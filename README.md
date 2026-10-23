@@ -53,28 +53,39 @@
 
 ---
 
-## 3. Быстрый старт
+## 3. Инструкция: Как скачать и пользоваться
 
-### Требования
-* Python 3.9+
-* Зависимости: `pip install -r requirements.txt` (`numpy`, `scipy`, `soundfile`)
-
-### Использование в Windows (в 1 клик через ярлык)
-1. Раздели любой трек на стемсы с помощью Demucs:
+### Способ 1. Для новичков (в 1 клик через архив)
+1. **Скачать репозиторий:**  
+   Нажмите зеленую кнопку **`<> Code`** вверху этой страницы и выберите **`Download ZIP`** (или [скачайте по прямой ссылке архивом](https://github.com/alex-gerek/lexgerek-studio-dsp/archive/refs/heads/master.zip)). Распакуйте архив в любое удобное место.
+2. **Установить зависимости (делается 1 раз):**  
+   Откройте терминал (PowerShell или командную строку) в распакованной папке и выполните:
    ```bash
-   python -m demucs.separate -d cuda track.wav
+   pip install -r requirements.txt
    ```
-2. Просто **перетащи папку со стемсами** (`vocals.wav`, `drums.wav`, `bass.wav`, `other.wav`) на ярлык **`Studio Remaster`** на Рабочем столе!
-3. Движок мгновенно создаст подпапку `Remaster/`:
-   - `vocals_cleaned.wav`
-   - `drums_punched.wav`
-   - `bass_monofied.wav`
-   - `other_widened.wav`
-   - **`[TRACK] - STUDIO_REMASTER.wav`** — финальный коммерческий мастер!
+3. **Разделить трек на стемсы (через Demucs):**  
+   ```bash
+   python -m demucs.separate -d cuda "ваш_трек.wav"
+   ```
+   *(Если нет видеокарты NVIDIA, замените `cuda` на `cpu`).*
+4. **Ремастеринг и очистка:**  
+   Просто **перетащите мышкой** папку со стемсами (`vocals.wav`, `drums.wav`, `bass.wav`, `other.wav`) на файл **`Studio Remaster.bat`**!  
+   Через 2 секунды внутри появится папка `Remaster/` с готовым треком:
+   * **`[ИМЯ_ТРЕКА] - STUDIO_REMASTER.wav`** — плотный, очищенный клубный мастер!
 
-### Использование через терминал
+---
+
+### Способ 2. Для разработчиков и продюсеров (через Git и терминал)
 ```bash
-python remaster_engine.py "путь/к/папке_со_стемсами"
+# 1. Клонировать репозиторий
+git clone https://github.com/alex-gerek/lexgerek-studio-dsp.git
+cd lexgerek-studio-dsp
+
+# 2. Установить библиотеки DSP
+pip install -r requirements.txt
+
+# 3. Запустить процессинг любой папки со стемсами
+python remaster_engine.py "path/to/stems_folder"
 ```
 
 ---
@@ -127,27 +138,38 @@ As generative neural audio tools (Suno, Udio, and AI synthesizers) entered the s
 
 ---
 
-## 3. Quick Start
+## 3. How to Download & Use
 
-### Requirements
-* Python 3.9+
-* Dependencies: `pip install -r requirements.txt` (`numpy`, `scipy`, `soundfile`)
-
-### Windows 1-Click Drag & Drop
-1. Split any track into stems using Demucs:
+### Option 1: 1-Click Setup (For Creators & Artists)
+1. **Download the project:**  
+   Click the green **`<> Code`** button above and select **`Download ZIP`** (or [click here to download directly](https://github.com/alex-gerek/lexgerek-studio-dsp/archive/refs/heads/master.zip)). Unzip the folder anywhere.
+2. **Install dependencies (one-time setup):**  
+   Open terminal inside the extracted folder and run:
    ```bash
-   python -m demucs.separate -d cuda track.wav
+   pip install -r requirements.txt
    ```
-2. Simply **drag and drop** the folder containing `vocals.wav`, `drums.wav`, `bass.wav`, `other.wav` onto the **`Studio Remaster`** desktop shortcut!
-3. The engine creates a `Remaster/` subfolder with:
-   - `vocals_cleaned.wav`
-   - `drums_punched.wav`
-   - `bass_monofied.wav`
-   - `other_widened.wav`
-   - **`[TRACK] - STUDIO_REMASTER.wav`** (Full commercial master!)
+3. **Separate your track into stems (via Demucs):**  
+   ```bash
+   python -m demucs.separate -d cuda "your_track.wav"
+   ```
+   *(If you don't have an NVIDIA GPU, change `cuda` to `cpu`).*
+4. **Remaster & De-harsh:**  
+   Simply **drag and drop** the folder with stems (`vocals.wav`, `drums.wav`, `bass.wav`, `other.wav`) onto **`Studio Remaster.bat`**!  
+   Within seconds, a `Remaster/` subfolder appears containing:
+   * **`[TRACK_NAME] - STUDIO_REMASTER.wav`** — the full punchy commercial master!
 
-### Command Line Usage
+---
+
+### Option 2: CLI (For Engineers & Developers)
 ```bash
+# 1. Clone repository
+git clone https://github.com/alex-gerek/lexgerek-studio-dsp.git
+cd lexgerek-studio-dsp
+
+# 2. Install requirements
+pip install -r requirements.txt
+
+# 3. Process any stem folder
 python remaster_engine.py "path/to/stems_folder"
 ```
 
