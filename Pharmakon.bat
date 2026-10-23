@@ -4,7 +4,8 @@ title PHARMAKON - Audio Antidote and Mastering DSP
 color 0E
 
 echo ========================================================
-echo         PHARMAKON - AUDIO ANTIDOTE AND MASTERING DSP
+echo         PHARMAKON // AUDIO ANTIDOTE AND MASTERING DSP
+echo    AI De-Harshing, Mono Sub-Bass, Punch and 3D Width
 echo    Очистка ИИ-артефактов, Моно-бас, Панч и 3D-Стерео
 echo ========================================================
 echo.
@@ -36,8 +37,8 @@ if "%PY_EXE%"=="" (
 )
 
 if "%PY_EXE%"=="" (
-    echo [ОШИБКА] Python не найден в системе.
-    echo Установите Python 3.9+ с официального сайта python.org
+    echo [ERROR] Python not found in system PATH.
+    echo Please install Python 3.9+ from https://www.python.org
     echo.
     pause
     exit /b 1
@@ -46,7 +47,7 @@ if "%PY_EXE%"=="" (
 REM Verify dependencies
 "%PY_EXE%" -c "import numpy, scipy, soundfile" >nul 2>&1
 if errorlevel 1 (
-    echo [НАСТРОЙКА] Первый запуск: установка библиотек numpy, scipy, soundfile...
+    echo [SETUP] First run: Installing required DSP libraries (numpy, scipy, soundfile)...
     "%PY_EXE%" -m pip install -r "%SCRIPT_DIR%requirements.txt"
     echo.
 )
@@ -54,8 +55,8 @@ if errorlevel 1 (
 set "TARGET=%~1"
 
 if "%TARGET%"=="" (
-    echo Перетащите сюда мышкой аудиофайл или папку со стемсами
-    echo или укажите путь и нажмите Enter:
+    echo Drag and drop an audio file (.wav/.mp3/.flac) or stems folder here
+    echo (Перетащите сюда аудиофайл или папку со стемами):
     echo.
     set /p "TARGET=> "
 )
@@ -63,26 +64,26 @@ if "%TARGET%"=="" (
 set "TARGET=%TARGET:"=%"
 
 if "%TARGET%"=="" (
-    echo [ОШИБКА] Путь к файлу не указан.
+    echo [ERROR] No target file or folder provided.
     pause
     exit /b 1
 )
 
 echo.
-echo Запуск обработки: "%TARGET%"
+echo Processing target: "%TARGET%"
 echo.
 
 "%PY_EXE%" "%ENGINE%" "%TARGET%"
 
 if errorlevel 1 (
     echo.
-    echo [ОШИБКА] Во время обработки произошел сбой.
+    echo [ERROR] An error occurred during audio processing.
     pause
     exit /b %errorlevel%
 )
 
 echo.
 echo ========================================================
-echo Готово. Нажмите любую клавишу для завершения...
+echo SUCCESS! Processing complete. Press any key to exit...
 echo ========================================================
 pause >nul

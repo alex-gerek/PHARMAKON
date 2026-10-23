@@ -240,10 +240,10 @@ def main():
     if len(sys.argv) > 1:
         target = sys.argv[1].strip().strip('"').strip("'")
     else:
-        target = input("Перетащите сюда аудиофайл или папку со стемсами: ").strip().strip('"').strip("'")
+        target = input("Drag & drop audio file or stems folder here (or paste path): ").strip().strip('"').strip("'")
 
     if not target:
-        print("Путь не указан.")
+        print("[ERROR] No target path provided.")
         return
 
     if os.path.isfile(target):
@@ -251,7 +251,7 @@ def main():
     elif os.path.isdir(target):
         process_stems_folder(target)
     else:
-        print(f"[ERROR] Не удалось найти: {target}")
+        print(f"[ERROR] Target not found: {target}")
 
 if __name__ == "__main__":
     main()
