@@ -6,7 +6,6 @@ color 0E
 echo ========================================================
 echo         PHARMAKON // AUDIO ANTIDOTE AND MASTERING DSP
 echo    AI De-Harshing, Mono Sub-Bass, Punch and 3D Width
-echo    Очистка ИИ-артефактов, Моно-бас, Панч и 3D-Стерео
 echo ========================================================
 echo.
 
@@ -17,50 +16,50 @@ REM Find the best Python executable
 set "PY_EXE="
 if exist "C:\Users\User\AppData\Local\Programs\Python\Python313\python.exe" (
     set "PY_EXE=C:\Users\User\AppData\Local\Programs\Python\Python313\python.exe"
+    goto :found_python
 )
 
-if "%PY_EXE%"=="" (
-    where py >nul 2>&1
+where py >nul 2>&1
+if not errorlevel 1 (
+    py -3.13 -c "import sys" >nul 2>&1
     if not errorlevel 1 (
-        py -3.13 -c "import sys" >nul 2>&1
-        if not errorlevel 1 (
-            set "PY_EXE=py -3.13"
-        )
+        set "PY_EXE=py -3.13"
+        goto :found_python
     )
 )
 
-if "%PY_EXE%"=="" (
-    where python >nul 2>&1
-    if not errorlevel 1 (
-        set "PY_EXE=python"
-    )
+where python >nul 2>&1
+if not errorlevel 1 (
+    set "PY_EXE=python"
+    goto :found_python
 )
 
-if "%PY_EXE%"=="" (
-    echo [ERROR] Python not found in system PATH.
-    echo Please install Python 3.9+ from https://www.python.org
-    echo.
-    pause
-    exit /b 1
-)
+echo [ERROR] Python not found in system PATH.
+echo Please install Python 3.9+ from https://www.python.org
+echo.
+pause
+exit /b 1
+
+:found_python
 
 REM Verify dependencies
 "%PY_EXE%" -c "import numpy, scipy, soundfile" >nul 2>&1
 if errorlevel 1 (
-    echo [SETUP] First run: Installing required DSP libraries (numpy, scipy, soundfile)...
+    echo [SETUP] Installing required libraries: numpy, scipy, soundfile...
     "%PY_EXE%" -m pip install -r "%SCRIPT_DIR%requirements.txt"
     echo.
 )
 
 set "TARGET=%~1"
 
-if "%TARGET%"=="" (
-    echo Drag and drop an audio file (.wav/.mp3/.flac) or stems folder here
-    echo (Перетащите сюда аудиофайл или папку со стемами):
-    echo.
-    set /p "TARGET=> "
-)
+if not "%TARGET%"=="" goto :run_engine
 
+echo Drag and drop an audio file [*.wav, *.mp3, *.flac] or stems folder here
+echo [Перетащите сюда аудиофайл или папку со стемами]:
+echo.
+set /p "TARGET=> "
+
+:run_engine
 set "TARGET=%TARGET:"=%"
 
 if "%TARGET%"=="" (
