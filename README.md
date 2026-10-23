@@ -68,18 +68,13 @@
 ### Шаг 1. Скачать проект
 Нажмите на большую зеленую кнопку вверху или [**скачайте архив по прямой ссылке**](https://github.com/alex-gerek/lexgerek-studio-dsp/archive/refs/heads/master.zip). Распакуйте архив в любую папку.
 
-### Шаг 2. Подготовить стемсы трека
-Возьмите стемсы любого трека (полученные из Demucs, Suno, Udio, RipX, FL Studio или Ableton):
-В папке должны быть 4 файла:
-* `vocals.wav` (вокал)
-* `bass.wav` (бас)
-* `drums.wav` (ударные)
-* `other.wav` (мелодии / синты / атмосфера)
-
-*(Если у вас только один целый `.wav` / `.mp3` файл, вы можете разделить его на стемсы с помощью Demucs командой: `python -m demucs.separate -d cuda track.wav`).*
+### Шаг 2. Выберите режим (любой целый файл ИЛИ стемсы):
+Инструмент поддерживает **два сценария работы**:
+* **Режим А (Целый трек — в 1 секунду):** если у вас просто один готовый аудиофайл (`.wav`, `.mp3`, `.flac`, `.ogg`) — перетащите прямо его! Процессор выполнит частотный кроссовер, запрет бас ниже 120 Гц в монолитное моно, вырежет жестяной свист на 5 кГц, расширит верх по 3D-стерео и отмастерит в True-Peak -0.3 dBFS.
+* **Режим Б (Поканальный ремастеринг стемсов):** если у вас есть папка со стемсами (`vocals.wav`, `drums.wav`, `bass.wav`, `other.wav`) — перетащите всю папку для глубокой поканальной хирургии каждого инструмента.
 
 ### Шаг 3. Запустить ремастеринг
-* **В Windows:** просто **перетащите папку со стемсами мышкой на файл `Studio Remaster.bat`** (или дважды кликните по нему и укажите путь).
+* **В Windows:** просто **перетащите файл или папку мышкой на `Studio Remaster.bat`** (или на ярлык на Рабочем столе).
 * **На macOS / Linux:** откройте терминал в папке проекта и выполните:
   ```bash
   chmod +x run_mac_linux.sh
@@ -151,18 +146,13 @@ As generative neural audio tools (Suno, Udio, and AI synthesizers) entered the s
 ### Step 1. Download
 Click the green button above or [**download the direct ZIP archive**](https://github.com/alex-gerek/lexgerek-studio-dsp/archive/refs/heads/master.zip). Extract the archive anywhere.
 
-### Step 2. Prepare Your Track Stems
-Have your stems ready (from Demucs, Suno, Udio, RipX, FL Studio, or Ableton):
-Your folder should contain 4 files:
-* `vocals.wav`
-* `bass.wav`
-* `drums.wav`
-* `other.wav`
-
-*(If you only have a single `.wav` or `.mp3` file, split it with Demucs: `python -m demucs.separate -d cuda "track.wav"`).*
+### Step 2. Choose Mode (Single Audio File OR Stems):
+The engine supports **two workflows**:
+* **Mode A (Single Full Track — in 1 second):** if you just have a single `.wav`, `.mp3`, `.flac`, or `.ogg` file — drag and drop it directly! The processor runs a frequency crossover, locks bass below 120Hz into solid mono, de-harshes 5kHz sibilance, expands 3D mid-side stereo width on the highs, applies tape saturation, and limits to -0.3 dBFS true-peak.
+* **Mode B (4-Stem Surgical Mastering):** if you have a folder with separated stems (`vocals.wav`, `drums.wav`, `bass.wav`, `other.wav`) — drag the whole folder for deep individual instrument surgery.
 
 ### Step 3. Run Remastering
-* **On Windows:** simply **drag and drop your stems folder onto `Studio Remaster.bat`** (or double-click it and enter the path).
+* **On Windows:** simply **drag and drop your audio file or stems folder onto `Studio Remaster.bat`** (or the desktop shortcut).
 * **On macOS / Linux:** open your terminal inside the folder and run:
   ```bash
   chmod +x run_mac_linux.sh
