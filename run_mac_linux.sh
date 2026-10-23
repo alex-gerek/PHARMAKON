@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Studio Remaster - Lex Gerek DSP Audio Engine (Mac & Linux)
+# PHARMAKON - Lex Gerek Audio Antidote & DSP Engine (Mac & Linux)
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 echo "========================================================"
-echo "        STUDIO REMASTER (DSP CLEANING & MASTERING)"
+echo "      PHARMAKON // AUDIO ANTIDOTE & MASTERING DSP"
 echo "   Audio De-Harshing, Mono Sub-Bass, Punch & 3D Width"
 echo "========================================================"
 echo ""
@@ -25,11 +25,11 @@ fi
 
 TARGET="$1"
 if [ -z "$TARGET" ]; then
-    read -p "Enter stems folder path: " TARGET
+    read -p "Enter audio file (.wav/.mp3) or stems folder path: " TARGET
 fi
 
 if [ -z "$TARGET" ]; then
-    echo "No folder provided. Exiting."
+    echo "No target provided. Exiting."
     exit 0
 fi
 

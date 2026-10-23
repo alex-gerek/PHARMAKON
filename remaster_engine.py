@@ -47,7 +47,7 @@ def process_single_file(file_path):
     track_title, ext = os.path.splitext(filename)
 
     print(f"\n=======================================================")
-    print(f"    STUDIO REMASTER (FULL TRACK MASTERING)")
+    print(f"    PHARMAKON // FULL TRACK MASTERING DSP")
     print(f"    Track: {track_title}")
     print(f"=======================================================\n")
 
@@ -142,7 +142,7 @@ def process_stems_folder(target_folder):
 
     track_name = os.path.basename(target_folder)
     print(f"\n=======================================================")
-    print(f"    STUDIO REMASTER (4-STEM SURGICAL MASTERING)")
+    print(f"    PHARMAKON // 4-STEM SURGICAL MASTERING DSP")
     print(f"    Track: {track_name}")
     print(f"=======================================================\n")
 

@@ -1,10 +1,10 @@
 @echo off
 chcp 65001 >nul
-title Studio Remaster - Lex Gerek DSP Audio Engine
+title PHARMAKON // Lex Gerek Audio Antidote & DSP Engine
 color 0E
 
 echo ========================================================
-echo         STUDIO REMASTER (DSP CLEANING & MASTERING)
+echo         PHARMAKON (AUDIO ANTIDOTE & MASTERING DSP)
 echo    Очистка ИИ-артефактов, Моно-бас, Панч и 3D-Стерео
 echo ========================================================
 echo.
@@ -34,8 +34,8 @@ if %errorlevel% neq 0 (
 set "TARGET=%~1"
 
 if "%TARGET%"=="" (
-    echo Перетащите сюда мышкой папку со стемсами (vocals, drums, bass, other)
-    echo или вставьте путь к ней и нажмите Enter:
+    echo Перетащите сюда мышкой аудиофайл (.wav/.mp3) или папку со стемсами
+    echo или вставьте путь и нажмите Enter:
     echo.
     set /p "TARGET=> "
 )
