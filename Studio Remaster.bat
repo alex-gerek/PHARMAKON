@@ -1,6 +1,6 @@
 @echo off
 chcp 65001 >nul
-title Studio Remaster - DSP Audio Engine
+title Studio Remaster - Lex Gerek DSP Audio Engine
 color 0E
 
 echo ========================================================
@@ -9,27 +9,49 @@ echo    Очистка ИИ-артефактов, Моно-бас, Панч и 3
 echo ========================================================
 echo.
 
+set "SCRIPT_DIR=%~dp0"
+set "ENGINE=%SCRIPT_DIR%remaster_engine.py"
+
+:: Check Python
+where python >nul 2>&1
+if %errorlevel% neq 0 (
+    echo [ОШИБКА / ERROR] Python не найден!
+    echo Установите Python 3.9+ с официального сайта: https://www.python.org/downloads/
+    echo Обязательно отметьте галочку "Add Python to PATH" при установке!
+    echo.
+    pause
+    exit /b 1
+)
+
+:: Check dependencies and auto-install if missing
+python -c "import numpy, scipy, soundfile" >nul 2>&1
+if %errorlevel% neq 0 (
+    echo [НАСТРОЙКА / SETUP] Первый запуск: автоматическая установка библиотек DSP...
+    python -m pip install -r "%SCRIPT_DIR%requirements.txt"
+    echo.
+)
+
 set "TARGET=%~1"
 
 if "%TARGET%"=="" (
-    echo Перетащите сюда папку со стемсами (или любой файл из нее)
-    echo и нажмите клавишу Enter:
+    echo Перетащите сюда мышкой папку со стемсами (vocals, drums, bass, other)
+    echo или вставьте путь к ней и нажмите Enter:
     echo.
     set /p "TARGET=> "
 )
 
 set "TARGET=%TARGET:"=%"
 
-if not exist "%TARGET%" (
-    echo.
-    echo [ОШИБКА] Путь не найден: "%TARGET%"
-    echo Нажмите любую клавишу для выхода...
-    pause >nul
+if "%TARGET%"=="" (
+    echo Путь не указан.
+    pause
     exit /b
 )
 
-"C:\Users\User\AppData\Local\Programs\Python\Python313\python.exe" "D:\КЛИПЫ\Reels\stems\remaster_engine.py" "%TARGET%"
+python "%ENGINE%" "%TARGET%"
 
 echo.
-echo Нажмите любую клавишу для завершения...
+echo ========================================================
+echo Готово! Нажмите любую клавишу для завершения...
+echo ========================================================
 pause >nul

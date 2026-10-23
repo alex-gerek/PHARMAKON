@@ -6,12 +6,19 @@
 ## Universal Studio-Grade Audio Restoration, De-Harshing & Stem Mastering Pipeline
 
 <p align="center">
+  <a href="https://github.com/alex-gerek/lexgerek-studio-dsp/archive/refs/heads/master.zip">
+    <img src="https://img.shields.io/badge/📥%20Скачать%20ZIP%20%7C%20Download%20ZIP%20(Direct%20Link)-238636?style=for-the-badge&logo=github&logoColor=white" alt="Download ZIP">
+  </a>
+</p>
+
+<p align="center">
   <b><a href="#-русская-версия">🇷🇺 Читать на русском</a></b> &nbsp;|&nbsp; 
   <b><a href="#-english-version">🇬🇧 Read in English</a></b>
 </p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.9+-blue.svg?style=flat-square" alt="Python">
+  <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-0078d7?style=flat-square" alt="Platform">
   <img src="https://img.shields.io/badge/DSP-SciPy%20SoundFile-red.svg?style=flat-square" alt="DSP">
   <img src="https://img.shields.io/badge/Artist-Lex%20Gerek-black.svg?style=flat-square&logo=youtube" alt="Lex Gerek">
   <img src="https://img.shields.io/badge/True--Peak--0.3%20dBFS-brightgreen.svg?style=flat-square" alt="True Peak">
@@ -27,7 +34,7 @@
 
 Этот проект родился в моих ночных студийных сессиях во время сведения и мастеринга.
 
-Когда работаешь с приглашенными вокалистами и сессионными музыкантами, присылающими дорожки из неподготовленных комнат и с разных микрофонов, неизбежно сталкиваешься с одним и тем же техническим адом: паразитные комнатные резонансы, микрофонная грязь, ядовитый свистящий скрежет на буквах С/Ш ($4.5\text{--}6.5\text{ кГц}$) и мутный размазанный саб-бас, убивающий давление на мощных клубных акустических системах (Funktion-One, L-Acoustics).
+Когда работаешь с приглашенными вокалистами и сессионными музыкантами, присылающими дорожки из разных комнат и микрофонов, неизбежно сталкиваешься с одним и тем же техническим адом: паразитные комнатные резонансы, микрофонная грязь, ядовитый свистящий скрежет на буквах С/Ш ($4.5\text{--}6.5\text{ кГц}$) и мутный размазанный саб-бас, убивающий давление на мощных клубных акустических системах (Funktion-One, L-Acoustics).
 
 Чтобы не тратить драгоценные часы на рутинную зачистку каждого трека, я разработал эту математическую DSP-цепочку как автоматизированный студийный процессор:
 - **Запирание баса ниже $120\text{ Гц}$ в строгое монолитное моно** — максимальный панч в грудь и ноль фазовых конфликтов в клубе.
@@ -53,40 +60,38 @@
 
 ---
 
-## 3. Инструкция: Как скачать и пользоваться
+## 3. 🚀 Инструкция: Как скачать и запустить за 3 шага
 
-### Способ 1. Для новичков (в 1 клик через архив)
-1. **Скачать репозиторий:**  
-   Нажмите зеленую кнопку **`<> Code`** вверху этой страницы и выберите **`Download ZIP`** (или [скачайте по прямой ссылке архивом](https://github.com/alex-gerek/lexgerek-studio-dsp/archive/refs/heads/master.zip)). Распакуйте архив в любое удобное место.
-2. **Установить зависимости (делается 1 раз):**  
-   Откройте терминал (PowerShell или командную строку) в распакованной папке и выполните:
-   ```bash
-   pip install -r requirements.txt
-   ```
-3. **Разделить трек на стемсы (через Demucs):**  
-   ```bash
-   python -m demucs.separate -d cuda "ваш_трек.wav"
-   ```
-   *(Если нет видеокарты NVIDIA, замените `cuda` на `cpu`).*
-4. **Ремастеринг и очистка:**  
-   Просто **перетащите мышкой** папку со стемсами (`vocals.wav`, `drums.wav`, `bass.wav`, `other.wav`) на файл **`Studio Remaster.bat`**!  
-   Через 2 секунды внутри появится папка `Remaster/` с готовым треком:
-   * **`[ИМЯ_ТРЕКА] - STUDIO_REMASTER.wav`** — плотный, очищенный клубный мастер!
+> [!TIP]
+> Инструмент полностью автономен. При первом запуске скрипт сам автоматически проверит и установит необходимые библиотеки!
 
----
+### Шаг 1. Скачать проект
+Нажмите на большую зеленую кнопку вверху или [**скачайте архив по прямой ссылке**](https://github.com/alex-gerek/lexgerek-studio-dsp/archive/refs/heads/master.zip). Распакуйте архив в любую папку.
 
-### Способ 2. Для разработчиков и продюсеров (через Git и терминал)
-```bash
-# 1. Клонировать репозиторий
-git clone https://github.com/alex-gerek/lexgerek-studio-dsp.git
-cd lexgerek-studio-dsp
+### Шаг 2. Подготовить стемсы трека
+Возьмите стемсы любого трека (полученные из Demucs, Suno, Udio, RipX, FL Studio или Ableton):
+В папке должны быть 4 файла:
+* `vocals.wav` (вокал)
+* `bass.wav` (бас)
+* `drums.wav` (ударные)
+* `other.wav` (мелодии / синты / атмосфера)
 
-# 2. Установить библиотеки DSP
-pip install -r requirements.txt
+*(Если у вас только один целый `.wav` / `.mp3` файл, вы можете разделить его на стемсы с помощью Demucs командой: `python -m demucs.separate -d cuda track.wav`).*
 
-# 3. Запустить процессинг любой папки со стемсами
-python remaster_engine.py "path/to/stems_folder"
-```
+### Шаг 3. Запустить ремастеринг
+* **В Windows:** просто **перетащите папку со стемсами мышкой на файл `Studio Remaster.bat`** (или дважды кликните по нему и укажите путь).
+* **На macOS / Linux:** откройте терминал в папке проекта и выполните:
+  ```bash
+  chmod +x run_mac_linux.sh
+  ./run_mac_linux.sh "путь_к_папке_со_стемсами"
+  ```
+
+Через 2 секунды внутри папки со стемсами появится директория `Remaster/`:
+- `vocals_cleaned.wav` (очищенный вокал без яда на 5 кГц)
+- `bass_monofied.wav` (бас, запертый в монолитное моно)
+- `drums_punched.wav` (прокачанный панч)
+- `other_widened.wav` (стерео-панорама +25%)
+- 🏆 **`[ИМЯ_ТРЕКА] - STUDIO_REMASTER.wav`** — готовый коммерческий мастер с лимитером -0.3 dBFS!
 
 ---
 
@@ -101,7 +106,7 @@ python remaster_engine.py "path/to/stems_folder"
 ---
 
 ## 5. Лицензия
-Проект распространяется с открытым исходным кодом по лицензии [MIT](LICENSE) © 2026 Lex Gerek.
+Проект распространяется с открытым исходным кодом по лицензии [MIT](LICENSE) © 2026 Lex Gerek. Бесплатно для артистов, музыкантов и звукорежиссёров по всему миру.
 
 ---
 
@@ -138,40 +143,38 @@ As generative neural audio tools (Suno, Udio, and AI synthesizers) entered the s
 
 ---
 
-## 3. How to Download & Use
+## 3. 🚀 Quick Start: How to Download & Run in 3 Steps
 
-### Option 1: 1-Click Setup (For Creators & Artists)
-1. **Download the project:**  
-   Click the green **`<> Code`** button above and select **`Download ZIP`** (or [click here to download directly](https://github.com/alex-gerek/lexgerek-studio-dsp/archive/refs/heads/master.zip)). Unzip the folder anywhere.
-2. **Install dependencies (one-time setup):**  
-   Open terminal inside the extracted folder and run:
-   ```bash
-   pip install -r requirements.txt
-   ```
-3. **Separate your track into stems (via Demucs):**  
-   ```bash
-   python -m demucs.separate -d cuda "your_track.wav"
-   ```
-   *(If you don't have an NVIDIA GPU, change `cuda` to `cpu`).*
-4. **Remaster & De-harsh:**  
-   Simply **drag and drop** the folder with stems (`vocals.wav`, `drums.wav`, `bass.wav`, `other.wav`) onto **`Studio Remaster.bat`**!  
-   Within seconds, a `Remaster/` subfolder appears containing:
-   * **`[TRACK_NAME] - STUDIO_REMASTER.wav`** — the full punchy commercial master!
+> [!TIP]
+> The engine is fully portable and automated. On the first run, it will automatically install any missing dependencies!
 
----
+### Step 1. Download
+Click the green button above or [**download the direct ZIP archive**](https://github.com/alex-gerek/lexgerek-studio-dsp/archive/refs/heads/master.zip). Extract the archive anywhere.
 
-### Option 2: CLI (For Engineers & Developers)
-```bash
-# 1. Clone repository
-git clone https://github.com/alex-gerek/lexgerek-studio-dsp.git
-cd lexgerek-studio-dsp
+### Step 2. Prepare Your Track Stems
+Have your stems ready (from Demucs, Suno, Udio, RipX, FL Studio, or Ableton):
+Your folder should contain 4 files:
+* `vocals.wav`
+* `bass.wav`
+* `drums.wav`
+* `other.wav`
 
-# 2. Install requirements
-pip install -r requirements.txt
+*(If you only have a single `.wav` or `.mp3` file, split it with Demucs: `python -m demucs.separate -d cuda "track.wav"`).*
 
-# 3. Process any stem folder
-python remaster_engine.py "path/to/stems_folder"
-```
+### Step 3. Run Remastering
+* **On Windows:** simply **drag and drop your stems folder onto `Studio Remaster.bat`** (or double-click it and enter the path).
+* **On macOS / Linux:** open your terminal inside the folder and run:
+  ```bash
+  chmod +x run_mac_linux.sh
+  ./run_mac_linux.sh "path_to_stems_folder"
+  ```
+
+In 2 seconds, a `Remaster/` folder is generated containing:
+- `vocals_cleaned.wav`
+- `bass_monofied.wav`
+- `drums_punched.wav`
+- `other_widened.wav`
+- 🏆 **`[TRACK_NAME] - STUDIO_REMASTER.wav`** — the full commercial master with -0.3 dBFS true-peak limiter!
 
 ---
 
