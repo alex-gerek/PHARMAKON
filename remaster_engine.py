@@ -5,6 +5,8 @@ import numpy as np
 import soundfile as sf
 import scipy.signal as signal
 
+SUPPORTED_EXTS = ('.wav', '.mp3', '.flac', '.ogg', '.aiff', '.aif')
+
 def butter_highpass(data, cutoff, fs, order=4):
     nyq = 0.5 * fs
     normal_cutoff = cutoff / nyq
@@ -20,41 +22,128 @@ def butter_lowpass(data, cutoff, fs, order=4):
 def soft_clip(x, threshold=0.95):
     return np.tanh(x / threshold) * threshold
 
+def ensure_stereo(arr):
+    if arr.ndim == 1:
+        return np.column_stack([arr, arr])
+    elif arr.shape[1] > 2:
+        return arr[:, :2]
+    return arr
+
 def find_stem(files, keyword):
     for f in files:
         base = os.path.basename(f).lower()
-        if keyword in base and base.endswith('.wav'):
+        if keyword in base and base.endswith(SUPPORTED_EXTS):
             return f
     return None
 
-def process_folder(target_folder):
+def process_single_file(file_path):
+    file_path = file_path.strip().strip('"').strip("'")
+    if not os.path.isfile(file_path):
+        print(f"[ERROR] File not found: {file_path}")
+        return False
+
+    base_dir = os.path.dirname(file_path)
+    filename = os.path.basename(file_path)
+    track_title, ext = os.path.splitext(filename)
+
+    print(f"\n=======================================================")
+    print(f"    STUDIO REMASTER (FULL TRACK MASTERING)")
+    print(f"    Track: {track_title}")
+    print(f"=======================================================\n")
+
+    print(f"[1/4] Loading audio: {filename}...")
+    try:
+        audio, sr = sf.read(file_path, dtype='float32')
+    except Exception as e:
+        print(f"[ERROR] Could not read audio file: {e}")
+        return False
+
+    audio = ensure_stereo(audio)
+    nyq = 0.5 * sr
+
+    print("[2/4] DSP Processing: Infrasonic Cut (<32Hz) & Low Crossover (<120Hz)...")
+    # Sub cut
+    audio_sub = butter_highpass(audio, 32, sr, order=4)
+    # Crossover at 120Hz
+    low_band = butter_lowpass(audio_sub, 120, sr, order=4)
+    high_band = butter_highpass(audio_sub, 120, sr, order=4)
+
+    # Lows to 100% True Mono (rock-solid sub bass translation)
+    mono_low = np.mean(low_band, axis=1, keepdims=True)
+    mono_low_stereo = np.repeat(mono_low, 2, axis=1)
+
+    print("[3/4] Highs: Anti-AI De-Harshing (5kHz Notch) & 3D Mid-Side (+20% width)...")
+    # De-harsh notch on highs
+    f_harsh = 5000.0 / nyq
+    b_notch, a_notch = signal.iirnotch(f_harsh, 2.8)
+    high_deharsh = signal.filtfilt(b_notch, a_notch, high_band, axis=0)
+
+    # Mid-Side stereo widening on highs only (leaving mono sub untouched)
+    mid = 0.5 * (high_deharsh[:, 0] + high_deharsh[:, 1])
+    side = 0.5 * (high_deharsh[:, 0] - high_deharsh[:, 1])
+    side_widened = side * 1.20
+    high_proc = np.column_stack([mid + side_widened, mid - side_widened])
+
+    print("[4/4] Summing, Analog Tape Warmth & True-Peak Limiter (-0.3 dBFS)...")
+    full_mix = mono_low_stereo + high_proc
+    # Analog tape warmth
+    full_mix = np.tanh(full_mix * 1.04) * 0.98
+
+    # True-peak limit to -0.3 dBFS
+    peak = np.max(np.abs(full_mix))
+    target_ceiling = 10 ** (-0.3 / 20.0)
+    if peak > 0:
+        full_mix = (full_mix / peak) * target_ceiling
+
+    # Output directory
+    out_dir = os.path.join(base_dir, "Remaster")
+    os.makedirs(out_dir, exist_ok=True)
+    out_file = os.path.join(out_dir, f"{track_title} - STUDIO_REMASTER.wav")
+
+    sf.write(out_file, full_mix, sr)
+
+    print(f"\n=======================================================")
+    print(f"  SUCCESS! Remaster completed in 1 second!")
+    print(f"  Master file: {os.path.basename(out_file)}")
+    print(f"  Location:    {out_dir}")
+    print(f"=======================================================\n")
+
+    os.system(f'explorer "{out_dir}"')
+    return True
+
+def process_stems_folder(target_folder):
     target_folder = target_folder.strip().strip('"').strip("'")
     if not os.path.isdir(target_folder):
-        # Maybe user dropped a file inside the folder
-        if os.path.isfile(target_folder):
-            target_folder = os.path.dirname(target_folder)
-        else:
-            print(f"[ERROR] Folder not found: {target_folder}")
-            return False
-
-    wav_files = glob.glob(os.path.join(target_folder, "*.wav"))
-    if not wav_files:
-        print(f"[ERROR] No .wav stem files found in: {target_folder}")
+        print(f"[ERROR] Folder not found: {target_folder}")
         return False
 
-    v_path = find_stem(wav_files, "vocal")
-    d_path = find_stem(wav_files, "drum")
-    b_path = find_stem(wav_files, "bass")
-    o_path = find_stem(wav_files, "other")
+    audio_files = []
+    for ext in SUPPORTED_EXTS:
+        audio_files.extend(glob.glob(os.path.join(target_folder, f"*{ext}")))
 
+    if not audio_files:
+        print(f"[ERROR] No audio files found in: {target_folder}")
+        return False
+
+    v_path = find_stem(audio_files, "vocal")
+    d_path = find_stem(audio_files, "drum")
+    b_path = find_stem(audio_files, "bass")
+    o_path = find_stem(audio_files, "other")
+
+    # If it is NOT a stems folder (doesn't have all 4 stems), but has a single audio file
     if not all([v_path, d_path, b_path, o_path]):
-        print("[ERROR] Could not find all 4 stems (vocals, drums, bass, other) in folder.")
-        print(f"Found: vocals={bool(v_path)}, drums={bool(d_path)}, bass={bool(b_path)}, other={bool(o_path)}")
-        return False
+        if len(audio_files) == 1:
+            print(f"[INFO] Folder contains a single track. Running Full Track Mastering...")
+            return process_single_file(audio_files[0])
+        else:
+            print("[INFO] Could not find all 4 stems (vocals, drums, bass, other).")
+            print(f"Found {len(audio_files)} files. Running Full Track Mastering on primary file: {os.path.basename(audio_files[0])}")
+            return process_single_file(audio_files[0])
 
     track_name = os.path.basename(target_folder)
     print(f"\n=======================================================")
-    print(f"    STUDIO REMASTER DSP ENGINE: {track_name}")
+    print(f"    STUDIO REMASTER (4-STEM SURGICAL MASTERING)")
+    print(f"    Track: {track_name}")
     print(f"=======================================================\n")
 
     print("[1/5] Loading lossless stems...")
@@ -62,12 +151,6 @@ def process_folder(target_folder):
     drums, _ = sf.read(d_path, dtype='float32')
     bass, _ = sf.read(b_path, dtype='float32')
     other, _ = sf.read(o_path, dtype='float32')
-
-    # Ensure 2 channels
-    def ensure_stereo(arr):
-        if arr.ndim == 1:
-            return np.column_stack([arr, arr])
-        return arr
 
     vocals = ensure_stereo(vocals)
     drums = ensure_stereo(drums)
@@ -128,7 +211,7 @@ def process_folder(target_folder):
     remaster_dir = os.path.join(target_folder, "Remaster")
     os.makedirs(remaster_dir, exist_ok=True)
 
-    # Save
+    # Save cleaned stems
     sf.write(os.path.join(remaster_dir, f"{track_name} - vocals_cleaned.wav"), vocals_proc, sr)
     sf.write(os.path.join(remaster_dir, f"{track_name} - drums_punched.wav"), drums_proc, sr)
     sf.write(os.path.join(remaster_dir, f"{track_name} - bass_monofied.wav"), bass_proc, sr)
@@ -140,15 +223,28 @@ def process_folder(target_folder):
     print(f"\n=======================================================")
     print(f"  SUCCESS! Remaster completed!")
     print(f"  Master file: {os.path.basename(master_path)}")
+    print(f"  Location:    {remaster_dir}")
     print(f"=======================================================\n")
     
-    # Open folder in Explorer
     os.system(f'explorer "{remaster_dir}"')
     return True
 
-if __name__ == "__main__":
+def main():
     if len(sys.argv) > 1:
-        folder = sys.argv[1]
+        target = sys.argv[1].strip().strip('"').strip("'")
     else:
-        folder = input("Enter or drag Stems folder here: ")
-    process_folder(folder)
+        target = input("Перетащите сюда аудиофайл или папку со стемсами: ").strip().strip('"').strip("'")
+
+    if not target:
+        print("Путь не указан.")
+        return
+
+    if os.path.isfile(target):
+        process_single_file(target)
+    elif os.path.isdir(target):
+        process_stems_folder(target)
+    else:
+        print(f"[ERROR] Не удалось найти: {target}")
+
+if __name__ == "__main__":
+    main()
