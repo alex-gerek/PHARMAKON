@@ -12,36 +12,40 @@
 ## 🌐 The Origin Story / Предыстория проекта
 
 ### [EN] English
-This project was born out of late-night mixing sessions in producer **Lex Gerek's** studio. 
+Hi, I'm **Lex Gerek** — electronic music producer and sound architect.
 
-When working with diverse guest vocalists, remote session musicians, and varied tracking environments, every audio engineer faces the same nightmare: microphone bleed, room resonances, harsh sibilance on consonants ($4.5\text{--}6.5\text{ kHz}$), and muddy sub-bass that destroys clarity and causes severe phase cancellation on high-end club sound systems (like *Funktion-One* or *L-Acoustics*).
+This engine was born directly out of my late-night studio mixing and mastering sessions. 
 
-Lex developed this mathematical DSP (Digital Signal Processing) pipeline as an automated studio channel strip to cure these chronic production headaches in seconds:
-- Locking low frequencies below $120\text{ Hz}$ into rock-solid mono
-- Carving out infrasonic rumble ($<32\text{ Hz}$) that wastes dynamic headroom
-- Surgical notch filtering of harsh metallic sibilance
-- Warm analog tape saturation modeling ($\tanh$)
-- 3D Mid-Side spatial stereo widening
+When tracking and mixing with guest vocalists and demanding session musicians who record in varied, imperfect acoustic environments, I constantly faced the same engineering nightmare: mic bleed, nasty room flutter resonances, piercing metallic sibilance on consonants ($4.5\text{--}6.5\text{ kHz}$), and muddy, out-of-phase sub-bass that drains punch and destroys club sound systems (like *Funktion-One* or *L-Acoustics*).
 
-**The Breakthrough "Side Effect":**  
-As generative neural audio tools (Suno, Udio, neural synthesizers) emerged, we discovered that this exact mathematical filter chain effortlessly obliterates modern digital quantization noise, phase smearing, and "AI soup" — transforming raw generated audio stems into club-ready, punchy commercial-grade masters.
+Instead of wasting hours manually repairing the same audio flaws across dozens of stem tracks, I engineered this mathematical DSP (Digital Signal Processing) pipeline as an automated studio channel strip:
+- **Locking sub-bass below $120\text{ Hz}$ into pure, focused mono** (maximum headroom, zero phase cancellation on big subs).
+- **Sub-harmonic cut below $32\text{ Hz}$** to remove invisible speaker-shaking mud and restore mix punch.
+- **Surgical dynamic notch filtering** to tame harsh $5\text{ kHz}$ sibilance and brittle overtones without dulling the vocal presence.
+- **Non-linear analog tape saturation modeling ($\tanh$)** for rich harmonic warmth and cohesion.
+- **3D Mid-Side spatial matrix** expanding side elements by $+25\%$ while keeping the kick and bass dead center.
+
+**The Unexpected "Side Effect":**  
+As generative neural audio tools (Suno, Udio, and AI synthesizers) entered the scene, I tested this exact DSP chain on raw generated stems. The result was staggering: the same mathematical filters that tamed harsh vocalists effortlessly eliminated digital quantization grain, robotic phase smearing, and "AI soup" — instantly transforming raw, flat stems into a warm, punchy, commercial-grade master.
 
 ---
 
 ### [RU] Русский
-Этот проект родился в ночных студийных сессиях продюсера **Lex Gerek**.
+Привет, я **Lex Gerek** — электронный продюсер и саунд-архитектор.
 
-При сведении треков с сессионными вокалистами и музыкантами, присылающими дорожки из разных комнат и с разных микрофонов, звукорежиссёр всегда сталкивается с одним и тем же адом: паразитные комнатные резонансы, микрофонная грязь, ядовитый свист на буквах С/Ш ($4.5\text{--}6.5\text{ кГц}$) и мутный бас, который размывается по стерео и убивает отдачу клубных сабвуферов.
+Этот проект родился в моих ночных студийных сессиях во время сведения и мастеринга.
 
-Лекс создал эту математическую DSP-цепочку как автоматический студийный процессор, решающий главные боли сведения в один клик:
-- Запирание саб-баса ниже $120\text{ Гц}$ в строгое монолитное моно
-- Срез инфра-гула ниже $32\text{ Гц}$, пожирающего громкость микса
-- Хирургическое удаление жестяных резонансов
-- Нелинейная плёночная сатурация теплых гармоник ($\tanh$)
-- 3D Mid-Side расширение панорамы атмосферы и синтов на $+25\%$
+Когда работаешь с приглашенными вокалистами и сессионными музыкантами, присылающими дорожки из неподготовленных комнат и с разных микрофонов, неизбежно сталкиваешься с одним и тем же техническим адом: паразитные комнатные резонансы, микрофонная грязь, ядовитый свистящий скрежет на буквах С/Ш ($4.5\text{--}6.5\text{ кГц}$) и мутный размазанный саб-бас, убивающий давление на мощных клубных акустических системах.
+
+Чтобы не тратить драгоценные часы на одну и ту же рутинную зачистку каждого трека, я разработал эту математическую DSP-цепочку как автоматизированный студийный процессор:
+- **Запирание баса ниже $120\text{ Гц}$ в строгое монолитное моно** — максимальный панч в грудь и ноль фазовых конфликтов в клубе.
+- **Крутой срез инфра-гула ниже $32\text{ Гц}$**, освобождающий полезный запас громкости (headroom).
+- **Хирургический режекторный фильтр** ядовитых обертонов и сибилянтов на $5\text{ кГц}$ с сохранением яркости и воздуха.
+- **Нелинейная плёночная сатурация ($\tanh$)** для склеивания микса и теплого аналогового тела.
+- **3D Mid-Side пространственная матрица** для расширения синтов и атмосферы на $+25\%$ при монолитном центре.
 
 **Потрясающий побочный эффект:**  
-С появлением генеративных нейросетей выяснилось, что эта студийная аналоговая цепочка абсолютно бесследно стирает в пыль любые современные цифровые ИИ-артефакты, фазовый шум и металлическую «кашу», превращая любой сырой материал в плотный коммерческий мастер!
+С появлением генеративных нейросетей (Suno, Udio и др.) я пропустил через этот процессор сырые генерации. Оказалось, что студийная математика, созданная для живых записей, абсолютно бесследно стирает цифровой шум квантования, фазовую «кашу» и жестяной ИИ-призвук, превращая сырой материал в плотный, готовый к релизу коммерческий саунд.
 
 ---
 
@@ -83,9 +87,9 @@ python remaster_engine.py "path/to/stems_folder"
 
 ---
 
-## 👤 About Lex Gerek / Об авторе
+## 👤 About Lex Gerek / Обо мне
 
-**Lex Gerek** is an electronic music producer, sound architect, and audiovisual artist creating ongoing neo-noir techno universes.
+I am an electronic music producer, sound architect, and audiovisual artist creating ongoing neo-noir techno universes.
 
 - 🎬 **Watch the 98-Minute Neo-Noir Techno Visual Album on YouTube**:  
   [**Lex Gerek — Center of Gravity (Full Mix)**](https://youtu.be/fCYPHCnbq2Y)
