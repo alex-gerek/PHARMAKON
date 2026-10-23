@@ -1,5 +1,12 @@
 import sys
 import os
+import io
+
+# Force UTF-8 stdout and stderr on Windows to prevent UnicodeEncodeError in console
+if sys.platform == 'win32':
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+
 import glob
 import numpy as np
 import soundfile as sf
@@ -61,7 +68,7 @@ def process_single_file(file_path):
     audio = ensure_stereo(audio)
     nyq = 0.5 * sr
 
-    print("[2/4] DSP Processing: Infrasonic Cut (<32Hz) & Low Crossover (<120Hz)...")
+    print("[2/4] DSP Processing: Infrasonic Cut (<32Hz) and Low Crossover (<120Hz)...")
     # Sub cut
     audio_sub = butter_highpass(audio, 32, sr, order=4)
     # Crossover at 120Hz
@@ -72,7 +79,7 @@ def process_single_file(file_path):
     mono_low = np.mean(low_band, axis=1, keepdims=True)
     mono_low_stereo = np.repeat(mono_low, 2, axis=1)
 
-    print("[3/4] Highs: Anti-AI De-Harshing (5kHz Notch) & 3D Mid-Side (+20% width)...")
+    print("[3/4] Highs: Anti-AI De-Harshing (5kHz Notch) and 3D Mid-Side (+20% width)...")
     # De-harsh notch on highs
     f_harsh = 5000.0 / nyq
     b_notch, a_notch = signal.iirnotch(f_harsh, 2.8)
@@ -84,7 +91,7 @@ def process_single_file(file_path):
     side_widened = side * 1.20
     high_proc = np.column_stack([mid + side_widened, mid - side_widened])
 
-    print("[4/4] Summing, Analog Tape Warmth & True-Peak Limiter (-0.3 dBFS)...")
+    print("[4/4] Summing, Analog Tape Warmth and True-Peak Limiter (-0.3 dBFS)...")
     full_mix = mono_low_stereo + high_proc
     # Analog tape warmth
     full_mix = np.tanh(full_mix * 1.04) * 0.98
@@ -130,14 +137,14 @@ def process_stems_folder(target_folder):
     b_path = find_stem(audio_files, "bass")
     o_path = find_stem(audio_files, "other")
 
-    # If it is NOT a stems folder (doesn't have all 4 stems), but has a single audio file
+    # If it is NOT a stems folder (doesn't have all 4 stems), but has audio files
     if not all([v_path, d_path, b_path, o_path]):
         if len(audio_files) == 1:
             print(f"[INFO] Folder contains a single track. Running Full Track Mastering...")
             return process_single_file(audio_files[0])
         else:
             print("[INFO] Could not find all 4 stems (vocals, drums, bass, other).")
-            print(f"Found {len(audio_files)} files. Running Full Track Mastering on primary file: {os.path.basename(audio_files[0])}")
+            print(f"Found {len(audio_files)} files. Running Full Track Mastering on: {os.path.basename(audio_files[0])}")
             return process_single_file(audio_files[0])
 
     track_name = os.path.basename(target_folder)
