@@ -32,7 +32,7 @@
 ## 1. Философия и предыстория проекта
 > **Pharmakon** *(др.-греч. φάρμακον)* — античный концепт, обозначающий одновременно **яд**, **лекарство** и **противоядие**. В звукорежиссуре грязь, паразитные обертоны и ядовитые фазовые резонансы способны убить трек, но под воздействием точной математики превращаются в плотный, благородный аналоговый звук.
 
-Привет, я **Lex Gerek** — электронный продюсер и саунд-архитектор.
+Привет, я **Lex Gerek** — звукорежиссер и саунд-архитектор.
 
 Этот проект родился в моих ночных студийных сессиях во время сведения и мастеринга.
 
@@ -89,7 +89,14 @@
 ---
 
 ## 4. Обо мне
-Я электронный музыкант, саунд-архитектор и аудиовизуальный продюсер, создающий цельную вселенную в стиле нео-нуар техно.
+Я — **звукорежиссер и саунд-архитектор**.
+
+В профессиональной деятельности я веду и продюсирую звук для разноплановых проектов индустрии:
+- 🎮 **Компьютерные игры:** создание звуковых ландшафтов, саунд-дизайн и интеграция игрового аудио.
+- 🎬 **Кинематограф:** пост-продакшн, сведение, ремастеринг и аудио-продакшн для фильмов.
+- 🎤 **Работа с артистами и вокалистами:** студийный трекинг, чистка и сведение вокала для исполнителей.
+
+А написание концептуальной электронной музыки и режиссура аудиовизуальных фильмов — это мое личное страстное хобби и творческая лаборатория, где я исследую пределы современного звучания.
 
 * 🎬 **Смотреть 98-минутный визуальный техно-альбом на YouTube**:  
   [**Lex Gerek — Center of Gravity (Full Mix)**](https://youtu.be/fCYPHCnbq2Y)
@@ -108,7 +115,7 @@
 ## 1. The Philosophy & Origin Story
 > **Pharmakon** *(Ancient Greek: φάρμακον)* — the philosophical concept of something that acts simultaneously as **poison**, **remedy**, and **antidote**. In music production, toxic room bleed, metallic harshness, and destructive phase smearing can poison a mix — but under precise mathematical surgery, they are converted into pure sonic weight and analog warmth.
 
-Hi, I'm **Lex Gerek** — electronic music producer and sound architect.
+Hi, I'm **Lex Gerek** — audio engineer and sound architect.
 
 This engine was born directly out of my late-night studio mixing and mastering sessions.
 
@@ -165,7 +172,14 @@ In seconds, a `Remaster/` folder is generated containing:
 ---
 
 ## 4. About Lex Gerek
-I am an electronic music producer, sound architect, and audiovisual artist creating ongoing neo-noir techno universes.
+I am a professional **audio engineer and sound architect**.
+
+Professionally, I engineer and lead audio production across commercial creative industries:
+- 🎮 **Video Games:** interactive audio systems, atmospheric sound design, and game audio engineering.
+- 🎬 **Motion Pictures:** film sound post-production, mixing, re-mastering, and cinematic audio.
+- 🎤 **Artists & Vocalists:** vocal tracking, surgical stem cleanup, and mixing for recording artists.
+
+Composing dark conceptual electronic music and directing audiovisual feature films is my personal creative passion and sonic laboratory:
 
 * 🎬 **Watch the 98-Minute Neo-Noir Techno Visual Album on YouTube**:  
   [**Lex Gerek — Center of Gravity (Full Mix)**](https://youtu.be/fCYPHCnbq2Y)
