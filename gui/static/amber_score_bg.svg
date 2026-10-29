@@ -1,0 +1,274 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
+  <defs>
+    <!-- Master calligraphic ink glow -->
+    <filter id="amberInkGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="2.5" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+
+    <!-- Fading linear gradients for ragged stave paper edges -->
+    <linearGradient id="staveFadeLeft" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#d97706" stop-opacity="0" />
+      <stop offset="15%" stop-color="#d97706" stop-opacity="0.18" />
+      <stop offset="80%" stop-color="#d97706" stop-opacity="0.18" />
+      <stop offset="100%" stop-color="#d97706" stop-opacity="0" />
+    </linearGradient>
+
+    <linearGradient id="staveFadeRight" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#f59e0b" stop-opacity="0" />
+      <stop offset="20%" stop-color="#f59e0b" stop-opacity="0.20" />
+      <stop offset="85%" stop-color="#f59e0b" stop-opacity="0.20" />
+      <stop offset="100%" stop-color="#f59e0b" stop-opacity="0" />
+    </linearGradient>
+  </defs>
+
+  <style>
+    .ink-calligraphy { fill: #f59e0b; fill-opacity: 0.32; }
+    .ink-calligraphy-bright { fill: #fbbf24; fill-opacity: 0.42; filter: url(#amberInkGlow); }
+    .ink-stroke { stroke: #d97706; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    .stave-line-left { stroke: url(#staveFadeLeft); stroke-width: 1.0; }
+    .stave-line-right { stroke: url(#staveFadeRight); stroke-width: 1.0; }
+    .davinci-geom { stroke: #d97706; stroke-opacity: 0.16; fill: none; stroke-linecap: round; }
+    .davinci-dash { stroke: #f59e0b; stroke-opacity: 0.18; stroke-dasharray: 4, 6; fill: none; }
+    .davinci-script { font-family: 'Times New Roman', serif; font-style: italic; fill: #d97706; fill-opacity: 0.22; letter-spacing: 1.5px; }
+    .antique-annotation { font-family: 'JetBrains Mono', monospace; font-size: 8.5px; fill: #fbbf24; fill-opacity: 0.25; letter-spacing: 2.5px; }
+    .diamond-note { fill: #f59e0b; fill-opacity: 0.32; }
+  </style>
+
+  <!-- =============================================================================================== -->
+  <!-- LEFT WING: CODEX HARMONICUS (Master Calligraphic Treble Clef, Flowing Phrases, Acoustic Vortex)  -->
+  <!-- =============================================================================================== -->
+  <g id="left-codex" transform="translate(30, 40)">
+
+    <!-- Stave System L1 (floating fragment, X=30 to 460) -->
+    <g id="stave-l1">
+      <line x1="30" y1="160" x2="470" y2="160" class="stave-line-left" />
+      <line x1="30" y1="172" x2="470" y2="172" class="stave-line-left" />
+      <line x1="30" y1="184" x2="470" y2="184" class="stave-line-left" />
+      <line x1="30" y1="196" x2="470" y2="196" class="stave-line-left" />
+      <line x1="30" y1="208" x2="470" y2="208" class="stave-line-left" />
+
+      <!-- Antique heavy calligraphic barline at start -->
+      <path d="M 65 158 L 68 158 L 68 210 L 65 210 Z" class="ink-calligraphy" fill-opacity="0.28" />
+      <line x1="72" y1="158" x2="72" y2="210" stroke="#d97706" stroke-width="0.8" stroke-opacity="0.2" />
+    </g>
+
+    <!-- MASTER CALLIGRAPHIC TREBLE G-CLEF (Гуру каллиграфии: thick/thin brush curves, copperplate spiral) -->
+    <!-- Drawn as an authentic filled calligraphic ribbon varying from 1px to 6px -->
+    <g id="master-g-clef" class="ink-calligraphy-bright">
+      <!-- Lower terminal drop & flourishing hook -->
+      <path d="M 104 238 C 100 240 94 239 91 234 C 88 229 91 223 96 222 C 102 221 106 226 105 231 C 105 234 102 236 100 236 C 98 236 97 234 97 232 C 97 230 99 229 101 230 C 102 230 103 232 101 233" />
+      
+      <!-- Calligraphic spine: ascending S-curve with swelling waist -->
+      <path d="M 102 236 C 104 225 107 195 107 175 C 107 140 102 122 105 108 C 107 98 114 90 120 90 C 126 90 129 98 126 108 C 122 120 110 148 102 178 C 96 200 96 215 100 226 C 102 232 103 235 102 236 Z" />
+      
+      <!-- Top teardrop loop -->
+      <path d="M 119 91 C 122 91 125 96 123 105 C 120 118 111 144 104 165 C 105 152 109 132 113 115 C 116 102 117 91 119 91 Z" />
+
+      <!-- The Grand Baroque G-Belly (Swelling from hairline to broad nib around line 2) -->
+      <path d="M 102 178 C 94 184 83 194 83 205 C 83 218 95 227 109 224 C 124 221 135 208 135 192 C 135 174 121 161 104 162 C 90 163 80 174 80 187 C 80 197 88 205 98 204 C 106 203 111 196 110 188 C 109 181 103 177 97 179 C 93 180 91 184 93 187 C 94 190 98 190 98 188 C 98 186 96 184 94 185 C 93 185 92 187 93 188 C 91 182 96 177 102 176 C 111 175 119 182 119 191 C 119 201 111 210 101 211 C 92 212 85 206 85 198 C 85 188 92 181 102 178 Z" />
+    </g>
+
+    <!-- Antique Mensural Time Signature: Tempus Perfectum (Circle with dot) -->
+    <circle cx="148" cy="184" r="8" stroke="#d97706" stroke-width="1.2" stroke-opacity="0.3" fill="none" />
+    <circle cx="148" cy="184" r="1.8" class="ink-calligraphy" fill-opacity="0.4" />
+
+    <!-- Phrase 1 Notes: Flowing Legato phrase with varying note values -->
+    <!-- Note 1: Diamond-headed minim with ascender -->
+    <path d="M 178 190 L 184 184 L 190 190 L 184 196 Z" class="diamond-note" />
+    <line x1="189" y1="187" x2="189" y2="152" stroke="#f59e0b" stroke-width="1.4" stroke-opacity="0.3" />
+
+    <!-- Note 2 & 3: Beamed Eighths with quill flourish -->
+    <ellipse cx="214" cy="178" rx="5.5" ry="4" transform="rotate(-22 214 178)" class="ink-calligraphy-bright" />
+    <line x1="219" y1="176" x2="219" y2="146" stroke="#f59e0b" stroke-width="1.3" stroke-opacity="0.32" />
+
+    <ellipse cx="242" cy="168" rx="5.5" ry="4" transform="rotate(-22 242 168)" class="ink-calligraphy-bright" />
+    <line x1="247" y1="166" x2="247" y2="142" stroke="#f59e0b" stroke-width="1.3" stroke-opacity="0.32" />
+
+    <!-- Thick Calligraphic Beam with angled nib cut -->
+    <polygon points="218,147 248,142 248,146 218,151" class="ink-calligraphy" fill-opacity="0.35" />
+
+    <!-- Slur arching over the notes -->
+    <path d="M 175 146 Q 210 130 252 140" stroke="#fbbf24" stroke-width="1.2" stroke-opacity="0.28" fill="none" />
+
+    <!-- Expressive Italian Dynamic Mark: Pianissimo / Dolce written by quill -->
+    <text x="265" y="198" class="davinci-script" font-size="14px">dolce</text>
+
+    <!-- Ledger line note leaping up -->
+    <line x1="310" y1="148" x2="334" y2="148" stroke="#d97706" stroke-width="1" stroke-opacity="0.25" />
+    <line x1="310" y1="136" x2="334" y2="136" stroke="#d97706" stroke-width="1" stroke-opacity="0.25" />
+    <ellipse cx="322" cy="136" rx="5.5" ry="3.8" transform="rotate(-20 322 136)" class="ink-calligraphy-bright" />
+    <line x1="317" y1="137" x2="317" y2="168" stroke="#f59e0b" stroke-width="1.3" stroke-opacity="0.3" />
+    <!-- Downward flag curl -->
+    <path d="M 317 168 C 322 174 328 178 332 186" stroke="#f59e0b" stroke-width="1.6" stroke-opacity="0.3" fill="none" />
+
+    <!-- Da Vinci Acoustic Vortex (Concentric wave ripples expanding from note 136) -->
+    <g id="davinci-wave-vortex">
+      <circle cx="322" cy="136" r="24" class="davinci-geom" stroke-width="0.7" />
+      <circle cx="322" cy="136" r="48" class="davinci-dash" stroke-width="0.8" />
+      <circle cx="322" cy="136" r="78" class="davinci-geom" stroke-width="0.6" stroke-opacity="0.1" />
+      <circle cx="322" cy="136" r="112" class="davinci-geom" stroke-width="0.5" stroke-opacity="0.06" />
+      <!-- Radial acoustic rays -->
+      <line x1="322" y1="136" x2="410" y2="80" class="davinci-geom" stroke-width="0.6" stroke-dasharray="2, 4" />
+      <line x1="322" y1="136" x2="430" y2="150" class="davinci-geom" stroke-width="0.6" stroke-dasharray="2, 4" />
+    </g>
+
+    <!-- Da Vinci Mirror Script / Handwriting in Latin -->
+    <text x="80" y="270" class="davinci-script" font-size="11px">"Sonus est motus aeris percussus..."</text>
+    <text x="80" y="286" class="antique-annotation">CODEX HARMONIA // FIG. I — ACOUSTIC DISPERSION</text>
+
+    <!-- Stave System L2 (Lower counter-stave fragment, slanted, Y=440 to 490) -->
+    <g id="stave-l2" transform="rotate(-2 200 480)">
+      <line x1="40" y1="460" x2="420" y2="460" class="stave-line-left" />
+      <line x1="40" y1="472" x2="420" y2="472" class="stave-line-left" />
+      <line x1="40" y1="484" x2="420" y2="484" class="stave-line-left" />
+      <line x1="40" y1="496" x2="420" y2="496" class="stave-line-left" />
+      <line x1="40" y1="508" x2="420" y2="508" class="stave-line-left" />
+
+      <!-- Antique C-Clef (Alto/Tenor clef) -->
+      <path d="M 70 472 L 74 472 L 74 508 L 70 508 Z" class="ink-calligraphy" fill-opacity="0.3" />
+      <path d="M 76 478 C 82 478 86 482 86 484 C 86 488 80 490 76 490 C 80 490 86 492 86 496 C 86 498 82 502 76 502" stroke="#f59e0b" stroke-width="1.4" stroke-opacity="0.3" fill="none" />
+
+      <!-- Descending ornamental arpeggio -->
+      <ellipse cx="110" cy="466" rx="5" ry="3.5" transform="rotate(-20 110 466)" class="ink-calligraphy-bright" />
+      <ellipse cx="138" cy="476" rx="5" ry="3.5" transform="rotate(-20 138 476)" class="ink-calligraphy" />
+      <ellipse cx="166" cy="488" rx="5" ry="3.5" transform="rotate(-20 166 488)" class="ink-calligraphy-bright" />
+      <ellipse cx="194" cy="500" rx="5" ry="3.5" transform="rotate(-20 194 500)" class="ink-calligraphy" />
+      <line x1="115" y1="464" x2="115" y2="436" stroke="#f59e0b" stroke-width="1.2" stroke-opacity="0.28" />
+      <line x1="143" y1="474" x2="143" y2="442" stroke="#f59e0b" stroke-width="1.2" stroke-opacity="0.28" />
+      <line x1="171" y1="486" x2="171" y2="448" stroke="#f59e0b" stroke-width="1.2" stroke-opacity="0.28" />
+      <line x1="199" y1="498" x2="199" y2="454" stroke="#f59e0b" stroke-width="1.2" stroke-opacity="0.28" />
+      <!-- Cascading beam -->
+      <polygon points="114,436 200,454 200,458 114,440" class="ink-calligraphy" fill-opacity="0.32" />
+
+      <!-- Great sweeping breath mark -->
+      <path d="M 220 460 C 235 440 260 440 280 470" stroke="#fbbf24" stroke-width="1.4" stroke-opacity="0.25" fill="none" />
+    </g>
+
+    <!-- Bottom Left Da Vinci Proportional Circle with Chord divisions -->
+    <g id="davinci-circle-l" transform="translate(80, 680)">
+      <circle cx="120" cy="120" r="80" class="davinci-geom" stroke-width="0.8" />
+      <circle cx="120" cy="120" r="49.4" class="davinci-dash" stroke-width="0.8" />
+      <polygon points="120,40 189,160 51,160" class="davinci-geom" stroke-width="0.6" stroke-opacity="0.12" />
+      <polygon points="120,200 189,80 51,80" class="davinci-geom" stroke-width="0.6" stroke-opacity="0.12" />
+      <text x="30" y="225" class="davinci-script" font-size="10px">Proportio Divina in Musica: 1 : 1.618</text>
+    </g>
+  </g>
+
+  <!-- =============================================================================================== -->
+  <!-- RIGHT WING: CODEX ACUSTICUS (Golden Fibonacci Spiral, Calligraphic Bass Clef, Fermata, Polyphony) -->
+  <!-- =============================================================================================== -->
+  <g id="right-codex" transform="translate(1420, 30)">
+
+    <!-- Stave System R1 (floating fragment, tilted slightly +1.5 deg, X=0 to 460) -->
+    <g id="stave-r1" transform="rotate(1.5 200 200)">
+      <line x1="10" y1="170" x2="460" y2="170" class="stave-line-right" />
+      <line x1="10" y1="182" x2="460" y2="182" class="stave-line-right" />
+      <line x1="10" y1="194" x2="460" y2="194" class="stave-line-right" />
+      <line x1="10" y1="206" x2="460" y2="206" class="stave-line-right" />
+      <line x1="10" y1="218" x2="460" y2="218" class="stave-line-right" />
+
+      <!-- MASTER CALLIGRAPHIC BASS F-CLEF (Гуру каллиграфии: thick copperplate arc & teardrop eyes) -->
+      <g id="master-f-clef" class="ink-calligraphy-bright">
+        <!-- Clef head: heavy swelling curl from line 4 (F line = Y=182) -->
+        <path d="M 48 186 C 45 186 41 183 41 178 C 41 171 48 165 57 166 C 70 167 78 178 74 193 C 70 208 55 220 38 226 C 36 227 34 225 35 224 C 48 217 62 206 65 194 C 67 184 62 174 54 173 C 48 173 45 177 46 181 C 47 185 50 186 48 186 Z" />
+        <!-- Two teardrop accent dots framing the F line (Y=176 and Y=188) -->
+        <ellipse cx="82" cy="176" rx="3.2" ry="2.4" transform="rotate(-15 82 176)" />
+        <ellipse cx="82" cy="188" rx="3.2" ry="2.4" transform="rotate(-15 82 188)" />
+      </g>
+
+      <!-- Key Signature: Antique Sharp symbols (calligraphic crossed chisels) -->
+      <g transform="translate(100, 168)">
+        <line x1="6" y1="4" x2="6" y2="26" stroke="#f59e0b" stroke-width="1" stroke-opacity="0.3" />
+        <line x1="11" y1="2" x2="11" y2="24" stroke="#f59e0b" stroke-width="1" stroke-opacity="0.3" />
+        <line x1="2" y1="10" x2="15" y2="8" stroke="#fbbf24" stroke-width="1.8" stroke-opacity="0.35" />
+        <line x1="2" y1="18" x2="15" y2="16" stroke="#fbbf24" stroke-width="1.8" stroke-opacity="0.35" />
+      </g>
+
+      <!-- Polyphonic Chord (3 voices stacked in antique diamond & round heads) -->
+      <g id="chord-cluster" transform="translate(135, 0)">
+        <ellipse cx="10" cy="182" rx="5.5" ry="3.8" transform="rotate(-20 10 182)" class="ink-calligraphy-bright" />
+        <ellipse cx="10" cy="194" rx="5.5" ry="3.8" transform="rotate(-20 10 194)" class="ink-calligraphy" />
+        <ellipse cx="10" cy="206" rx="5.5" ry="3.8" transform="rotate(-20 10 206)" class="ink-calligraphy-bright" />
+        <line x1="15" y1="180" x2="15" y2="140" stroke="#f59e0b" stroke-width="1.4" stroke-opacity="0.32" />
+      </g>
+
+      <!-- Calligraphic Crescendo/Decrescendo Hairpins (< >) -->
+      <path d="M 165 232 L 215 226 M 165 232 L 215 238" stroke="#fbbf24" stroke-width="1.4" stroke-opacity="0.28" fill="none" />
+      <path d="M 218 226 L 268 232 M 218 238 L 268 232" stroke="#fbbf24" stroke-width="1.4" stroke-opacity="0.28" fill="none" />
+
+      <!-- THE ROYAL FERMATA (Знак ферматы — корона времени / вечный покой звука) -->
+      <!-- Thick calligraphic arch with a luminous drop in the center -->
+      <g id="royal-fermata" transform="translate(310, 138)">
+        <path d="M 0 16 C 0 0 32 0 32 16 C 29 3 3 3 0 16 Z" class="ink-calligraphy-bright" />
+        <circle cx="16" cy="11" r="2.6" class="ink-calligraphy-bright" />
+        <!-- Whole note resting under the fermata -->
+        <ellipse cx="16" cy="32" rx="7" ry="4.8" transform="rotate(-20 16 32)" stroke="#fbbf24" stroke-width="2" stroke-opacity="0.38" fill="none" />
+        <ellipse cx="16" cy="32" rx="3" ry="2" transform="rotate(-20 16 32)" fill="none" stroke="#f59e0b" stroke-opacity="0.2" />
+      </g>
+
+      <!-- Handwritten tempo in Italian calligraphy -->
+      <text x="280" y="120" class="davinci-script" font-size="14px">Adagio solenne</text>
+    </g>
+
+    <!-- THE GOLDEN FIBONACCI ACOUSTIC SPIRAL (Da Vinci's Chamber of Sound) -->
+    <!-- Logarithmic spiral blossoming outward across the score -->
+    <g id="golden-spiral" transform="translate(180, 420)">
+      <!-- Golden Rectangles blueprint lines -->
+      <rect x="-130" y="-80" width="210" height="130" class="davinci-geom" stroke-width="0.6" stroke-opacity="0.12" />
+      <rect x="-130" y="-80" width="130" height="130" class="davinci-geom" stroke-width="0.6" stroke-opacity="0.1" />
+      <rect x="0" y="-80" width="80" height="80" class="davinci-geom" stroke-width="0.6" stroke-opacity="0.1" />
+      <rect x="0" y="0" width="50" height="50" class="davinci-geom" stroke-width="0.6" stroke-opacity="0.1" />
+      
+      <!-- Luminous golden spiral arc -->
+      <path d="M -130 50 A 130 130 0 0 1 0 -80 A 80 80 0 0 1 80 0 A 50 50 0 0 1 30 50 A 30 30 0 0 1 0 20" class="davinci-geom" stroke="#fbbf24" stroke-width="1.4" stroke-opacity="0.32" filter="url(#amberInkGlow)" />
+      
+      <!-- Faint radial spokes of harmonic overtone ratios -->
+      <line x1="0" y1="20" x2="-140" y2="-90" class="davinci-dash" stroke-width="0.6" />
+      <line x1="0" y1="20" x2="100" y2="-70" class="davinci-dash" stroke-width="0.6" />
+      <line x1="0" y1="20" x2="110" y2="60" class="davinci-dash" stroke-width="0.6" />
+
+      <text x="-120" y="70" class="antique-annotation">HARMONIC RATIO // Φ = 1.6180339887...</text>
+      <text x="-120" y="86" class="davinci-script" font-size="11px">"Ogni suono ha la sua proporzione geometrica"</text>
+    </g>
+
+    <!-- Stave System R2 (Lower Stave with sweeping cascading 16ths into silence, Y=620) -->
+    <g id="stave-r2" transform="translate(20, 620)">
+      <line x1="0" y1="60" x2="420" y2="60" class="stave-line-right" />
+      <line x1="0" y1="72" x2="420" y2="72" class="stave-line-right" />
+      <line x1="0" y1="84" x2="420" y2="84" class="stave-line-right" />
+      <line x1="0" y1="96" x2="420" y2="96" class="stave-line-right" />
+      <line x1="0" y1="108" x2="420" y2="108" class="stave-line-right" />
+
+      <!-- Double barline ending (Finis) -->
+      <line x1="380" y1="58" x2="380" y2="110" stroke="#d97706" stroke-width="1" stroke-opacity="0.3" />
+      <path d="M 386 58 L 390 58 L 390 110 L 386 110 Z" class="ink-calligraphy" fill-opacity="0.35" />
+
+      <!-- Descending run of notes with calligraphic flourishes -->
+      <ellipse cx="60" cy="54" rx="5" ry="3.5" transform="rotate(-20 60 54)" class="ink-calligraphy-bright" />
+      <ellipse cx="90" cy="66" rx="5" ry="3.5" transform="rotate(-20 90 66)" class="ink-calligraphy" />
+      <ellipse cx="120" cy="78" rx="5" ry="3.5" transform="rotate(-20 120 78)" class="ink-calligraphy-bright" />
+      <ellipse cx="150" cy="90" rx="5" ry="3.5" transform="rotate(-20 150 90)" class="ink-calligraphy" />
+      <ellipse cx="180" cy="102" rx="5" ry="3.5" transform="rotate(-20 180 102)" class="ink-calligraphy-bright" />
+
+      <!-- Stems & Beams -->
+      <line x1="65" y1="52" x2="65" y2="25" stroke="#f59e0b" stroke-width="1.2" stroke-opacity="0.3" />
+      <line x1="95" y1="64" x2="95" y2="37" stroke="#f59e0b" stroke-width="1.2" stroke-opacity="0.3" />
+      <line x1="125" y1="76" x2="125" y2="49" stroke="#f59e0b" stroke-width="1.2" stroke-opacity="0.3" />
+      <line x1="155" y1="88" x2="155" y2="61" stroke="#f59e0b" stroke-width="1.2" stroke-opacity="0.3" />
+      <line x1="185" y1="100" x2="185" y2="73" stroke="#f59e0b" stroke-width="1.2" stroke-opacity="0.3" />
+      <polygon points="64,25 186,73 186,77 64,29" class="ink-calligraphy" fill-opacity="0.32" />
+
+      <!-- Antique Rest symbols (Crotchet rest / пауза) -->
+      <path d="M 230 70 L 238 78 L 232 86 L 240 94 C 237 99 231 100 228 98" stroke="#fbbf24" stroke-width="1.4" stroke-opacity="0.3" fill="none" />
+
+      <!-- Final fading inscription -->
+      <text x="260" y="88" class="davinci-script" font-size="13px">morendo...</text>
+      <text x="0" y="145" class="antique-annotation">PHARMAKON TAPE SATURATION &amp; ACOUSTIC ARCHIVE // 1974-2049</text>
+    </g>
+  </g>
+
+</svg>

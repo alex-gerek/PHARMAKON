@@ -1,9 +1,10 @@
 <p align="center">
-  <img src="studio_icon.png" width="130" height="130" alt="PHARMAKON Logo">
+  <img src="gui/static/studio_icon.png" width="130" height="130" alt="PHARMAKON Logo">
 </p>
 
-# PHARMAKON
-## Studio-Grade Audio Antidote, De-Harshing & Stem Mastering Pipeline
+# PHARMAKON 2.0 PRO
+## Studio-Grade Audio Antidote, AI De-Harshing & Mastering Console
+### Created by Lex Gerek // Abbey Road 1974 × Blade Runner 2049
 
 <p align="center">
   <a href="https://github.com/alex-gerek/PHARMAKON/archive/refs/heads/master.zip">
@@ -12,16 +13,18 @@
 </p>
 
 <p align="center">
-  <b><a href="#-русская-версия">🇷🇺 Читать на русском</a></b> &nbsp;|&nbsp; 
-  <b><a href="#-english-version">🇬🇧 Read in English</a></b>
+  <b><a href="#-русская-версия">🇷🇺 Читать руководство на русском</a></b> &nbsp;|&nbsp; 
+  <b><a href="#-english-version">🇬🇧 Read User Guide in English</a></b>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Python-3.9+-blue.svg?style=flat-square" alt="Python">
+  <img src="https://img.shields.io/badge/Version-2.0%20PRO-emerald.svg?style=flat-square&color=10b981" alt="Version 2.0 PRO">
+  <img src="https://img.shields.io/badge/UI-Interactive%20Hardware%20Console-blue.svg?style=flat-square" alt="Console UI">
+  <img src="https://img.shields.io/badge/Oscilloscope-Dual%2060%20FPS%20CRT-brightgreen.svg?style=flat-square" alt="CRT Scope">
+  <img src="https://img.shields.io/badge/Crossfade-35ms%20Cosine-purple.svg?style=flat-square" alt="Crossfade">
+  <img src="https://img.shields.io/badge/True--Peak--0.3%20dBFS-amber.svg?style=flat-square&color=f59e0b" alt="True Peak">
   <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-0078d7?style=flat-square" alt="Platform">
-  <img src="https://img.shields.io/badge/DSP-SciPy%20SoundFile-red.svg?style=flat-square" alt="DSP">
-  <img src="https://img.shields.io/badge/Artist-Lex%20Gerek-black.svg?style=flat-square&logo=youtube" alt="Lex Gerek">
-  <img src="https://img.shields.io/badge/True--Peak--0.3%20dBFS-brightgreen.svg?style=flat-square" alt="True Peak">
+  <img src="https://img.shields.io/badge/Author-Lex%20Gerek-black.svg?style=flat-square&logo=youtube" alt="Lex Gerek">
   <img src="https://img.shields.io/badge/License-MIT-orange.svg?style=flat-square" alt="License">
 </p>
 
@@ -29,164 +32,203 @@
 
 # 🇷🇺 Русская версия
 
-## 1. Философия и предыстория проекта
-> **Pharmakon** *(др.-греч. φάρμακον)* — античный концепт, обозначающий одновременно **яд**, **лекарство** и **противоядие**. В звукорежиссуре грязь, паразитные обертоны и ядовитые фазовые резонансы способны убить трек, но под воздействием точной математики превращаются в плотный, благородный аналоговый звук.
+## 1. Философия и концепция PHARMAKON
+> **Pharmakon** *(др.-греч. φάρμακон)* — античный философский концепт, означающий одновременно **яд**, **лекарство** и **противоядие**. 
 
-Привет, я **Lex Gerek** — звукорежиссер и саунд-архитектор.
+В современной звукозаписи цифровая резкость (harshness), ядовитый свист на буквах С/Ш (4.5–7 кГц), перегруженные транзиенты и мутный некогерентный саб-бас убивают музыкальность треков. **PHARMAKON 2.0** превращает этот «яд» в целебную формулу — очищая звук математическими алгоритмами психоакустики, аналоговой теплотой ленты (Tape Saturation) и хирургическим контролем фазы.
 
-Этот проект родился в моих ночных студийных сессиях во время сведения и мастеринга.
-
-Когда работаешь с приглашенными вокалистами и сессионными музыкантами, присылающими дорожки из разных комнат и микрофонов, неизбежно сталкиваешься с одним и тем же техническим адом: паразитные комнатные резонансы, микрофонная грязь, ядовитый свистящий скрежет на буквах С/Ш ($4.5\text{--}6.5\text{ кГц}$) и мутный размазанный саб-бас, убивающий давление на мощных клубных акустических системах (Funktion-One, L-Acoustics).
-
-Чтобы не тратить драгоценные часы на рутинную зачистку каждого трека, я разработал эту математическую DSP-цепочку как автоматизированный студийный процессор:
-- **Запирание баса ниже $120\text{ Гц}$ в строгое монолитное моно** — максимальный панч в грудь и ноль фазовых конфликтов в клубе.
-- **Крутой срез инфра-гула ниже $32\text{ Гц}$**, освобождающий полезный динамический запас громкости (*headroom*).
-- **Хирургический режекторный фильтр** ядовитых обертонов и сибилянтов на $5\text{ кГц}$ с сохранением яркости и воздуха.
-- **Нелинейная плёночная сатурация ($\tanh$)** для склеивания микса и теплого аналогового тела.
-- **3D Mid-Side пространственная матрица** для расширения синтов и атмосферы на $+20\dots+25\%$ при монолитном центре.
-
-### 💡 Потрясающий побочный эффект:
-С появлением генеративных нейросетей (Suno, Udio и др.) я пропустил через этот процессор сырые генерации. Оказалось, что студийная математика, созданная для живых записей, абсолютно бесследно стирает цифровой шум квантования, фазовую «кашу» и жестяной ИИ-призвук, превращая сырой материал в плотный, готовый к релизу коммерческий саунд.
+Интерфейс версии 2.0 вдохновлен эстетикой **Abbey Road 1974 × Blade Runner 2049**:
+- Массивный титановый рэковый корпус с фрезерованными 3D-ручками (Knurled Metal Knobs).
+- Вольфрамовые граненые лампы накаливания (Jewel Lamps).
+- Двойные выпуклые кинескопные CRT-осциллографы с зеленым фосфором и сканлайнами.
+- Фон — рукописный янтарный манускрипт в духе нотных кодексов Леонардо да Винчи с золотой спиралью Фибоначчи ($\varphi = 1.618$).
 
 ---
 
-## 2. Архитектура DSP-обработки
+## 2. Архитектура режимов: PHARMAKON 1 vs PHARMAKON 2
 
-```text
- АУДИОФАЙЛ ИЛИ СТЕМСЫ (.WAV / .MP3 / .FLAC)
- ├── ВОКАЛ / ВЕРХ   ──> [Highpass 85Hz] ──> [5kHz Surgical Notch Filter] ──> [Tape Saturation] ──┐
- ├── БАС / САБ-НИЗ  ──> [Highpass 32Hz] ──> [120Hz Crossover -> True Mono] ──> [Warmth Tanh]   ──┼─> [Master Sum] ─> [True-Peak Limiter -0.3dBFS] ─> STUDIO_REMASTER.WAV
- ├── УДАРНЫЕ        ──> [Highpass 28Hz] ──> [Transient Attack Punch Boost] ──> [Soft Clip]     ──┤
- └── АТМОСФЕРА/СИНТ ──> [Highpass 115Hz] ──> [Mid-Side Matrix -> +20% Side Width] ────────────┘
+В верхней части консоли расположен переключатель режимов:
+
+### Режим 1: `PHARMAKON 1: AUTO ANTIDOTE`
+Режим «интеллектуальной кнопки» для быстрого и безупречного результата:
+- **Автоматический спектральный анализ:** Движок сканирует аудиоматериал, выявляя частотные пики резонансов и перегрузки.
+- **Интеллектуальный De-Harshing:** Динамическое подавление паразитного металлического звона без затупления общего звучания.
+- **Аналоговая склейка:** Мягкая сатурация магнитной ленты и подтяжка плотности до радиоформата (-0.3 dBFS True-Peak).
+
+### Режим 2: `PHARMAKON 2: STUDIO PRO RACK`
+Полноценная 8-параметрическая аналоговая консоль для прецизионного мастеринга:
+1. **SUB-BASS FOCUS (Hz):** Обрезной фильтр ультра-инфразвука (20–45 Гц). Устраняет неслышимый саб-рокот, высвобождая запас громкости (headroom).
+2. **MONO CROSSOVER (Hz):** Монофонизация суб-баса (40–160 Гц). Фокусирует низ в центр стереопанорамы, гарантируя плотный удар на мощных клубных сабвуферах (Funktion-One, L-Acoustics) без фазовой каши.
+3. **DE-HARSH INTENSITY (%):** Психоакустический дехаршер (3.5–7.5 кГц). Подавляет сибилянты, микрофонный свист и резкость тарелок.
+4. **TAPE WARMTH (%):** Нелинейная сатурация магнитной ленты. Добавляет музыкальные четные и нечетные гармоники, склеивая микс в единое полотно.
+5. **AIR LIFT GAIN (dB):** Полочный фильтр шелковистого воздуха (11–16 кГц). Добавляет благородный блеск без появления песка.
+6. **STEREO SPREAD (%):** Контроллер расширения бокового канала (Mid/Side). Раздувает стереопанораму от естественной ширины (100%) до кинематографической глубины (160%).
+7. **TRUE-PEAK CEILING (dB):** Межсэмпловый лимитер (Brickwall True-Peak Limiter) с защитой от цифрового клиппинга для стримингов (Spotify, Apple Music, YouTube).
+8. **MACRO TIMEBASE (Zoom):** Масштаб развертки CRT-осциллографов (от 0.5x до 10.0x).
+
+> **Управление 3D-ручками:**  
+> Зажмите ручку левой кнопкой мыши и тяните **вверх/вниз** для изменения значения.  
+> Или наведите курсор и крутите **колесико мыши** для шага в 1%.  
+> Двойной клик сбрасывает параметр к заводскому оптимуму.
+
+---
+
+## 3. Хирургический режим (Surgical Punch-In / Repair)
+
+Когда вам нужно вылечить только испорченный фрагмент (например, резкий крик в микрофон или щелчок на 15-й секунде), не трогая идеальное звучание остального трека:
+
+1. **Выделение на осциллографе:** Зажмите левую кнопку мыши на интерактивной вейвформе и потяните диапазон.
+2. **Лазерные калиперы:** Появится полупрозрачный янтарно-бирюзовый регион с точными таймкодами `IN` и `OUT`.
+3. **Быстрые кнопки шага:** Нажмите `+3s`, `+5s` или `+10s` от текущей позиции воспроизведения.
+4. **35-мс Equal-Power Raised-Cosine Crossfade:** При экспорте или обработке регион бесшовно вклеивается в оригинальный трек. **100% аудио за пределами калиперов остается байпасным и байт-в-байт нетронутым!**
+5. **Сброс выделения:** Нажмите кнопку `✖ CLEAR`, клавишу `Escape` или дважды кликните по вейвформе.
+
+---
+
+## 4. Двойные 60 FPS CRT-осциллографы и A/B прослушивание
+
+- **Channel A (RAW):** Оригинальный необработанный сигнал (лазерный рубиновый цвет с неоновым детектором перегрузок).
+- **Channel B (MASTER):** Результат мастеринга PHARMAKON (насыщенный изумрудный фосфор).
+- **Кнопка `🔁 LOOP 5s`:** Мгновенное включение циклического повтора текущего 5-секундного отрезка для отслушивания микродеталей.
+- **Горячие клавиши:**
+  - `Пробел (Space)` — Старт / Пауза.
+  - `A` — Переключение на исходный трек (RAW).
+  - `B` — Переключение на мастер (PHARMAKON).
+  - `Escape` — Сброс хирургического региона.
+  - `Ctrl + V` — Быстрая вставка пути к аудиофайлу из буфера обмена.
+
+---
+
+## 5. 🚀 Быстрый старт за 3 шага
+
+### Шаг 1. Клонировать или скачать
+```bash
+git clone https://github.com/alex-gerek/PHARMAKON.git
+cd PHARMAKON
+```
+Или нажмите кнопку **[Download ZIP](https://github.com/alex-gerek/PHARMAKON/archive/refs/heads/master.zip)** в шапке и распакуйте архив.
+
+### Шаг 2. Установить зависимости
+Требуется Python 3.9 или выше:
+```bash
+pip install -r requirements.txt
 ```
 
----
+### Шаг 3. Запустить студийную консоль
+Нажмите дважды на файл:
+```text
+Pharmakon_GUI.bat
+```
+*(Либо выполните команду: `python gui/server.py`)*
 
-## 3. 🚀 Инструкция: Как скачать и запустить за 3 шага
+Консоль автоматически откроется в браузере или отдельном окне по адресу:
+👉 **`http://127.0.0.1:7860`**
 
-> [!TIP]
-> Инструмент полностью автономен. При первом запуске скрипт сам автоматически проверит и установит необходимые библиотеки!
-
-### Шаг 1. Скачать проект
-Нажмите на большую зеленую кнопку вверху или [**скачайте архив по прямой ссылке**](https://github.com/alex-gerek/PHARMAKON/archive/refs/heads/master.zip). Распакуйте архив в любую папку.
-
-### Шаг 2. Выберите режим (целый файл ИЛИ стемсы):
-Инструмент поддерживает **два сценария работы**:
-* **Режим А (Целый трек — за 1 секунду):** если у вас просто один аудиофайл (`.wav`, `.mp3`, `.flac`, `.ogg`) — перетащите прямо его! Процессор выполнит частотный кроссовер, запрет бас ниже 120 Гц в монолитное моно, вырежет жестяной свист на 5 кГц, расширит верх по 3D-стерео и отмастерит в True-Peak -0.3 dBFS.
-* **Режим Б (Поканальный ремастеринг стемсов):** если у вас есть папка со стемсами (`vocals.wav`, `drums.wav`, `bass.wav`, `other.wav`) — перетащите всю папку для глубокой поканальной хирургии каждого инструмента.
-
-### Шаг 3. Запустить
-* **В Windows:** просто **перетащите файл или папку мышкой на `Pharmakon.bat`** (или на ярлык на Рабочем столе).
-* **На macOS / Linux:** откройте терминал в папке проекта и выполните:
-  ```bash
-  chmod +x run_mac_linux.sh
-  ./run_mac_linux.sh "путь_к_файлу_или_папке"
-  ```
-
-Через секунду внутри папки появится директория `Remaster/`:
-- 🏆 **`[ИМЯ_ТРЕКА] - STUDIO_REMASTER.wav`** — готовый коммерческий мастер с лимитером -0.3 dBFS!
-
----
-
-## 4. Обо мне
-Я — **звукорежиссер и саунд-архитектор**.
-
-В профессиональной деятельности я веду и продюсирую звук для разноплановых проектов индустрии:
-- 🎮 **Компьютерные игры:** создание звуковых ландшафтов, саунд-дизайн и интеграция игрового аудио.
-- 🎬 **Кинематограф:** пост-продакшн, сведение, ремастеринг и аудио-продакшн для фильмов.
-- 🎤 **Работа с артистами и вокалистами:** студийный трекинг, чистка и сведение вокала для исполнителей.
-
-А написание концептуальной электронной музыки и режиссура аудиовизуальных фильмов — это мое личное страстное хобби и творческая лаборатория, где я исследую пределы современного звучания.
-
-* 🎬 **Смотреть 98-минутный визуальный техно-альбом на YouTube**:  
-  [**Lex Gerek — Center of Gravity (Full Mix)**](https://youtu.be/fCYPHCnbq2Y)
-* ⚡️ **X / Twitter**: [@LexGerek](https://x.com/LexGerek)
-* 💿 **Bandcamp**: [lexgerek.bandcamp.com](https://lexgerek.bandcamp.com)
-
----
-
-## 5. Лицензия
-Проект распространяется с открытым исходным кодом по лицензии [MIT](LICENSE) © 2026 Lex Gerek. Бесплатно для артистов, музыкантов и звукорежиссёров по всему миру.
+*(Для пакетной обработки через консоль Windows доступен батник `Pharmakon.bat`).*
 
 ---
 
 # 🇬🇧 English Version
 
-## 1. The Philosophy & Origin Story
-> **Pharmakon** *(Ancient Greek: φάρμακον)* — the philosophical concept of something that acts simultaneously as **poison**, **remedy**, and **antidote**. In music production, toxic room bleed, metallic harshness, and destructive phase smearing can poison a mix — but under precise mathematical surgery, they are converted into pure sonic weight and analog warmth.
+## 1. Philosophy & Concept of PHARMAKON
+> **Pharmakon** *(Ancient Greek: φάρмакон)* — a profound philosophical term representing both **poison**, **remedy**, and **antidote**.
 
-Hi, I'm **Lex Gerek** — audio engineer and sound architect.
+In contemporary audio production, harsh high-end resonances (4.5–7 kHz sibilance), brittle vocal spikes, rogue sub-low mud, and poorly controlled transient phase can ruin an otherwise brilliant record. **PHARMAKON 2.0** acts as the definitive audio antidote — neutralizing acoustic poisons through precision psychoacoustics, warm analog tape saturation, and phase-coherent stem mastering.
 
-This engine was born directly out of my late-night studio mixing and mastering sessions.
-
-When tracking and mixing with guest vocalists and demanding session musicians who record in varied, imperfect acoustic environments, I constantly faced the same engineering nightmare: mic bleed, nasty room flutter resonances, piercing metallic sibilance on consonants ($4.5\text{--}6.5\text{ kHz}$), and muddy, out-of-phase sub-bass that drains punch and destroys club sound systems (like *Funktion-One* or *L-Acoustics*).
-
-Instead of wasting hours manually repairing the same audio flaws across dozens of stem tracks, I engineered this mathematical DSP (Digital Signal Processing) pipeline as an automated studio channel strip:
-- **Locking sub-bass below $120\text{ Hz}$ into pure, focused mono** (maximum headroom, zero phase issues on big subs).
-- **Sub-harmonic cut below $32\text{ Hz}$** to remove invisible speaker-shaking mud and restore mix punch.
-- **Surgical dynamic notch filtering** to tame harsh $5\text{ kHz}$ sibilance and brittle overtones without dulling the vocal presence.
-- **Non-linear analog tape saturation modeling ($\tanh$)** for rich harmonic warmth and cohesion.
-- **3D Mid-Side spatial matrix** expanding side elements by $+20\dots+25\%$ while keeping the kick and bass dead center.
-
-### 💡 The Unexpected "Side Effect":
-As generative neural audio tools (Suno, Udio, and AI synthesizers) entered the scene, I tested this exact DSP chain on raw generated stems. The result was staggering: the same mathematical filters that tamed harsh vocalists effortlessly eliminated digital quantization grain, robotic phase smearing, and "AI soup" — instantly transforming raw, flat stems into a warm, punchy, commercial-grade master.
+Version 2.0 is sculpted in the signature **Abbey Road 1974 × Blade Runner 2049** hardware aesthetic:
+- Gunmetal titanium rack chassis with knurled 3D aluminum rotary knobs.
+- Warm tungsten-filament jewel indicator lamps.
+- Dual 60 FPS CRT phosphor oscilloscopes with spherical glass lens reflections and CRT scanlines.
+- Hand-drawn amber musical manuscript background inspired by Leonardo da Vinci’s acoustic codices and golden ratio spirals ($\varphi = 1.618$).
 
 ---
 
-## 2. DSP Processing Architecture
+## 2. Two-Tier Processing: PHARMAKON 1 vs PHARMAKON 2
 
-```text
- RAW AUDIO OR STEMS (.WAV / .MP3 / .FLAC)
- ├── VOCALS / HIGHS ──> [Highpass 85Hz] ──> [5kHz Surgical Notch Filter] ──> [Tape Saturation] ──┐
- ├── BASS / LOW-END ──> [Highpass 32Hz] ──> [120Hz Crossover -> True Mono] ──> [Warmth Tanh]   ──┼─> [Master Sum] ─> [True-Peak Limiter -0.3dBFS] ─> STUDIO_REMASTER.WAV
- ├── DRUMS          ──> [Highpass 28Hz] ──> [Transient Attack Punch Boost] ──> [Soft Clip]     ──┤
- └── SYNTHS / ATMO  ──> [Highpass 115Hz] ──> [Mid-Side Matrix -> +20% Side Width] ────────────┘
+Use the top selector switch to toggle between workflow tiers:
+
+### Tier 1: `PHARMAKON 1: AUTO ANTIDOTE`
+One-click autonomous mastering:
+- **Intelligent Spectral De-Harshing:** Scans the audio file, pinpoints harsh frequency build-ups, and tames them transparently.
+- **Tape Glue & Dynamics:** Applies cohesive tape saturation and levels the audio to a broadcast-ready -0.3 dBFS True-Peak standard.
+
+### Tier 2: `PHARMAKON 2: STUDIO PRO RACK`
+Eight-parameter tactile mastering console:
+1. **SUB-BASS FOCUS (Hz):** High-pass infrasonic filter (20–45 Hz) eliminating sub-rumble to reclaim maximum headroom.
+2. **MONO CROSSOVER (Hz):** Sums low-end (40–160 Hz) strictly to Mono, ensuring punchy, phase-cancellation-free bass on large sound systems (Funktion-One, L-Acoustics).
+3. **DE-HARSH INTENSITY (%):** Psychoacoustic harshness suppressor targeting sibilants, harsh cymbals, and piercing upper-mids (3.5–7.5 kHz).
+4. **TAPE WARMTH (%):** Non-linear magnetic tape saturation generating rich even and odd harmonics.
+5. **AIR LIFT GAIN (dB):** High-shelf boost (11–16 kHz) delivering silky analog sheen without brittleness.
+6. **STEREO SPREAD (%):** Mid/Side spatial expansion controller (100% natural up to 160% cinematic width).
+7. **TRUE-PEAK CEILING (dB):** Inter-sample peak limiter safeguarding against streaming distortion.
+8. **MACRO TIMEBASE (Zoom):** Waveform oscilloscope resolution zoom (0.5x to 10.0x).
+
+> **Operating 3D Knobs:**  
+> Click and drag **up/down** on any knob to smoothly adjust values.  
+> Hover and scroll the **mouse wheel** for fine 1% precision nudges.  
+> Double-click to instantly reset to factory defaults.
+
+---
+
+## 3. Surgical Region / Punch-In Repair
+
+Repair damaged or harsh sections without altering pristine parts of your track:
+
+1. **Drag-to-Select:** Click and drag directly on the interactive waveform canvas.
+2. **Laser Calipers:** Visual caliper brackets mark exact `IN` and `OUT` timestamps.
+3. **Quick Spans:** Click `+3s`, `+5s`, or `+10s` relative to playhead position.
+4. **35ms Raised-Cosine Equal-Power Crossfade:** The processed segment is smoothly blended into the untouched original. **100% of audio outside the calipers remains byte-for-byte bypass untouched.**
+5. **Clear Calipers:** Click `✖ CLEAR`, press `Escape`, or double-click the waveform.
+
+---
+
+## 4. Monitoring, Transport & A/B Auditioning
+
+- **Channel A (RAW):** Original unmodified signal rendered in laser ruby with clipping highlights.
+- **Channel B (MASTER):** Antidote-processed signal rendered in vintage phosphor emerald.
+- **`🔁 LOOP 5s`:** One-click toggle to loop the current 5-second playback window.
+- **`⬇ DOWNLOAD MASTER (.WAV)`:** Direct high-resolution master download button.
+- **Hotkeys:**
+  - `Space` — Play / Pause.
+  - `A` — Audition RAW original.
+  - `B` — Audition PHARMAKON master.
+  - `Escape` — Cancel surgical caliper region.
+  - `Ctrl + V` — Quick-paste audio file path.
+
+---
+
+## 5. 🚀 Quick Start in 3 Steps
+
+### Step 1. Clone or Download
+```bash
+git clone https://github.com/alex-gerek/PHARMAKON.git
+cd PHARMAKON
+```
+Or click the **[Download ZIP](https://github.com/alex-gerek/PHARMAKON/archive/refs/heads/master.zip)** button above.
+
+### Step 2. Install Dependencies
+Requires Python 3.9 or higher:
+```bash
+pip install -r requirements.txt
 ```
 
----
+### Step 3. Launch Studio Console
+Double-click:
+```text
+Pharmakon_GUI.bat
+```
+*(Or run `python gui/server.py` in terminal)*
 
-## 3. 🚀 Quick Start: How to Download & Run in 3 Steps
-
-> [!TIP]
-> The engine is fully portable and automated. On the first run, it will automatically install any missing dependencies!
-
-### Step 1. Download
-Click the green button above or [**download the direct ZIP archive**](https://github.com/alex-gerek/PHARMAKON/archive/refs/heads/master.zip). Extract the archive anywhere.
-
-### Step 2. Choose Mode (Single Audio File OR Stems):
-The engine supports **two workflows**:
-* **Mode A (Single Full Track — in 1 second):** if you just have a single `.wav`, `.mp3`, `.flac`, or `.ogg` file — drag and drop it directly! The processor runs a frequency crossover, locks bass below 120Hz into solid mono, de-harshes 5kHz sibilance, expands 3D mid-side stereo width on the highs, applies tape saturation, and limits to -0.3 dBFS true-peak.
-* **Mode B (4-Stem Surgical Mastering):** if you have a folder with separated stems (`vocals.wav`, `drums.wav`, `bass.wav`, `other.wav`) — drag the whole folder for deep individual instrument surgery.
-
-### Step 3. Run
-* **On Windows:** simply **drag and drop your audio file or stems folder onto `Pharmakon.bat`** (or the desktop shortcut).
-* **On macOS / Linux:** open your terminal inside the folder and run:
-  ```bash
-  chmod +x run_mac_linux.sh
-  ./run_mac_linux.sh "path_to_audio_or_stems"
-  ```
-
-In seconds, a `Remaster/` folder is generated containing:
-- 🏆 **`[TRACK_NAME] - STUDIO_REMASTER.wav`** — the full commercial master with -0.3 dBFS true-peak limiter!
+Navigate to:
+👉 **`http://127.0.0.1:7860`**
 
 ---
 
-## 4. About Lex Gerek
-I am a professional **audio engineer and sound architect**.
+## 6. Author & Credits
+Created with acoustic passion by **Lex Gerek**  
+- Sound Architect, Mastering Engineer & Producer  
+- YouTube / Portfolio: [Lex Gerek](https://www.youtube.com/@alex-gerek)  
+- GitHub: [@alex-gerek](https://github.com/alex-gerek)
 
-Professionally, I engineer and lead audio production across commercial creative industries:
-- 🎮 **Video Games:** interactive audio systems, atmospheric sound design, and game audio engineering.
-- 🎬 **Motion Pictures:** film sound post-production, mixing, re-mastering, and cinematic audio.
-- 🎤 **Artists & Vocalists:** vocal tracking, surgical stem cleanup, and mixing for recording artists.
-
-Composing dark conceptual electronic music and directing audiovisual feature films is my personal creative passion and sonic laboratory:
-
-* 🎬 **Watch the 98-Minute Neo-Noir Techno Visual Album on YouTube**:  
-  [**Lex Gerek — Center of Gravity (Full Mix)**](https://youtu.be/fCYPHCnbq2Y)
-* ⚡️ **X / Twitter**: [@LexGerek](https://x.com/LexGerek)
-* 💿 **Bandcamp**: [lexgerek.bandcamp.com](https://lexgerek.bandcamp.com)
-
----
-
-## 5. License
-This project is open-source under the [MIT License](LICENSE) © 2026 Lex Gerek. Free for artists, producers, and developers worldwide.
+## 7. License
+Released under the **MIT License**. Free for personal, commercial, and studio use.

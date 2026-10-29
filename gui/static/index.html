@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PHARMAKON // Studio Audio Antidote & Mastering Console</title>
+  <link rel="stylesheet" href="/static/style.css?v=score3">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;800&family=Orbitron:wght@500;700;900&family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="theme-cybernoir">
+  <div class="console-wrapper">
+    
+    <!-- TOP HEADER -->
+    <header class="studio-header">
+      <div class="brand-group">
+        <div class="brand-logo-hex">
+          <img src="/static/studio_icon.png" alt="Pharmakon" onerror="this.style.display='none'">
+          <div class="hex-glow"></div>
+        </div>
+        <div class="brand-titles">
+          <div class="flex items-center gap-3">
+            <div class="jewel-lamp jewel-lamp-amber"></div>
+            <h1 class="brand-name">PHARMAKON <span class="version-tag">2.0 PRO</span></h1>
+            <span class="serial-plate">SERIAL: LG-PH-002-PRO</span>
+          </div>
+          <p class="brand-subtitle">LEX GEREK SOUND ARCHITECTURE &bull; DUAL 60 FPS PHOSPHOR CATHODE SCOPES &bull; TAPE GLUE TANH</p>
+        </div>
+      </div>
+
+      <!-- WORKFLOW MODE SELECTOR -->
+      <div class="mode-selector-rack">
+        <div class="mode-label">WORKFLOW MODE:</div>
+        <div class="mode-toggle-group">
+          <button id="btnMode1" class="mode-btn active" onclick="setMode('pharmakon1')">
+            <span class="indicator-dot"></span>
+            PHARMAKON 1 <span class="mode-sub">AUTO ANTIDOTE</span>
+          </button>
+          <button id="btnMode2" class="mode-btn" onclick="setMode('pharmakon2')">
+            <span class="indicator-dot"></span>
+            PHARMAKON 2 <span class="mode-sub">STUDIO PRO RACK</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="author-signature">
+        <span class="sig-name">LEX GEREK</span>
+        <span class="sig-role">SOUND ARCHITECT</span>
+      </div>
+    </header>
+
+    <!-- MAIN CONTROL DECK -->
+    <main class="console-body">
+
+      <!-- DROPZONE & INPUT BAY -->
+      <section class="rack-module input-bay">
+        <div class="module-header">
+          <span class="led-indicator led-green"></span>
+          <h2>01 // AUDIO INGESTION & TARGET SELECTION</h2>
+          <div class="module-tag">DRAG & DROP READY</div>
+        </div>
+
+        <div id="dropzone" class="dropzone-area">
+          <div class="dropzone-hologram">
+            <div class="radar-scan"></div>
+            <div class="drop-icon">⤓</div>
+            <div class="drop-primary-text">DRAG & DROP AUDIO FILE OR STEMS FOLDER HERE</div>
+            <div class="drop-secondary-text">Supported formats: .wav, .mp3, .flac, .ogg or 4-stem folders (Vocals, Drums, Bass, Other)</div>
+          </div>
+        </div>
+        <input type="file" id="fileInput" accept=".wav,.mp3,.flac,.ogg,.aiff" style="display:none">
+
+        <div class="manual-path-bar">
+          <div class="input-prefix">TARGET PATH:</div>
+          <input type="text" id="targetPathInput" placeholder="Paste absolute path to audio file or stems folder..." value="D:\КЛИПЫ\Reels\Data Corruption\Bronze Psalter\Audio\Bronze Psalter (1).wav" onkeydown="if(event.key==='Enter'){currentTarget=this.value.trim();runPharmakonProcess();}" onpaste="setTimeout(()=>{currentTarget=this.value.trim();runPharmakonProcess();}, 100)">
+          <button class="btn-secondary" onclick="openNativeBrowser('file')">📁 BROWSE FILE...</button>
+          <button class="btn-secondary" onclick="openNativeBrowser('folder')">📁 BROWSE STEMS...</button>
+          <button class="btn-secondary" onclick="browseOrPaste()" title="Paste path or URL from clipboard (or press Ctrl+V anywhere)">📋 PASTE</button>
+        </div>
+
+        <!-- QUICK TEST PRESETS -->
+        <div class="quick-presets">
+          <span class="preset-label">QUICK BENCHMARK PRESETS:</span>
+          <button class="preset-chip" onclick="loadPreset('D:\\КЛИПЫ\\Reels\\Data Corruption\\Bronze Psalter\\Audio\\Bronze Psalter (1).wav')">
+            🎵 Bronze Psalter (Full Master)
+          </button>
+          <button class="preset-chip" onclick="loadPreset('D:\\КЛИПЫ\\Reels\\stems\\GRAVITY HAS AN ADDRESS')">
+            🎛 GRAVITY HAS AN ADDRESS (4-Stems)
+          </button>
+        </div>
+      </section>
+
+      <!-- PHARMAKON 2: STUDIO PRO RACK (COLLAPSIBLE / EXPANDABLE) -->
+      <section id="proRackSection" class="rack-module pro-rack-bay hidden">
+        <div class="module-header pro-header">
+          <div class="jewel-lamp jewel-lamp-amber"></div>
+          <h2>02 // PHARMAKON 2 — ANALOG PARAMETRIC SURGERY RACK</h2>
+          <div class="module-tag pro-tag">REAL-TIME TACTILE HARDWARE</div>
+        </div>
+
+        <div class="rack-grid">
+          <!-- SUB MATRIX -->
+          <div class="rack-unit">
+            <div class="unit-title">SUB MATRIX & CROSSOVER</div>
+            <div class="knobs-row">
+              <div class="knob-control" data-param="sub_cutoff" data-min="20" data-max="45" data-val="32" data-step="1" data-unit="Hz">
+                <label>SUB CUTOFF</label>
+                <div class="knob-housing">
+                  <div class="knob-ticks"></div>
+                  <div class="knob-3d" id="knob_sub_cutoff">
+                    <div class="knob-cap"></div>
+                    <div class="knob-indicator glow-cyan" id="ind_sub_cutoff"></div>
+                  </div>
+                </div>
+                <input type="hidden" id="param_sub_cutoff" value="32">
+                <div class="knob-readout"><span class="val">32</span> Hz</div>
+                <div class="param-desc">Highpass &lt; 32Hz</div>
+              </div>
+              <div class="knob-control" data-param="mono_crossover" data-min="80" data-max="180" data-val="120" data-step="5" data-unit="Hz">
+                <label>MONO X-OVER</label>
+                <div class="knob-housing">
+                  <div class="knob-ticks"></div>
+                  <div class="knob-3d" id="knob_mono_crossover">
+                    <div class="knob-cap"></div>
+                    <div class="knob-indicator glow-cyan" id="ind_mono_crossover"></div>
+                  </div>
+                </div>
+                <input type="hidden" id="param_mono_crossover" value="120">
+                <div class="knob-readout"><span class="val">120</span> Hz</div>
+                <div class="param-desc">100% True Mono Sub</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- DE-HARSH SURGERY -->
+          <div class="rack-unit">
+            <div class="unit-title">DE-HARSH SURGERY (AI CURE)</div>
+            <div class="knobs-row">
+              <div class="knob-control" data-param="deharsh_freq" data-min="3500" data-max="7500" data-val="5000" data-step="50" data-unit="Hz">
+                <label>NOTCH FREQ</label>
+                <div class="knob-housing">
+                  <div class="knob-ticks"></div>
+                  <div class="knob-3d" id="knob_deharsh_freq">
+                    <div class="knob-cap"></div>
+                    <div class="knob-indicator glow-amber" id="ind_deharsh_freq"></div>
+                  </div>
+                </div>
+                <input type="hidden" id="param_deharsh_freq" value="5000">
+                <div class="knob-readout"><span class="val">5000</span> Hz</div>
+                <div class="param-desc">Target Sibilant Peak</div>
+              </div>
+              <div class="knob-control" data-param="deharsh_q" data-min="1.5" data-max="5.0" data-val="2.8" data-step="0.1" data-unit="">
+                <label>Q-FACTOR</label>
+                <div class="knob-housing">
+                  <div class="knob-ticks"></div>
+                  <div class="knob-3d" id="knob_deharsh_q">
+                    <div class="knob-cap"></div>
+                    <div class="knob-indicator glow-amber" id="ind_deharsh_q"></div>
+                  </div>
+                </div>
+                <input type="hidden" id="param_deharsh_q" value="2.8">
+                <div class="knob-readout"><span class="val">2.8</span></div>
+                <div class="param-desc">Bandwidth Precision</div>
+              </div>
+              <div class="knob-control" data-param="deharsh_depth" data-min="0.2" data-max="1.0" data-val="1.0" data-step="0.05" data-unit="%" data-mult="100">
+                <label>DEPTH</label>
+                <div class="knob-housing">
+                  <div class="knob-ticks"></div>
+                  <div class="knob-3d" id="knob_deharsh_depth">
+                    <div class="knob-cap"></div>
+                    <div class="knob-indicator glow-amber" id="ind_deharsh_depth"></div>
+                  </div>
+                </div>
+                <input type="hidden" id="param_deharsh_depth" value="1.0">
+                <div class="knob-readout"><span class="val">100</span> %</div>
+                <div class="param-desc">Notch Attenuation</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- TAPE WARMTH & 3D MATRIX -->
+          <div class="rack-unit">
+            <div class="unit-title">TAPE SATURATION & 3D M/S</div>
+            <div class="knobs-row">
+              <div class="knob-control" data-param="tape_drive" data-min="1.00" data-max="1.25" data-val="1.04" data-step="0.01" data-unit="x">
+                <label>TAPE DRIVE</label>
+                <div class="knob-housing">
+                  <div class="knob-ticks"></div>
+                  <div class="knob-3d" id="knob_tape_drive">
+                    <div class="knob-cap"></div>
+                    <div class="knob-indicator glow-emerald" id="ind_tape_drive"></div>
+                  </div>
+                </div>
+                <input type="hidden" id="param_tape_drive" value="1.04">
+                <div class="knob-readout"><span class="val">1.04</span>x</div>
+                <div class="param-desc">Tanh Analog Warmth</div>
+              </div>
+              <div class="knob-control" data-param="side_stereo_boost" data-min="1.00" data-max="1.45" data-val="1.20" data-step="0.05" data-unit="%" data-mult="100" data-add="-100">
+                <label>3D AIR WIDTH</label>
+                <div class="knob-housing">
+                  <div class="knob-ticks"></div>
+                  <div class="knob-3d" id="knob_side_stereo_boost">
+                    <div class="knob-cap"></div>
+                    <div class="knob-indicator glow-violet" id="ind_side_stereo_boost"></div>
+                  </div>
+                </div>
+                <input type="hidden" id="param_side_stereo_boost" value="1.20">
+                <div class="knob-readout">+<span class="val">20</span> %</div>
+                <div class="param-desc">Mid-Side Side Gain</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- STEM ATTACK & MASTER LIMITER -->
+          <div class="rack-unit">
+            <div class="unit-title">TRANSIENT & CEILING</div>
+            <div class="knobs-row">
+              <div class="knob-control" data-param="drum_punch" data-min="0.5" data-max="1.8" data-val="1.0" data-step="0.1" data-unit="x">
+                <label>DRUM ATTACK</label>
+                <div class="knob-housing">
+                  <div class="knob-ticks"></div>
+                  <div class="knob-3d" id="knob_drum_punch">
+                    <div class="knob-cap"></div>
+                    <div class="knob-indicator glow-ruby" id="ind_drum_punch"></div>
+                  </div>
+                </div>
+                <input type="hidden" id="param_drum_punch" value="1.0">
+                <div class="knob-readout"><span class="val">1.0</span>x</div>
+                <div class="param-desc">Kick Punch Shaper</div>
+              </div>
+              <div class="knob-control">
+                <label>TRUE-PEAK</label>
+                <div class="ceiling-selector">
+                  <button class="ceiling-btn" onclick="setCeiling(-0.1)">-0.1</button>
+                  <button class="ceiling-btn active" onclick="setCeiling(-0.3)">-0.3</button>
+                  <button class="ceiling-btn" onclick="setCeiling(-1.0)">-1.0</button>
+                </div>
+                <div class="knob-readout" id="ceilingReadout">-0.3 dBFS</div>
+                <div class="param-desc">Master Ceiling</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- BIG ACTION BUTTON -->
+      <section class="action-dock">
+        <button id="btnProcess" class="btn-main-heal" onclick="runPharmakonProcess()">
+          <span class="btn-glow-layer"></span>
+          <span class="btn-content">
+            <span class="icon-pulse">⚡</span>
+            <span class="btn-title" id="btnTitle">HEAL & MASTER AUDIO</span>
+            <span class="btn-subtitle">RE-RENDER DSP WITH CURRENT PARAMETERS</span>
+          </span>
+        </button>
+
+        <div id="statusNotice" class="status-notice">
+          <span class="status-icon">●</span>
+          <span id="statusText">READY. Click HEAL to master or press PLAY for real-time dual oscilloscope comparison!</span>
+        </div>
+      </section>
+
+      <!-- DUAL REAL-TIME OSCILLOSCOPE BAY (SIDE-BY-SIDE MONITORING) -->
+      <section class="rack-module dual-scope-bay">
+        <div class="module-header visual-header">
+          <div class="header-left-title">
+            <span class="led-indicator led-green"></span>
+            <h2>03 // REAL-TIME MONITORING BAY</h2>
+          </div>
+          
+          <!-- EXTENDED VIEW MODE SELECTOR -->
+          <div class="screen-view-selector">
+            <button id="btnViewDual" class="view-mode-btn active" onclick="setViewMode('dual')">
+              ⚡ DUAL BEAMS
+            </button>
+            <button id="btnViewSingleOsc" class="view-mode-btn" onclick="setViewMode('single_osc')">
+              📺 SINGLE SCOPE
+            </button>
+            <button id="btnViewRta" class="view-mode-btn" onclick="setViewMode('rta')">
+              📊 RTA SPECTRUM
+            </button>
+            <button id="btnViewStatic" class="view-mode-btn" onclick="setViewMode('static')">
+              🎯 DSP CURVES
+            </button>
+            <button id="btnViewWaveform" class="view-mode-btn" onclick="setViewMode('waveform')">
+              🌊 WAVEFORM
+            </button>
+          </div>
+
+          <!-- TIMEBASE MACRO ZOOM & FREEZE -->
+          <div class="scope-zoom-control">
+            <span class="zoom-label">ZOOM:</span>
+            <button class="zoom-btn" onclick="adjustZoom(-0.5)" title="Zoom Out Timebase">−</button>
+            <span id="zoomReadout" class="zoom-readout">1.0x</span>
+            <button class="zoom-btn" onclick="adjustZoom(0.5)" title="Zoom In Timebase">+</button>
+            <button id="btnFreeze" class="freeze-btn" onclick="toggleFreeze()" title="Freeze Current Waveform Frame">❄ FREEZE</button>
+          </div>
+
+          <!-- TOP A/B AUDITION SWITCHER -->
+          <div class="scope-ab-switch">
+            <button id="scopeBtnRaw" class="scope-ab-btn" onclick="selectAudioSource('raw')" title="Audition Raw Untreated Source [A]">
+              <span class="ab-indicator-dot dot-red"></span> [A] RAW DIGITAL AI (SPIKY / HARSH)
+            </button>
+            <button id="scopeBtnHealed" class="scope-ab-btn active" onclick="selectAudioSource('healed')" title="Audition Pharmakon Master [B]">
+              <span class="ab-indicator-dot dot-emerald"></span> [B] PHARMAKON MASTER (ROUNDED / GLUED)
+            </button>
+          </div>
+        </div>
+
+        <!-- SURGICAL RANGE & PUNCH-IN REPAIR CALIPER -->
+        <div class="surgical-caliper-bar">
+          <div class="scope-mode-toggle">
+            <span class="caliper-title">MASTERING TARGET:</span>
+            <button id="btnScopeFull" class="scope-toggle-btn active" onclick="setMasteringScope('full')">
+              🌐 FULL TRACK (100%)
+            </button>
+            <button id="btnScopeRegion" class="scope-toggle-btn" onclick="setMasteringScope('region')">
+              ✂ SURGICAL REGION (PUNCH-IN)
+            </button>
+          </div>
+
+          <div id="surgicalControls" class="surgical-region-controls hidden">
+            <div class="caliper-group">
+              <label>IN [START]:</label>
+              <input type="text" id="surgicalInInput" value="00:00.00" onchange="onSurgicalInputChange()">
+              <button class="caliper-btn" onclick="setSurgicalInToPlayhead()" title="Set IN marker to current playhead">SET IN</button>
+            </div>
+            
+            <div class="caliper-group">
+              <label>OUT [END]:</label>
+              <input type="text" id="surgicalOutInput" value="00:05.00" onchange="onSurgicalInputChange()">
+              <button class="caliper-btn" onclick="setSurgicalOutToPlayhead()" title="Set OUT marker to current playhead">SET OUT</button>
+            </div>
+
+            <div class="quick-spans">
+              <button class="span-btn" onclick="setSurgicalSpan(3)">+3s</button>
+              <button class="span-btn active" id="btnSpan5" onclick="setSurgicalSpan(5)">+5s</button>
+              <button class="span-btn" onclick="setSurgicalSpan(10)">+10s</button>
+              <button class="span-btn" onclick="auditionSurgicalRegion()" title="Loop audition selected region in A/B">🔁 AUDITION</button>
+              <button class="span-btn btn-reset-region" onclick="resetSurgicalRegion()" title="Cancel selection & return to full track (Esc or Dbl-Click)">✖ CLEAR</button>
+            </div>
+
+            <div class="caliper-notice">
+              <span class="pulse-dot"></span>
+              <span id="caliperDesc">Surgically healing 5.0s window. Rest of song stays 100% untouched!</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- DUAL SCREENS CONTAINER -->
+        <div id="dualScreensContainer" class="dual-screens-grid">
+          
+          <!-- LEFT SCREEN: RAW UNTREATED -->
+          <div class="scope-monitor-card raw-card" onclick="selectAudioSource('raw')">
+            <div class="monitor-top-bar">
+              <div class="monitor-title">
+                <div class="jewel-lamp jewel-lamp-red" style="width: 14px; height: 14px;"></div>
+                <span>SCREEN 01 // RAW AUDIO [A]</span>
+              </div>
+              <div id="activePillRaw" class="active-listening-pill">● ON AIR [AUDITIONING]</div>
+            </div>
+            <div class="monitor-viewport">
+              <div class="crt-overlay"></div>
+              <canvas id="canvasRaw" width="580" height="280"></canvas>
+              <div class="monitor-hud-overlay">
+                <span class="hud-tag tag-red">DIGITAL RESIDENTIAL HARSH</span>
+                <span class="hud-sub-info">CLIPPING RISK: HIGH</span>
+              </div>
+            </div>
+            <!-- DIAGNOSIS: WHAT WAS WRONG -->
+            <div class="monitor-diagnosis diag-raw">
+              <div class="diag-header">❌ SOURCE DEFECT DIAGNOSIS:</div>
+              <ul class="diag-list">
+                <li><span class="alert-bullet">⚠</span> <b>Peak Ceiling:</b> 0.00 dBFS (Harsh digital clipping detected)</li>
+                <li><span class="alert-bullet">⚠</span> <b>5kHz Resonance:</b> Toxic AI glass sibilance & harshness</li>
+                <li><span class="alert-bullet">⚠</span> <b>Sub-Bass:</b> Stereo smearing & destructive phase cancelation</li>
+                <li><span class="alert-bullet">⚠</span> <b>Infra-Rumble:</b> Infrasonic mud below 32Hz stealing headroom</li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- RIGHT SCREEN: PHARMAKON MASTER (ANTIDOTE) -->
+          <div class="scope-monitor-card healed-card" onclick="selectAudioSource('healed')">
+            <div class="monitor-top-bar">
+              <div class="monitor-title">
+                <div class="jewel-lamp jewel-lamp-green" style="width: 14px; height: 14px;"></div>
+                <span>SCREEN 02 // PHARMAKON MASTER [B]</span>
+              </div>
+              <div id="activePillHealed" class="active-listening-pill active">● ON AIR [AUDITIONING]</div>
+            </div>
+            <div class="monitor-viewport">
+              <div class="crt-overlay"></div>
+              <canvas id="canvasHealed" width="580" height="280"></canvas>
+              <div class="monitor-hud-overlay">
+                <span class="hud-tag tag-emerald">ANALOG TAPE GLUE TANH</span>
+                <span class="hud-sub-info">TRUE-PEAK: -0.3 dBFS</span>
+              </div>
+            </div>
+            <!-- SURGERY: WHAT WAS CURED -->
+            <div class="monitor-diagnosis diag-healed">
+              <div class="diag-header">⚡ SURGICAL CURE // PHARMAKON DSP TELEMETRY:</div>
+              <ul class="diag-list">
+                <li><span class="check-bullet">✓</span> <b>True-Peak Ceiling:</b> Strictly brickwalled to <b>-0.30 dBFS</b></li>
+                <li><span class="check-bullet">✓</span> <b>Anti-AI De-Harsh:</b> 5kHz surgical notch attenuation: <b><span id="txtHarsh">-20.73 dB</span></b></li>
+                <li><span class="check-bullet">✓</span> <b>Mono Sub Lock:</b> Low-end below 120Hz locked to <b>100% True Mono</b></li>
+                <li><span class="check-bullet">✓</span> <b>Analog Tape Glue:</b> Warmth saturation boost: <b><span id="txtRms">+1.35 dB</span></b></li>
+              </ul>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- FULL-WIDTH ALTERNATE VIEWS (RTA & STATIC) -->
+        <div id="altViewContainer" class="canvas-viewport single-viewport" style="display: none;">
+          <div class="crt-overlay"></div>
+          <canvas id="canvasSingle" width="1180" height="340"></canvas>
+        </div>
+
+        <!-- TELEMETRY METRIC READOUTS -->
+        <div class="telemetry-grid">
+          <div class="telemetry-card">
+            <div class="t-label">TRUE PEAK CEILING</div>
+            <div class="t-value" id="m_peak">-0.30 <span class="unit">dBFS</span></div>
+            <div class="t-delta" id="m_peak_delta">Clamped from 0.00 dBFS</div>
+          </div>
+          <div class="telemetry-card highlight-card">
+            <div class="t-label">ANALOG WARMTH (RMS)</div>
+            <div class="t-value" id="m_rms">-12.92 <span class="unit">dBFS</span></div>
+            <div class="t-delta" id="m_rms_delta">+1.35 dB Density Boost</div>
+          </div>
+          <div class="telemetry-card">
+            <div class="t-label">SUB RUMBLE REMOVED</div>
+            <div class="t-value" id="m_sub">-5.20 <span class="unit">dB</span></div>
+            <div class="t-delta">Below 32 Hz Cleaned</div>
+          </div>
+          <div class="telemetry-card highlight-card">
+            <div class="t-label">5kHz HARSH ATTENUATION</div>
+            <div class="t-value" id="m_harsh">-21.5 <span class="unit">dB</span></div>
+            <div class="t-delta">AI Glass Sibilance Neutralized</div>
+          </div>
+          <div class="telemetry-card">
+            <div class="t-label">3D STEREO WIDTH</div>
+            <div class="t-value" id="m_width">+2.80 <span class="unit">dB</span></div>
+            <div class="t-delta">Side Expansion (Mid-Side)</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- AUDIOPHILE A/B TRANSPORT CONTROLS -->
+      <section class="rack-module player-bay">
+        <div class="transport-inner">
+          <div class="transport-left">
+            <button id="btnPlayPause" class="btn-transport" onclick="togglePlayPause()" title="Play / Pause (Spacebar)">
+              <span id="playIcon">▶</span>
+            </button>
+            <button id="btnLoop" class="btn-loop" onclick="toggleLoopFragment()" title="Loop 5-second fragment around playhead (Hotkey: L)">
+              🔁 LOOP 5s
+            </button>
+            <div class="time-display">
+              <span id="currTime">00:00</span> / <span id="totalTime">00:00</span>
+            </div>
+            <div class="progress-track" id="progressTrack" onclick="seekAudio(event)">
+              <div class="progress-bar" id="progressBar"></div>
+            </div>
+          </div>
+
+          <!-- ZERO-LATENCY REAL-TIME A/B SWITCHER -->
+          <div class="transport-ab">
+            <div class="ab-label">MONITOR SOURCE:</div>
+            <div class="ab-switch-group">
+              <button id="btnSourceRaw" class="ab-btn" onclick="selectAudioSource('raw')">
+                <span class="ab-led led-red"></span>
+                A: RAW SOURCE (UNTREATED)
+              </button>
+              <button id="btnSourceHealed" class="ab-btn active" onclick="selectAudioSource('healed')">
+                <span class="ab-led led-emerald"></span>
+                B: PHARMAKON MASTER (ANTIDOTE)
+              </button>
+            </div>
+          </div>
+
+          <div class="transport-right">
+            <button class="btn-reveal" onclick="openOutputFolder()" title="Open destination folder in Windows Explorer">
+              📂 REVEAL IN EXPLORER
+            </button>
+            <a id="btnDownloadMaster" class="btn-download-master" href="#" download="STUDIO_REMASTER.wav" title="Download lossless mastered WAV file directly to your PC">
+              ⬇ DOWNLOAD MASTER (.WAV)
+            </a>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- FOOTER -->
+    <footer class="studio-footer">
+      <div>PHARMAKON DSP ARCHITECTURE &bull; OPEN-SOURCE MIT LICENSE &copy; 2026 LEX GEREK</div>
+      <div>DUAL 60 FPS REAL-TIME OSCILLOSCOPES &bull; NEURAL AUDIO ANTIDOTE &bull; ANALOG SATURATION</div>
+    </footer>
+
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
