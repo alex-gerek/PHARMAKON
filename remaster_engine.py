@@ -437,14 +437,18 @@ def process_stems_folder(target_folder, params=None, open_folder=True):
     b_out = os.path.join(remaster_dir, f"{track_name} - bass_monofied.wav")
     o_out = os.path.join(remaster_dir, f"{track_name} - other_widened.wav")
     master_path = os.path.join(remaster_dir, f"{track_name} - STUDIO_REMASTER.wav")
+    raw_sum_path = os.path.join(remaster_dir, f"{track_name} - RAW_SUM.wav")
 
     sf.write(v_out, vocals_proc, sr)
     sf.write(d_out, drums_proc, sr)
     sf.write(b_out, bass_proc, sr)
     sf.write(o_out, other_proc, sr)
     sf.write(master_path, master_mix, sr)
+    sf.write(raw_sum_path, raw_sum, sr)
 
     metrics = calc_audio_metrics(raw_sum, master_mix, sr, params)
+    if metrics:
+        metrics['raw_sum_path'] = raw_sum_path
 
     print(f"\n=======================================================")
     print(f"  SUCCESS! Remaster completed!")

@@ -129,10 +129,11 @@ async def process_target(request: Request):
             if not master_path:
                 raise HTTPException(status_code=500, detail="Stems processing failed")
             out_dir = os.path.dirname(master_path)
+            raw_path = (metrics.get('raw_sum_path') if metrics else None) or os.path.join(out_dir, f"{os.path.basename(target_path)} - RAW_SUM.wav")
             return {
                 "success": True,
                 "type": "stems",
-                "original_path": target_path,
+                "original_path": raw_path,
                 "master_path": master_path,
                 "output_dir": out_dir,
                 "track_name": os.path.basename(target_path),
