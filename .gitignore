@@ -1,6 +1,5 @@
 __pycache__/
 *.pyc
-*.wav
 *.mp3
 *.flac
 *.aif
@@ -9,4 +8,7 @@ __pycache__/
 Thumbs.db
 *.bak*
 backup_*/
+*.wav
+!demo_audio/**/*.wav
+demo_audio/**/Remaster/*_*_*.wav
 

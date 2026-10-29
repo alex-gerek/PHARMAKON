@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PHARMAKON // Studio Audio Antidote & Mastering Console</title>
-  <link rel="stylesheet" href="/static/style.css?v=score3">
+  <link rel="stylesheet" href="/static/style.css?v=demo1">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;800&family=Orbitron:wght@500;700;900&family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
@@ -71,23 +71,32 @@
         </div>
         <input type="file" id="fileInput" accept=".wav,.mp3,.flac,.ogg,.aiff" style="display:none">
 
+        <!-- CURATED BENCHMARK DEMOS (1-CLICK LOAD) -->
+        <div class="demo-selector-bar">
+          <div class="demo-badge-label">
+            <span class="jewel-lamp jewel-lamp-amber"></span>
+            <span>CURATED STUDIO DEMOS:</span>
+          </div>
+          <div class="demo-chips-group">
+            <button class="demo-rack-chip active" id="chipDemoBronze" onclick="loadBundledDemo('bronze_psalter')">
+              <span class="chip-status-led"></span>
+              <span class="chip-title">DEMO 1: BRONZE PSALTER</span>
+              <span class="chip-tag tag-deharsh">AI DE-HARSHING</span>
+            </button>
+            <button class="demo-rack-chip" id="chipDemoGravity" onclick="loadBundledDemo('gravity_stems')">
+              <span class="chip-status-led"></span>
+              <span class="chip-title">DEMO 2: GRAVITY HAS AN ADDRESS</span>
+              <span class="chip-tag tag-stems">4-STEM MASTER</span>
+            </button>
+          </div>
+        </div>
+
         <div class="manual-path-bar">
           <div class="input-prefix">TARGET PATH:</div>
-          <input type="text" id="targetPathInput" placeholder="Paste absolute path to audio file or stems folder..." value="D:\КЛИПЫ\Reels\Data Corruption\Bronze Psalter\Audio\Bronze Psalter (1).wav" onkeydown="if(event.key==='Enter'){currentTarget=this.value.trim();runPharmakonProcess();}" onpaste="setTimeout(()=>{currentTarget=this.value.trim();runPharmakonProcess();}, 100)">
+          <input type="text" id="targetPathInput" placeholder="Drop audio file, pick a Demo above, or paste path..." value="" onkeydown="if(event.key==='Enter'){currentTarget=this.value.trim();runPharmakonProcess();}" onpaste="setTimeout(()=>{currentTarget=this.value.trim();runPharmakonProcess();}, 100)">
           <button class="btn-secondary" onclick="openNativeBrowser('file')">📁 BROWSE FILE...</button>
           <button class="btn-secondary" onclick="openNativeBrowser('folder')">📁 BROWSE STEMS...</button>
           <button class="btn-secondary" onclick="browseOrPaste()" title="Paste path or URL from clipboard (or press Ctrl+V anywhere)">📋 PASTE</button>
-        </div>
-
-        <!-- QUICK TEST PRESETS -->
-        <div class="quick-presets">
-          <span class="preset-label">QUICK BENCHMARK PRESETS:</span>
-          <button class="preset-chip" onclick="loadPreset('D:\\КЛИПЫ\\Reels\\Data Corruption\\Bronze Psalter\\Audio\\Bronze Psalter (1).wav')">
-            🎵 Bronze Psalter (Full Master)
-          </button>
-          <button class="preset-chip" onclick="loadPreset('D:\\КЛИПЫ\\Reels\\stems\\GRAVITY HAS AN ADDRESS')">
-            🎛 GRAVITY HAS AN ADDRESS (4-Stems)
-          </button>
         </div>
       </section>
 

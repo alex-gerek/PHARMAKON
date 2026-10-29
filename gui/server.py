@@ -29,21 +29,29 @@ app.add_middleware(
 UPLOAD_DIR = PROJECT_DIR / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
 
-# Known demo paths for one-click testing
+DEMO_DIR = PROJECT_DIR / "demo_audio"
+
+# Bundled demo audio paths located directly inside the repository
 DEMO_TRACKS = [
     {
         "id": "bronze_psalter",
         "title": "Bronze Psalter (Single WAV)",
-        "path": r"D:\КЛИПЫ\Reels\Data Corruption\Bronze Psalter\Audio\Bronze Psalter (1).wav",
+        "subtitle": "AI De-Harshing & Tape Saturation",
+        "path": str(DEMO_DIR / "bronze_psalter" / "Bronze_Psalter_Demo.wav"),
         "type": "file"
     },
     {
         "id": "gravity_stems",
         "title": "GRAVITY HAS AN ADDRESS (4 Stems)",
-        "path": r"D:\КЛИПЫ\Reels\stems\GRAVITY HAS AN ADDRESS",
+        "subtitle": "Stem Mastering & Sub Crossover",
+        "path": str(DEMO_DIR / "gravity_stems"),
         "type": "stems"
     }
 ]
+
+@app.get("/api/demos")
+def get_demos():
+    return {"demos": DEMO_TRACKS}
 
 @app.post("/api/browse-native")
 def browse_native(mode: str = "file"):

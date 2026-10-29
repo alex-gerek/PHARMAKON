@@ -4,7 +4,8 @@
 // ==========================================================================
 
 let currentMode = 'pharmakon1';
-let currentTarget = "D:\\КЛИПЫ\\Reels\\Data Corruption\\Bronze Psalter\\Audio\\Bronze Psalter (1).wav";
+let currentTarget = "";
+let bundledDemos = [];
 let lastMetrics = null;
 let currentViewMode = 'dual'; // 'dual', 'single_osc', 'rta', 'static', 'waveform'
 let activeCeiling = -0.3;
@@ -56,7 +57,7 @@ let canvasRaw = null;
 let canvasHealed = null;
 let canvasSingle = null;
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   initDropzone();
   initCanvases();
   setViewMode('dual');
@@ -67,8 +68,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // Start 60 FPS Dual Render Loop immediately
   requestAnimationFrame(renderLoop);
 
-  // Auto-run initial demo processing so metrics & dual streams are ready
-  runPharmakonProcess(true);
+  // Initialize curated bundled demos and auto-run first demo
+  await initBundledDemos();
+  if (currentTarget) {
+    runPharmakonProcess(true);
+  }
 });
 
 // --------------------------------------------------------------------------
@@ -1506,6 +1510,40 @@ async function browseOrPaste() {
     currentTarget = text.trim().replace(/^["']|["']$/g, '');
     document.getElementById('targetPathInput').value = currentTarget;
     updateStatus(`Target loaded: ${currentTarget}`);
+    runPharmakonProcess();
+  }
+}
+
+async function initBundledDemos() {
+  try {
+    const res = await fetch('/api/demos');
+    const data = await res.json();
+    if (data && data.demos && data.demos.length > 0) {
+      bundledDemos = data.demos;
+      // Default to Bronze Psalter demo
+      loadBundledDemo(bundledDemos[0].id, false);
+    }
+  } catch (err) {
+    console.warn("Could not fetch bundled demos:", err);
+  }
+}
+
+function loadBundledDemo(demoId, autoProcess = true) {
+  const demo = bundledDemos.find(d => d.id === demoId) || (bundledDemos.length > 0 ? bundledDemos[0] : null);
+  if (!demo) return;
+
+  currentTarget = demo.path;
+  const inputEl = document.getElementById('targetPathInput');
+  if (inputEl) inputEl.value = demo.path;
+
+  // Toggle chip classes
+  const chipBronze = document.getElementById('chipDemoBronze');
+  const chipGravity = document.getElementById('chipDemoGravity');
+  if (chipBronze) chipBronze.classList.toggle('active', demo.id === 'bronze_psalter');
+  if (chipGravity) chipGravity.classList.toggle('active', demo.id === 'gravity_stems');
+
+  updateStatus(`Loaded Demo: ${demo.title}`);
+  if (autoProcess) {
     runPharmakonProcess();
   }
 }
