@@ -2153,3 +2153,41 @@ body.theme-cybernoir {
   color: #fff;
   border-color: #475569;
 }
+
+
+/* DUAL MASTER ACTION BUTTONS (STEREO MASTER + SPLIT & STEM MASTER) */
+.action-buttons-dock {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  width: 100%;
+  max-width: 980px;
+}
+
+@media (max-width: 820px) {
+  .action-buttons-dock {
+    grid-template-columns: 1fr;
+  }
+}
+
+.btn-main-heal.btn-stem-split {
+  background: linear-gradient(135deg, #0e7490 0%, #06b6d4 50%, #0891b2 100%) !important;
+  border-color: #38bdf8 !important;
+  box-shadow: 0 0 30px rgba(6, 182, 212, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3) !important;
+}
+
+.btn-main-heal.btn-stem-split:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 45px rgba(6, 182, 212, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.5) !important;
+}
+
+.btn-secondary.btn-highlight-cyan {
+  border-color: #06b6d4;
+  color: #38bdf8;
+  background: rgba(6, 182, 212, 0.12);
+}
+
+.btn-secondary.btn-highlight-cyan:hover {
+  background: rgba(6, 182, 212, 0.25);
+  box-shadow: 0 0 12px rgba(6, 182, 212, 0.4);
+}

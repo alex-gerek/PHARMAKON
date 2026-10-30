@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PHARMAKON // Studio Audio Antidote & Mastering Console</title>
-  <link rel="stylesheet" href="/static/style.css?v=v5_1793347082">
+  <link rel="stylesheet" href="/static/style.css?v=v6_1793348527">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;800&family=Orbitron:wght@500;700;900&family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
@@ -313,20 +313,31 @@
         </div>
       </section>
 
-      <!-- BIG ACTION BUTTON -->
+      <!-- BIG ACTION BUTTONS DOCK (STEREO MASTER vs SPLIT & STEM MASTER) -->
       <section class="action-dock">
-        <button id="btnProcess" class="btn-main-heal" onclick="runPharmakonProcess()">
-          <span class="btn-glow-layer"></span>
-          <span class="btn-content">
-            <span class="icon-pulse">⚡</span>
-            <span class="btn-title" id="btnTitle">HEAL & MASTER AUDIO</span>
-            <span class="btn-subtitle">RE-RENDER DSP WITH CURRENT PARAMETERS</span>
-          </span>
-        </button>
+        <div class="action-buttons-dock">
+          <button id="btnProcess" class="btn-main-heal" onclick="runPharmakonProcess()" title="Process entire audio file directly through analog surgery rack">
+            <span class="btn-glow-layer"></span>
+            <span class="btn-content">
+              <span class="icon-pulse">⚡</span>
+              <span class="btn-title" id="btnTitle">EXECUTE PRO SURGICAL MASTER</span>
+              <span class="btn-subtitle">RE-RENDER DSP WITH CURRENT PARAMETERS</span>
+            </span>
+          </button>
+
+          <button id="btnSplitAndMaster" class="btn-main-heal btn-stem-split" onclick="runSplitAndStemMaster()" title="Autonomous 4-stem separation (Drums, Bass, Vocals, Other) &amp; deep stem surgery">
+            <span class="btn-glow-layer glow-cyan"></span>
+            <span class="btn-content">
+              <span class="icon-pulse">🧬</span>
+              <span class="btn-title">SPLIT &amp; STEM MASTER</span>
+              <span class="btn-subtitle">AUTO-SEPARATE 4 STEMS &amp; DEEP SURGERY</span>
+            </span>
+          </button>
+        </div>
 
         <div id="statusNotice" class="status-notice">
           <span class="status-icon">●</span>
-          <span id="statusText">READY. Click HEAL to master or press PLAY for real-time dual oscilloscope comparison!</span>
+          <span id="statusText">READY. Click EXECUTE to master or SPLIT &amp; STEM MASTER to decompose into 4 stems!</span>
         </div>
       </section>
 
@@ -606,6 +617,6 @@
     </div>
   </div>
 
-  <script src="/static/app.js?v=v5_1793347082"></script>
+  <script src="/static/app.js?v=v6_1793348527"></script>
 </body>
 </html>

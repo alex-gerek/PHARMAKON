@@ -1332,6 +1332,88 @@ function renderSingleStatic() {
 // --------------------------------------------------------------------------
 // PHARMAKON DSP PROCESSING
 // --------------------------------------------------------------------------
+
+// -----------------------------------------------------------------------------
+// ONE-CLICK DEEP STEM ANTIDOTE (SPLIT & STEM MASTER)
+// -----------------------------------------------------------------------------
+async function runSplitAndStemMaster() {
+  if (!currentTarget) {
+    updateStatus("Notice: Please load or drop an audio file first!");
+    return;
+  }
+
+  const btnProcess = document.getElementById('btnProcess');
+  const btnSplit = document.getElementById('btnSplitAndMaster');
+  if (btnProcess) btnProcess.disabled = true;
+  if (btnSplit) btnSplit.disabled = true;
+
+  updateStatus("🧬 DEEP STEM ANTIDOTE: Extracting Drums, Bass, Vocals & Synths via HPSS...");
+
+  const startTime = performance.now();
+  const params = {
+    sub_cutoff: parseFloat(document.getElementById('param_sub_cutoff').value),
+    mono_crossover: parseFloat(document.getElementById('param_mono_crossover').value),
+    deharsh_freq: parseFloat(document.getElementById('param_deharsh_freq').value),
+    deharsh_q: parseFloat(document.getElementById('param_deharsh_q').value),
+    deharsh_depth: parseFloat(document.getElementById('param_deharsh_depth').value),
+    dynamic_deharsh: true,
+    tape_drive: parseFloat(document.getElementById('param_tape_drive').value),
+    side_stereo_boost: parseFloat(document.getElementById('param_side_stereo_boost').value),
+    air_exciter: (parseFloat(document.getElementById('param_air_exciter')?.value || 12) / 100.0),
+    drum_punch: parseFloat(document.getElementById('param_drum_punch').value),
+    target_ceiling_db: activeCeiling,
+    preset: currentPreset !== 'none' ? currentPreset : null,
+    phase_align_sub: true
+  };
+
+  try {
+    const res = await fetch('/api/split-and-master', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        target_path: currentTarget,
+        mode: currentMode,
+        params: params
+      })
+    });
+
+    const data = await res.json();
+    if (btnProcess) btnProcess.disabled = false;
+    if (btnSplit) btnSplit.disabled = false;
+
+    if (!data.success) {
+      updateStatus(`ERROR: ${data.detail || data.error || 'Stem separation failed'}`);
+      return;
+    }
+
+    const elapsed = ((performance.now() - startTime) / 1000).toFixed(2);
+    lastResult = data;
+    lastMetrics = data.metrics;
+
+    updateStatus(`SUCCESS! 4 stems extracted & mastered in ${elapsed}s! Master: ${data.track_name} - STUDIO_REMASTER.wav`);
+
+    // Setup A/B/Δ monitoring streams
+    setupAudioStreams(data.original_path, data.master_path);
+
+    // Direct download button
+    const dlBtn = document.getElementById('btnDownloadMaster');
+    if (dlBtn && data.master_path) {
+      dlBtn.href = `/api/stream?path=${encodeURIComponent(data.master_path)}`;
+      dlBtn.download = `${data.track_name} - STUDIO_REMASTER.wav`;
+    }
+
+    // Telemetry cards update
+    if (data.metrics) {
+      updateTelemetryCards(data.metrics);
+    }
+  } catch (err) {
+    if (btnProcess) btnProcess.disabled = false;
+    if (btnSplit) btnSplit.disabled = false;
+    updateStatus(`System Error: ${err.message}`);
+  }
+}
+
+
 async function runPharmakonProcess(isInitial = false) {
   const inputVal = document.getElementById('targetPathInput').value.trim();
   if (inputVal) {

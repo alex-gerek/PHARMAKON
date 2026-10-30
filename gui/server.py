@@ -105,6 +105,52 @@ def get_system_info():
 def get_presets():
     return remaster_engine.PRESETS
 
+@app.post("/api/split-and-master")
+async def split_and_master_target(request: Request):
+    """Decomposes single mixed file into 4 stems and executes deep stem surgery."""
+    try:
+        body = await request.json()
+        target_path = body.get("target_path", "").strip().strip('"').strip("'")
+        custom_params = body.get("params", {})
+        mode = body.get("mode", "pharmakon1")
+
+        if target_path and not os.path.exists(target_path):
+            rel_candidate = PROJECT_DIR / target_path
+            if rel_candidate.exists():
+                target_path = str(rel_candidate.resolve())
+
+        if not target_path or not os.path.isfile(target_path):
+            raise HTTPException(status_code=400, detail=f"Target audio file not found: {target_path}")
+
+        params = dict(remaster_engine.DEFAULT_PARAMS)
+        params.update(custom_params)
+        params["mode"] = mode
+
+        out_master, metrics, stems_dir = await asyncio.to_thread(
+            remaster_engine.split_and_master_single_file, target_path, params
+        )
+
+        if not out_master or not os.path.isfile(out_master):
+            raise HTTPException(status_code=500, detail="Split & stem mastering failed")
+
+        track_name = os.path.splitext(os.path.basename(target_path))[0]
+        out_dir = os.path.dirname(out_master)
+
+        return {
+            "success": True,
+            "type": "split_stems",
+            "original_path": target_path,
+            "master_path": out_master,
+            "output_dir": out_dir,
+            "stems_dir": stems_dir,
+            "report_path": metrics.get("report_path") if metrics else None,
+            "track_name": track_name,
+            "metrics": metrics
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/api/process")
 async def process_target(request: Request):
     try:

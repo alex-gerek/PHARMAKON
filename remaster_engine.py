@@ -1302,6 +1302,135 @@ def process_stems_folder(target_folder, params=None, open_folder=True):
 
     return master_path, metrics
 
+# -----------------------------------------------------------------------------
+# AUTONOMOUS STEM SEPARATION & DEEP STEM MASTERING
+# -----------------------------------------------------------------------------
+
+def split_audio_to_stems(input_path, output_stems_dir=None):
+    """
+    Autonomous Stem Separation:
+    Decomposes single mixed stereo track into 4 distinct stems:
+    - Drums.wav: percussive transients, drum punch, snare attack
+    - Bass.wav: sub-bass & bass (<130 Hz mono-summed)
+    - Vocals.wav: center mid-band vocal formant isolation (280 Hz - 5 kHz)
+    - Other.wav: stereo synth pads, guitars, air and atmospheric ambience
+
+    Uses high-speed SciPy STFT Harmonic-Percussive Source Separation (HPSS)
+    with soft Wiener masks. Runs in seconds with zero external downloads.
+    """
+    from scipy.ndimage import median_filter
+    audio, sr = sf.read(input_path)
+    audio = ensure_stereo(audio)
+    orig_len = len(audio)
+    nyq = 0.5 * sr
+
+    track_title = os.path.splitext(os.path.basename(input_path))[0]
+    if output_stems_dir is None:
+        output_stems_dir = os.path.join(os.path.dirname(input_path), f"{track_title}_Stems")
+    os.makedirs(output_stems_dir, exist_ok=True)
+
+    # 1. Bass stem isolation (<130 Hz steep 4th-order Butterworth lowpass + True-Mono)
+    b_bass, a_bass = signal.butter(4, min(130.0, nyq - 20.0) / nyq, btype='low')
+    bass_raw = signal.filtfilt(b_bass, a_bass, audio, axis=0)
+    bass_mono = np.mean(bass_raw, axis=1, keepdims=True)
+    bass_stem = np.repeat(bass_mono, 2, axis=1)
+
+    # 2. Residual signal above 130 Hz
+    b_hi, a_hi = signal.butter(4, min(130.0, nyq - 20.0) / nyq, btype='high')
+    audio_hi = signal.filtfilt(b_hi, a_hi, audio, axis=0)
+
+    # 3. Harmonic-Percussive Source Separation (HPSS) via STFT median filtering
+    nperseg = 2048
+    noverlap = 1536
+    f, t_stft, Zxx_L = signal.stft(audio_hi[:, 0], fs=sr, nperseg=nperseg, noverlap=noverlap)
+    Zxx_R = signal.stft(audio_hi[:, 1], fs=sr, nperseg=nperseg, noverlap=noverlap)[2]
+
+    mag_L = np.abs(Zxx_L)
+    mag_R = np.abs(Zxx_R)
+
+    # Harmonic components (horizontal lines: vocals, synths, sustained notes)
+    harm_L = median_filter(mag_L, size=(1, 15))
+    harm_R = median_filter(mag_R, size=(1, 15))
+
+    # Percussive components (vertical spikes: transients, kicks, snares, hats)
+    perc_L = median_filter(mag_L, size=(15, 1))
+    perc_R = median_filter(mag_R, size=(15, 1))
+
+    # Soft Wiener masks
+    eps = 1e-9
+    mask_p_L = (perc_L ** 1.8) / (perc_L ** 1.8 + harm_L ** 1.8 + eps)
+    mask_p_R = (perc_R ** 1.8) / (perc_R ** 1.8 + harm_R ** 1.8 + eps)
+    mask_h_L = 1.0 - mask_p_L
+    mask_h_R = 1.0 - mask_p_R
+
+    # Reconstruct Drums
+    _, drums_L = signal.istft(Zxx_L * mask_p_L, fs=sr, nperseg=nperseg, noverlap=noverlap)
+    _, drums_R = signal.istft(Zxx_R * mask_p_R, fs=sr, nperseg=nperseg, noverlap=noverlap)
+    drums_stem = np.column_stack([drums_L[:orig_len], drums_R[:orig_len]])
+
+    # Reconstruct Harmonics (Vocals + Other)
+    _, harm_L_sig = signal.istft(Zxx_L * mask_h_L, fs=sr, nperseg=nperseg, noverlap=noverlap)
+    _, harm_R_sig = signal.istft(Zxx_R * mask_h_R, fs=sr, nperseg=nperseg, noverlap=noverlap)
+    harm_sig = np.column_stack([harm_L_sig[:orig_len], harm_R_sig[:orig_len]])
+
+    # 4. Separate Vocals from Other
+    mid = 0.5 * (harm_sig[:, 0] + harm_sig[:, 1])
+    b_voc_lo, a_voc_lo = signal.butter(2, 280.0 / nyq, btype='high')
+    b_voc_hi, a_voc_hi = signal.butter(2, min(5000.0, nyq - 50.0) / nyq, btype='low')
+    mid_voc = signal.filtfilt(b_voc_hi, a_voc_hi, signal.filtfilt(b_voc_lo, a_voc_lo, mid))
+    vocals_stem = np.column_stack([mid_voc, mid_voc])
+
+    other_stem = harm_sig - vocals_stem * 0.8
+
+    # Pad or trim to orig_len
+    def _fit(arr):
+        if len(arr) < orig_len:
+            pad = np.zeros((orig_len - len(arr), 2), dtype=arr.dtype)
+            return np.vstack([arr, pad])
+        return arr[:orig_len]
+
+    drums_stem = _fit(drums_stem)
+    bass_stem = _fit(bass_stem)
+    vocals_stem = _fit(vocals_stem)
+    other_stem = _fit(other_stem)
+
+    drums_path = os.path.join(output_stems_dir, "Drums.wav")
+    bass_path = os.path.join(output_stems_dir, "Bass.wav")
+    vocals_path = os.path.join(output_stems_dir, "Vocals.wav")
+    other_path = os.path.join(output_stems_dir, "Other.wav")
+
+    sf.write(drums_path, drums_stem.astype(np.float32), sr)
+    sf.write(bass_path, bass_stem.astype(np.float32), sr)
+    sf.write(vocals_path, vocals_stem.astype(np.float32), sr)
+    sf.write(other_path, other_stem.astype(np.float32), sr)
+
+    return output_stems_dir, {
+        "drums": drums_path,
+        "bass": bass_path,
+        "vocals": vocals_path,
+        "other": other_path,
+        "sr": sr,
+        "duration": orig_len / sr
+    }
+
+
+def split_and_master_single_file(file_path, params=None, open_folder=False):
+    """
+    One-Click Deep Stem Antidote:
+    1. Splits single stereo file into 4 stems (Drums, Bass, Vocals, Other).
+    2. Runs full stem mastering suite (Transient Punch, Sub Sync, De-Harshing, 3D M/S).
+    3. Produces final master and mastering certificate.
+    """
+    track_title = os.path.splitext(os.path.basename(file_path))[0]
+    out_stems_dir = os.path.join(os.path.dirname(file_path), f"{track_title}_Stems")
+
+    split_dir, info = split_audio_to_stems(file_path, out_stems_dir)
+    out_master, metrics = process_stems_folder(split_dir, params=params, open_folder=open_folder)
+
+    return out_master, metrics, split_dir
+
+
+
 def main():
     if len(sys.argv) > 1:
         target = sys.argv[1].strip().strip('"').strip("'")
