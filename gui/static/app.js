@@ -80,7 +80,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 // WEBAUDIO DUAL ANALYSER & PLAYER ENGINE
 // --------------------------------------------------------------------------
 function initWebAudio() {
-  if (audioCtx) return;
+  if (analyserRaw && analyserHealed) return;
   const AudioContext = window.AudioContext || window.webkitAudioContext;
   audioCtx = new AudioContext();
 
@@ -183,10 +183,8 @@ let lastKnobClickTime = 0;
 
 function playHardwareClick(type = 'relay') {
   try {
-    const AudioContext = window.AudioContext || window.webkitAudioContext;
-    if (!audioCtx) {
-      audioCtx = new AudioContext();
-    }
+    initWebAudio();
+    if (!audioCtx) return;
     if (audioCtx.state === 'suspended') {
       audioCtx.resume();
     }
