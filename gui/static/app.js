@@ -1566,20 +1566,97 @@ function formatTime(sec) {
   return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 }
 
-function openOutputFolder() {
-  if (lastResult && lastResult.output_dir) {
-    fetch('/api/reveal', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: lastResult.output_dir })
-    });
-  } else {
-    fetch('/api/reveal', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: currentTarget })
-    });
+async function openOutputFolder() {
+  const target = lastResult?.master_path || lastResult?.output_dir || currentTarget || document.getElementById('targetPathInput')?.value?.trim();
+  if (!target) {
+    updateStatus("Notice: No audio target or remaster output to reveal yet.");
+    return;
   }
+  updateStatus("Opening native Windows Explorer...");
+  try {
+    const res = await fetch('/api/reveal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: target })
+    });
+    const data = await res.json();
+    if (data.success) {
+      updateStatus(`📂 Opened in Windows Explorer: ${data.opened || target}`);
+    } else {
+      updateStatus(`Explorer notice: ${data.error || 'Unable to open path'}`);
+    }
+  } catch (err) {
+    updateStatus(`Error launching Explorer: ${err.message}`);
+  }
+}
+
+async function downloadOrSaveMaster(e) {
+  if (e) e.preventDefault();
+
+  const masterPath = lastResult?.master_path;
+  if (!masterPath) {
+    updateStatus("No mastered audio rendered yet. Select a track and click 'COMMENCE RE-MASTERING' first!");
+    return;
+  }
+
+  const suggestedName = (lastResult?.track_name ? `${lastResult.track_name} - STUDIO_REMASTER.wav` : 'STUDIO_REMASTER.wav');
+  updateStatus("Choosing destination folder for master...");
+
+  // Tier 1: Modern File System Access API (native Windows Save-As dialog inside Chrome)
+  if (window.showSaveFilePicker) {
+    try {
+      const handle = await window.showSaveFilePicker({
+        suggestedName: suggestedName,
+        types: [{
+          description: 'Lossless Master Audio (*.wav)',
+          accept: { 'audio/wav': ['.wav'] }
+        }]
+      });
+      updateStatus("Writing lossless WAV master to selected destination...");
+      const streamUrl = `/api/stream?path=${encodeURIComponent(masterPath)}`;
+      const response = await fetch(streamUrl);
+      const blob = await response.blob();
+      const writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      updateStatus(`Master saved successfully: ${handle.name}`);
+      return;
+    } catch (pickerErr) {
+      if (pickerErr.name === 'AbortError') {
+        updateStatus("Save cancelled.");
+        return;
+      }
+      console.warn("File System Access API error, trying native server dialog:", pickerErr);
+    }
+  }
+
+  // Tier 2: Native Windows desktop Save-As dialog via local server
+  try {
+    const res = await fetch('/api/save-as', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ master_path: masterPath })
+    });
+    const data = await res.json();
+    if (data.success && data.saved_path) {
+      updateStatus(`Master saved to: ${data.saved_path}`);
+      return;
+    } else if (data.cancelled) {
+      updateStatus("Save cancelled.");
+      return;
+    }
+  } catch (err) {
+    console.warn("Server save-as fallback failed:", err);
+  }
+
+  // Tier 3: Direct browser download trigger
+  const dlLink = document.createElement('a');
+  dlLink.href = `/api/stream?path=${encodeURIComponent(masterPath)}`;
+  dlLink.download = suggestedName;
+  document.body.appendChild(dlLink);
+  dlLink.click();
+  document.body.removeChild(dlLink);
+  updateStatus(`Downloading ${suggestedName}...`);
 }
 
 function setupKeyboardShortcuts() {

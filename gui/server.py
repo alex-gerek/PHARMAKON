@@ -1,6 +1,9 @@
 import os
 import sys
 import json
+import shutil
+import asyncio
+import subprocess
 import urllib.parse
 from pathlib import Path
 
@@ -183,17 +186,99 @@ def stream_audio(path: str):
         raise HTTPException(status_code=404, detail="Audio file not found")
     return FileResponse(clean_path, media_type="audio/wav")
 
-@app.post("/api/reveal")
-async def reveal_in_explorer(request: Request):
+def _run_save_as_dialog(master_path: str) -> str:
+    """Threaded native Tkinter Save As dialog helper."""
+    import tkinter as tk
+    import tkinter.filedialog as fd
+
+    root = tk.Tk()
+    root.withdraw()
+    root.attributes('-topmost', True)
+
+    default_name = os.path.basename(master_path)
+    init_dir = os.path.expanduser("~/Music")
+    if not os.path.exists(init_dir):
+        init_dir = os.path.expanduser("~/Desktop")
+
+    save_dest = fd.asksaveasfilename(
+        title="PHARMAKON // Save Lossless Master As...",
+        initialdir=init_dir,
+        initialfile=default_name,
+        defaultextension=".wav",
+        filetypes=[
+            ("WAV Lossless Audio (*.wav)", "*.wav"),
+            ("All Files (*.*)", "*.*")
+        ]
+    )
+    root.destroy()
+    return save_dest
+
+@app.post("/api/save-as")
+async def save_master_as(request: Request):
+    """Opens native Windows Save-As dialog to save master WAV to any user-chosen directory."""
     try:
         body = await request.json()
-        folder_path = body.get("path", "").strip().strip('"').strip("'")
-        if os.path.isfile(folder_path):
-            folder_path = os.path.dirname(folder_path)
-        if os.path.isdir(folder_path) and sys.platform == "win32":
-            os.system(f'explorer "{folder_path}"')
-            return {"success": True}
-        return {"success": False, "error": "Folder not found"}
+        master_path = body.get("master_path", "").strip().strip('"').strip("'")
+        
+        # Unquote and resolve relative path if needed
+        master_path = urllib.parse.unquote(master_path)
+        if master_path.startswith("file:///"):
+            master_path = master_path[8:]
+        
+        if master_path and not os.path.isabs(master_path):
+            candidate = PROJECT_DIR / master_path
+            if candidate.exists():
+                master_path = str(candidate.resolve())
+
+        if not master_path or not os.path.isfile(master_path):
+            raise HTTPException(status_code=400, detail="Master audio file not found")
+
+        save_dest = await asyncio.to_thread(_run_save_as_dialog, master_path)
+
+        if save_dest:
+            save_dest = os.path.normpath(save_dest)
+            shutil.copy2(master_path, save_dest)
+            return {"success": True, "saved_path": save_dest, "filename": os.path.basename(save_dest)}
+        return {"success": False, "cancelled": True}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+@app.post("/api/reveal")
+async def reveal_in_explorer(request: Request):
+    """Reveals target file or folder in native Windows Explorer."""
+    try:
+        body = await request.json()
+        target_path = body.get("path", "").strip().strip('"').strip("'")
+        if not target_path:
+            return {"success": False, "error": "No path provided"}
+
+        target_path = urllib.parse.unquote(target_path)
+        if target_path.startswith("file:///"):
+            target_path = target_path[8:]
+
+        # Resolve relative path against project directory
+        if not os.path.isabs(target_path):
+            candidate = (PROJECT_DIR / target_path).resolve()
+            if candidate.exists():
+                target_path = str(candidate)
+
+        target_path = os.path.normpath(target_path)
+
+        if sys.platform == "win32":
+            if os.path.isfile(target_path):
+                subprocess.Popen(["explorer", f"/select,{target_path}"])
+                return {"success": True, "opened": target_path}
+            elif os.path.isdir(target_path):
+                subprocess.Popen(["explorer", target_path])
+                return {"success": True, "opened": target_path}
+            else:
+                # Try parent directory
+                parent = os.path.dirname(target_path)
+                if os.path.isdir(parent):
+                    subprocess.Popen(["explorer", parent])
+                    return {"success": True, "opened": parent}
+
+        return {"success": False, "error": f"Folder not found: {target_path}"}
     except Exception as e:
         return {"success": False, "error": str(e)}
 
