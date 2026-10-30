@@ -105,32 +105,38 @@ function initWebAudio() {
   gainRaw.gain.setValueAtTime(0.0, audioCtx.currentTime);
   gainHealed.gain.setValueAtTime(1.0, audioCtx.currentTime);
 
-  // CRITICAL: Analysers are tapped BEFORE gains so BOTH screens dance simultaneously!
+  // Monitor bus: sums active auditioned stream (RAW, MASTER, or DELTA)
+  monitorBus = audioCtx.createGain();
+  monitorBus.gain.setValueAtTime(1.0, audioCtx.currentTime);
+
+  // Connect analysers (tapped before gains so dual CRT screens dance)
   sourceRaw.connect(analyserRaw);
   analyserRaw.connect(gainRaw);
-  gainRaw.connect(audioCtx.destination);
+  gainRaw.connect(monitorBus);
 
   sourceHealed.connect(analyserHealed);
   analyserHealed.connect(gainHealed);
-  gainHealed.connect(audioCtx.destination);
+  gainHealed.connect(monitorBus);
 
-  timeDataRaw = new Uint8Array(analyserRaw.fftSize);
-  timeDataHealed = new Uint8Array(analyserHealed.fftSize);
-  freqDataRaw = new Uint8Array(analyserRaw.frequencyBinCount);
-  freqDataHealed = new Uint8Array(analyserHealed.frequencyBinCount);
+  monitorBus.connect(audioCtx.destination);
 
-  // Phase Scope Goniometer Stereo L/R Splitter
+  // Phase Scope Goniometer Stereo L/R Splitter connected to monitorBus
   splitterNode = audioCtx.createChannelSplitter(2);
   analyserL = audioCtx.createAnalyser();
   analyserR = audioCtx.createAnalyser();
   analyserL.fftSize = 1024;
   analyserR.fftSize = 1024;
-  analyserL.smoothingTimeConstant = 0.7;
-  analyserR.smoothingTimeConstant = 0.7;
+  analyserL.smoothingTimeConstant = 0.6;
+  analyserR.smoothingTimeConstant = 0.6;
 
-  sourceHealed.connect(splitterNode);
+  monitorBus.connect(splitterNode);
   splitterNode.connect(analyserL, 0);
   splitterNode.connect(analyserR, 1);
+
+  timeDataRaw = new Uint8Array(analyserRaw.fftSize);
+  timeDataHealed = new Uint8Array(analyserHealed.fftSize);
+  freqDataRaw = new Uint8Array(analyserRaw.frequencyBinCount);
+  freqDataHealed = new Uint8Array(analyserHealed.frequencyBinCount);
 
   floatDataL = new Float32Array(analyserL.fftSize);
   floatDataR = new Float32Array(analyserR.fftSize);
@@ -395,18 +401,22 @@ window.addEventListener('resize', () => {
 });
 
 function renderLoop() {
-  if (currentViewMode === 'dual') {
-    renderDualOscilloscopes();
-  } else if (currentViewMode === 'single_osc') {
-    renderSingleOscilloscope();
-  } else if (currentViewMode === 'rta') {
-    renderSingleRta();
-  } else if (currentViewMode === 'static') {
-    renderSingleStatic();
-  } else if (currentViewMode === 'waveform') {
-    renderSingleWaveform();
-  } else if (currentViewMode === 'goniometer') {
-    renderGoniometerScope();
+  try {
+    if (currentViewMode === 'dual') {
+      renderDualOscilloscopes();
+    } else if (currentViewMode === 'single_osc') {
+      renderSingleOscilloscope();
+    } else if (currentViewMode === 'rta') {
+      renderSingleRta();
+    } else if (currentViewMode === 'static') {
+      renderSingleStatic();
+    } else if (currentViewMode === 'waveform') {
+      renderSingleWaveform();
+    } else if (currentViewMode === 'goniometer') {
+      renderGoniometerScope();
+    }
+  } catch (loopErr) {
+    console.error("renderLoop protected error:", loopErr);
   }
 
   requestAnimationFrame(renderLoop);
@@ -661,6 +671,222 @@ function setViewMode(mode) {
     fitCanvasDpi(canvasSingle);
   }
 }
+
+// -----------------------------------------------------------------------------
+// LISSAJOUS PHASE GONIOMETER & CORRELATION SCOPE (CRT 60 FPS)
+// -----------------------------------------------------------------------------
+function renderGoniometerScope() {
+  if (!canvasSingle) return;
+  const ctx = canvasSingle.getContext('2d');
+  const w = canvasSingle.width;
+  const h = canvasSingle.height;
+
+  // Background CRT dark phosphor clear
+  ctx.fillStyle = '#060a10';
+  ctx.fillRect(0, 0, w, h);
+
+  const cx = w / 2;
+  const cy = h / 2 - 18;
+  const radius = Math.min(w * 0.30, h * 0.38, 140);
+
+  ctx.save();
+
+  // 1. Draw Oscilloscope Radar Reticle
+  ctx.strokeStyle = 'rgba(20, 35, 55, 0.7)';
+  ctx.lineWidth = 1;
+
+  // Concentric Range Rings
+  [1.0, 0.75, 0.5, 0.25].forEach(rMul => {
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius * rMul, 0, 2 * Math.PI);
+    ctx.stroke();
+  });
+
+  // Diagonal 45-deg M/S lines (L and R axes)
+  ctx.strokeStyle = 'rgba(16, 185, 129, 0.25)';
+  ctx.setLineDash([4, 4]);
+
+  // +L axis (-45 deg)
+  ctx.beginPath();
+  ctx.moveTo(cx - radius * 0.9, cy - radius * 0.9);
+  ctx.lineTo(cx + radius * 0.9, cy + radius * 0.9);
+  ctx.stroke();
+
+  // +R axis (+45 deg)
+  ctx.beginPath();
+  ctx.moveTo(cx + radius * 0.9, cy - radius * 0.9);
+  ctx.lineTo(cx - radius * 0.9, cy + radius * 0.9);
+  ctx.stroke();
+
+  // Horizontal Side (L-R) axis
+  ctx.strokeStyle = 'rgba(239, 68, 68, 0.35)';
+  ctx.beginPath();
+  ctx.moveTo(cx - radius * 1.15, cy);
+  ctx.lineTo(cx + radius * 1.15, cy);
+  ctx.stroke();
+
+  // Vertical Mono/Mid (M) axis
+  ctx.strokeStyle = 'rgba(56, 189, 248, 0.45)';
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - radius * 1.15);
+  ctx.lineTo(cx, cy + radius * 1.15);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Reticle Labels
+  ctx.font = '10px "JetBrains Mono", monospace';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#38bdf8';
+  ctx.fillText('+M (MONO)', cx, cy - radius - 8);
+  ctx.fillText('-M', cx, cy + radius + 14);
+
+  ctx.fillStyle = '#10b981';
+  ctx.fillText('+L', cx - radius * 0.72 - 14, cy - radius * 0.72 - 4);
+  ctx.fillText('+R', cx + radius * 0.72 + 14, cy - radius * 0.72 - 4);
+
+  ctx.fillStyle = '#f43f5e';
+  ctx.fillText('-S', cx - radius - 16, cy + 3);
+  ctx.fillText('+S', cx + radius + 16, cy + 3);
+
+  // 2. Fetch Stereo Time Data from analysers (or fallback from mono wave)
+  let sumLR = 0, sumLL = 0, sumRR = 0;
+  let hasSignal = false;
+
+  if (analyserL && analyserR && floatDataL && floatDataR) {
+    analyserL.getFloatTimeDomainData(floatDataL);
+    analyserR.getFloatTimeDomainData(floatDataR);
+
+    for (let i = 0; i < floatDataL.length; i++) {
+      if (Math.abs(floatDataL[i]) > 0.001 || Math.abs(floatDataR[i]) > 0.001) {
+        hasSignal = true;
+        break;
+      }
+    }
+  }
+
+  const isAudioActive = isPlaying || isFrozen || hasCapturedAudio;
+
+  if (isAudioActive && hasSignal && floatDataL && floatDataR) {
+    const isDelta = (activeSource === 'delta');
+    const isRaw = (activeSource === 'raw');
+    const glowColor = isDelta ? 'rgba(245, 158, 11, 0.6)' : (isRaw ? 'rgba(239, 68, 68, 0.55)' : 'rgba(16, 185, 129, 0.65)');
+    const coreColor = isDelta ? '#fbbf24' : (isRaw ? '#fca5a5' : '#a7f3d0');
+
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = glowColor;
+    ctx.strokeStyle = coreColor;
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+
+    const sqrt2 = Math.SQRT2;
+    const gainScale = radius * 1.5;
+    const len = floatDataL.length;
+
+    for (let i = 0; i < len; i++) {
+      const l = floatDataL[i];
+      const r = floatDataR[i];
+
+      sumLR += l * r;
+      sumLL += l * l;
+      sumRR += r * r;
+
+      // 45 degree rotation: X = (L - R) / sqrt(2), Y = -(L + R) / sqrt(2)
+      const side = (l - r) / sqrt2;
+      const mid = (l + r) / sqrt2;
+
+      const px = cx + side * gainScale;
+      const py = cy - mid * gainScale;
+
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+  } else {
+    // Idle glowing center reticle line
+    ctx.strokeStyle = 'rgba(16, 185, 129, 0.35)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - 15);
+    ctx.lineTo(cx, cy + 15);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // 3. Phase Correlation Calculation
+  let rawCorr = 1.0;
+  if (sumLL > 1e-7 && sumRR > 1e-7) {
+    rawCorr = sumLR / Math.sqrt(sumLL * sumRR);
+    rawCorr = Math.max(-1.0, Math.min(1.0, rawCorr));
+  }
+  smoothedCorrelation = 0.88 * smoothedCorrelation + 0.12 * rawCorr;
+  const corr = (isAudioActive && hasSignal) ? smoothedCorrelation : 1.0;
+
+  // 4. Draw Phase Correlation Meter Bar at Bottom
+  const barW = Math.min(460, w - 80);
+  const barH = 12;
+  const barX = (w - barW) / 2;
+  const barY = h - 38;
+
+  ctx.fillStyle = '#080d14';
+  ctx.fillRect(barX, barY, barW, barH);
+  ctx.strokeStyle = '#1e293b';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(barX, barY, barW, barH);
+
+  // Gradient zone: -1 (red) -> 0 (yellow) -> +1 (green)
+  const grad = ctx.createLinearGradient(barX, 0, barX + barW, 0);
+  grad.addColorStop(0.0, 'rgba(239, 68, 68, 0.85)');
+  grad.addColorStop(0.45, 'rgba(245, 158, 11, 0.7)');
+  grad.addColorStop(0.55, 'rgba(245, 158, 11, 0.7)');
+  grad.addColorStop(1.0, 'rgba(16, 185, 129, 0.85)');
+
+  // Needle position
+  const needleNorm = (corr + 1.0) / 2.0; // 0.0 to 1.0
+  const needleX = barX + Math.max(0, Math.min(barW, needleNorm * barW));
+
+  // Fill up to center or needle
+  ctx.fillStyle = grad;
+  const centerX = barX + barW / 2;
+  if (needleX >= centerX) {
+    ctx.fillRect(centerX, barY + 1, needleX - centerX, barH - 2);
+  } else {
+    ctx.fillRect(needleX, barY + 1, centerX - needleX, barH - 2);
+  }
+
+  // Draw Needle
+  ctx.fillStyle = '#ffffff';
+  ctx.shadowColor = '#38bdf8';
+  ctx.shadowBlur = 8;
+  ctx.fillRect(needleX - 2, barY - 2, 4, barH + 4);
+  ctx.shadowBlur = 0;
+
+  // Scale markings
+  ctx.fillStyle = '#64748b';
+  ctx.font = '9px "JetBrains Mono", monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('-1.0', barX, barY + barH + 12);
+  ctx.fillText('-0.5', barX + barW * 0.25, barY + barH + 12);
+  ctx.fillText('0.0 (WIDE)', barX + barW * 0.5, barY + barH + 12);
+  ctx.fillText('+0.5', barX + barW * 0.75, barY + barH + 12);
+  ctx.fillText('+1.0 (MONO)', barX + barW, barY + barH + 12);
+
+  // Top Badge Readout
+  const corrColor = corr > 0.4 ? '#10b981' : (corr > 0.0 ? '#f59e0b' : '#ef4444');
+  const corrText = corr > 0.7 ? 'SOLID MONO-COMPATIBLE STEREO' : (corr > 0.2 ? 'WIDE STEREO SPREAD' : (corr > 0 ? 'CRITICAL STEREO (MARGINAL MONO)' : '⚠ OUT OF PHASE / MONO CANCELLATION'));
+
+  ctx.fillStyle = 'rgba(10, 14, 22, 0.88)';
+  const badgeW = Math.min(520, w - 40);
+  ctx.fillRect((w - badgeW) / 2, 8, badgeW, 22);
+  ctx.strokeStyle = '#1e293b';
+  ctx.strokeRect((w - badgeW) / 2, 8, badgeW, 22);
+
+  ctx.font = 'bold 11px "JetBrains Mono", monospace';
+  ctx.fillStyle = corrColor;
+  ctx.textAlign = 'center';
+  ctx.fillText(`PHASE CORRELATION: ${corr >= 0 ? '+' : ''}${corr.toFixed(2)}  •  ${corrText}`, w / 2, 23);
+}
+
 
 function renderSingleOscilloscope() {
   if (!canvasSingle) return;
