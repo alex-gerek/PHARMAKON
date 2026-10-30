@@ -353,10 +353,29 @@ async def download_stems_zip(stems_dir: str):
     from fastapi.responses import FileResponse
 
     clean_dir = urllib.parse.unquote(stems_dir).strip().strip('"').strip("'")
-    if not os.path.isdir(clean_dir):
+    if not os.path.isabs(clean_dir):
         candidate = PROJECT_DIR / clean_dir
-        if candidate.is_dir():
+        if candidate.exists():
             clean_dir = str(candidate.resolve())
+
+    # If clean_dir is a file or candidate _Stems dir
+    if os.path.isfile(clean_dir):
+        stem_cand = os.path.join(os.path.dirname(clean_dir), f"{os.path.splitext(os.path.basename(clean_dir))[0]}_Stems")
+        if os.path.isdir(stem_cand):
+            clean_dir = stem_cand
+        else:
+            # Auto split on the fly if user requested download directly
+            split_dir, _ = await asyncio.to_thread(remaster_engine.split_audio_to_stems, clean_dir)
+            clean_dir = split_dir
+    elif not os.path.isdir(clean_dir):
+        # Try finding corresponding _Stems directory
+        dot_idx = clean_dir.rfind('.')
+        cand = (clean_dir[:dot_idx] + "_Stems") if dot_idx != -1 else (clean_dir + "_Stems")
+        if os.path.isdir(cand):
+            clean_dir = cand
+        elif os.path.isfile(clean_dir):
+            split_dir, _ = await asyncio.to_thread(remaster_engine.split_audio_to_stems, clean_dir)
+            clean_dir = split_dir
 
     if not os.path.isdir(clean_dir):
         raise HTTPException(status_code=404, detail="Stems directory not found")

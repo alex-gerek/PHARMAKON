@@ -1404,7 +1404,7 @@ async function runSplitAndStemMaster() {
 
     // Telemetry cards update
     if (data.metrics) {
-      updateTelemetryCards(data.metrics);
+      updateTelemetry(data.metrics);
     }
   } catch (err) {
     if (btnProcess) btnProcess.disabled = false;
@@ -2061,17 +2061,10 @@ async function openOutputFolder() {
 async function downloadOrSaveStems(e) {
   if (e) e.preventDefault();
 
-  let stemsDir = lastResult?.stems_dir;
-  if (!stemsDir && currentTarget) {
-    // Check if current target itself is a stems directory
-    if (currentTarget.includes('_Stems') || currentTarget.includes('gravity_stems')) {
-      stemsDir = currentTarget;
-    } else {
-      // Check candidate _Stems dir
-      const dotIdx = currentTarget.lastIndexOf('.');
-      const candidate = (dotIdx !== -1) ? `${currentTarget.substring(0, dotIdx)}_Stems` : `${currentTarget}_Stems`;
-      stemsDir = candidate;
-    }
+  let stemsDir = lastResult?.stems_dir || currentTarget;
+  if (!stemsDir) {
+    updateStatus("Notice: No audio target selected. Please choose a track first!");
+    return;
   }
 
   if (!stemsDir) {
