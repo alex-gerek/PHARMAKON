@@ -225,6 +225,84 @@ body.theme-cybernoir {
   box-shadow: 0 0 8px var(--neon-amber);
 }
 
+/* ==========================================================================
+   AI GENERATOR PRESET BAR (SUNO / UDIO / CLUB / AUDIOPHILE)
+   ========================================================================== */
+.preset-selector-rack {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(10, 13, 20, 0.85);
+  border: 1px solid var(--border-rack);
+  padding: 6px 14px;
+  border-radius: 6px;
+}
+
+.preset-bar-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.preset-btn-group {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.preset-btn {
+  background: #111520;
+  border: 1px solid #232c3f;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 5px 11px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  letter-spacing: 0.5px;
+}
+
+.preset-btn:hover {
+  background: #1a2233;
+  color: #fff;
+  border-color: #3d4c6c;
+}
+
+.preset-btn.active {
+  background: #1e293b;
+  color: var(--neon-cyan);
+  border-color: var(--neon-cyan);
+  box-shadow: 0 0 10px rgba(6, 182, 212, 0.25);
+}
+
+.preset-btn#preset_suno.active {
+  color: var(--neon-amber);
+  border-color: var(--neon-amber);
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.25);
+}
+
+.preset-btn#preset_udio.active {
+  color: #c084fc;
+  border-color: #c084fc;
+  box-shadow: 0 0 10px rgba(192, 132, 252, 0.25);
+}
+
+.preset-btn#preset_club.active {
+  color: var(--neon-red);
+  border-color: var(--neon-red);
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.25);
+}
+
+.preset-btn#preset_audiophile.active {
+  color: #f1f5f9;
+  border-color: #94a3b8;
+  box-shadow: 0 0 10px rgba(241, 245, 249, 0.2);
+}
+
 .author-signature {
   text-align: right;
   display: flex;

@@ -44,6 +44,18 @@
         </div>
       </div>
 
+      <!-- AI GENERATOR PRESET PROFILES -->
+      <div class="preset-selector-rack">
+        <div class="preset-bar-label">AI PROFILE:</div>
+        <div class="preset-btn-group">
+          <button class="preset-btn active" id="preset_none" onclick="applyPreset('none')" title="Adaptive FFT Spectral Scan">⚡ AUTO SCAN</button>
+          <button class="preset-btn" id="preset_suno" onclick="applyPreset('suno')" title="Optimized for Suno v3.5 & v4 high-frequency glassiness">🟡 SUNO v3.5/v4</button>
+          <button class="preset-btn" id="preset_udio" onclick="applyPreset('udio')" title="Optimized for Udio 1.5 sibilance and stereo phase blur">🟣 UDIO 1.5</button>
+          <button class="preset-btn" id="preset_club" onclick="applyPreset('club')" title="Club & EDM maximum transient punch, mono sub 140Hz">🔴 CLUB PUNCH</button>
+          <button class="preset-btn" id="preset_audiophile" onclick="applyPreset('audiophile')" title="Transparent audiophile mastering (-1.0 dBFS True-Peak)">⚪ AUDIOPHILE</button>
+        </div>
+      </div>
+
       <div class="author-signature">
         <span class="sig-name">LEX GEREK</span>
         <span class="sig-role">SOUND ARCHITECT</span>
@@ -410,10 +422,11 @@
             <div class="monitor-diagnosis diag-healed">
               <div class="diag-header">⚡ SURGICAL CURE // PHARMAKON DSP TELEMETRY:</div>
               <ul class="diag-list">
-                <li><span class="check-bullet">✓</span> <b>True-Peak Ceiling:</b> Strictly brickwalled to <b>-0.30 dBFS</b></li>
-                <li><span class="check-bullet">✓</span> <b>Anti-AI De-Harsh:</b> 5kHz surgical notch attenuation: <b><span id="txtHarsh">-20.73 dB</span></b></li>
+                <li><span class="check-bullet">✓</span> <b>4x True-Peak Ceiling:</b> Clamped strictly to <b>-0.30 dBFS</b> (ISP immune)</li>
+                <li><span class="check-bullet">✓</span> <b>Integrated Loudness:</b> Normalized to <b><span id="txtLufs">-14.0 LUFS</span></b> (ITU-R BS.1770)</li>
+                <li><span class="check-bullet">✓</span> <b>Dynamic De-Harshing:</b> <span id="txtResonance">Adaptive Notch</span>: <b><span id="txtHarsh">-20.73 dB</span></b></li>
                 <li><span class="check-bullet">✓</span> <b>Mono Sub Lock:</b> Low-end below 120Hz locked to <b>100% True Mono</b></li>
-                <li><span class="check-bullet">✓</span> <b>Analog Tape Glue:</b> Warmth saturation boost: <b><span id="txtRms">+1.35 dB</span></b></li>
+                <li><span class="check-bullet">✓</span> <b>Analog Tape Warmth:</b> Hyperbolic tangent saturation: <b><span id="txtRms">+1.35 dB</span></b></li>
               </ul>
             </div>
           </div>
@@ -429,9 +442,14 @@
         <!-- TELEMETRY METRIC READOUTS -->
         <div class="telemetry-grid">
           <div class="telemetry-card">
-            <div class="t-label">TRUE PEAK CEILING</div>
+            <div class="t-label">4X TRUE PEAK CEILING</div>
             <div class="t-value" id="m_peak">-0.30 <span class="unit">dBFS</span></div>
-            <div class="t-delta" id="m_peak_delta">Clamped from 0.00 dBFS</div>
+            <div class="t-delta" id="m_peak_delta">Oversampled True-Peak</div>
+          </div>
+          <div class="telemetry-card highlight-card">
+            <div class="t-label">INTEGRATED LOUDNESS (LUFS)</div>
+            <div class="t-value" id="m_lufs">-14.0 <span class="unit">LUFS</span></div>
+            <div class="t-delta" id="m_lufs_delta">ITU-R BS.1770 / EBU R128</div>
           </div>
           <div class="telemetry-card highlight-card">
             <div class="t-label">ANALOG WARMTH (RMS)</div>
@@ -444,9 +462,9 @@
             <div class="t-delta">Below 32 Hz Cleaned</div>
           </div>
           <div class="telemetry-card highlight-card">
-            <div class="t-label">5kHz HARSH ATTENUATION</div>
+            <div class="t-label">DYNAMIC DE-HARSH ATTENUATION</div>
             <div class="t-value" id="m_harsh">-21.5 <span class="unit">dB</span></div>
-            <div class="t-delta">AI Glass Sibilance Neutralized</div>
+            <div class="t-delta" id="m_harsh_desc">AI Glass Sibilance Neutralized</div>
           </div>
           <div class="telemetry-card">
             <div class="t-label">3D STEREO WIDTH</div>

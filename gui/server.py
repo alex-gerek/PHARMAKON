@@ -96,9 +96,14 @@ def get_system_info():
         "engine": "PHARMAKON 2.0 DSP",
         "author": "Lex Gerek",
         "default_params": remaster_engine.DEFAULT_PARAMS,
+        "presets": remaster_engine.PRESETS,
         "demos": demos,
         "status": "ready"
     }
+
+@app.get("/api/presets")
+def get_presets():
+    return remaster_engine.PRESETS
 
 @app.post("/api/process")
 async def process_target(request: Request):

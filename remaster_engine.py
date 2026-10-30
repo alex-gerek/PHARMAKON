@@ -1,3 +1,19 @@
+"""
+PHARMAKON // Advanced AI Audio Restoration & Mastering DSP Engine
+Developed by Lex Gerek (Sound Architect / Engineer)
+Architecture: Pure NumPy + SciPy (Zero external PyTorch / heavy dependencies)
+
+Features:
+- Dynamic Anti-AI De-Harshing (Band-isolated envelope follower / dynamic ducker)
+- Auto Spectral Antidote (Welch PSD + Prominence peak detection for AI metallic resonances)
+- True-Peak Brickwall Limiter with 4x Polyphase Oversampling (ISP suppression)
+- ITU-R BS.1770-4 / EBU R128 Integrated LUFS Loudness Metering
+- Dual-Ballistic Envelope Follower Drum Transient Designer
+- Infrasonic Sub-Cut & True Mono Solidification below crossover
+- 3D Mid-Side Stereo Expansion & Analog Tape Warmth Saturation
+- Surgical Time-Range / Region Punch-In Blending with 35ms Cosine Crossfade
+"""
+
 import sys
 import os
 import io
@@ -5,6 +21,7 @@ import glob
 import numpy as np
 import soundfile as sf
 import scipy.signal as signal
+from scipy.ndimage import minimum_filter1d
 
 # Force UTF-8 stdout and stderr on Windows to prevent UnicodeEncodeError in console
 if sys.platform == 'win32':
@@ -22,30 +39,99 @@ DEFAULT_PARAMS = {
     'deharsh_freq': 5000.0,      # Anti-AI harshness notch frequency (Hz)
     'deharsh_q': 2.8,            # Notch Q factor
     'deharsh_depth': 1.0,        # 1.0 = full notch, 0.5 = blend
+    'dynamic_deharsh': True,     # True = Dynamic Ducker/Notch, False = Static IIR
     'tape_drive': 1.04,          # Analog tape saturation drive
     'tape_ceiling': 0.98,        # Saturation ceiling
     'side_stereo_boost': 1.20,   # Highs Mid-Side side gain (+20%)
     'target_ceiling_db': -0.3,   # True-Peak ceiling (dBFS)
     'drum_punch': 1.0,           # Transient attack punch multiplier (for stems)
-    'mode': 'pharmakon1'         # 'pharmakon1' (Auto) or 'pharmakon2' (Pro)
+    'mode': 'pharmakon1',        # 'pharmakon1' (Auto) or 'pharmakon2' (Pro)
+    'preset': None,              # 'suno', 'udio', 'club', 'audiophile'
+    'vocals_gain': 1.0,          # Stems balance
+    'drums_gain': 1.0,
+    'bass_gain': 1.0,
+    'other_gain': 1.0
 }
 
+PRESETS = {
+    'suno': {
+        'name': 'Suno v3.5 / v4 Antidote',
+        'sub_cutoff': 34.0,
+        'mono_crossover': 130.0,
+        'deharsh_freq': 5200.0,
+        'deharsh_q': 3.2,
+        'deharsh_depth': 1.0,
+        'dynamic_deharsh': True,
+        'tape_drive': 1.06,
+        'side_stereo_boost': 1.18,
+        'target_ceiling_db': -0.3,
+        'drum_punch': 1.15
+    },
+    'udio': {
+        'name': 'Udio 1.5 Polish',
+        'sub_cutoff': 30.0,
+        'mono_crossover': 110.0,
+        'deharsh_freq': 6100.0,
+        'deharsh_q': 2.6,
+        'deharsh_depth': 0.9,
+        'dynamic_deharsh': True,
+        'tape_drive': 1.03,
+        'side_stereo_boost': 1.25,
+        'target_ceiling_db': -0.3,
+        'drum_punch': 1.05
+    },
+    'club': {
+        'name': 'Club & EDM Punch',
+        'sub_cutoff': 36.0,
+        'mono_crossover': 140.0,
+        'deharsh_freq': 4800.0,
+        'deharsh_q': 2.8,
+        'deharsh_depth': 0.85,
+        'dynamic_deharsh': True,
+        'tape_drive': 1.10,
+        'side_stereo_boost': 1.30,
+        'target_ceiling_db': -0.1,
+        'drum_punch': 1.35
+    },
+    'audiophile': {
+        'name': 'Audiophile Transparent',
+        'sub_cutoff': 25.0,
+        'mono_crossover': 95.0,
+        'deharsh_freq': 5000.0,
+        'deharsh_q': 3.5,
+        'deharsh_depth': 0.6,
+        'dynamic_deharsh': True,
+        'tape_drive': 1.01,
+        'side_stereo_boost': 1.08,
+        'target_ceiling_db': -1.0,
+        'drum_punch': 1.0
+    }
+}
+
+# -----------------------------------------------------------------------------
+# CORE DSP BUILDING BLOCKS
+# -----------------------------------------------------------------------------
+
 def butter_highpass(data, cutoff, fs, order=4):
+    """Zero-phase highpass Butterworth filter."""
     nyq = 0.5 * fs
     normal_cutoff = max(10.0, min(cutoff, nyq - 50.0)) / nyq
     b, a = signal.butter(order, normal_cutoff, btype='high', analog=False)
     return signal.filtfilt(b, a, data, axis=0)
 
 def butter_lowpass(data, cutoff, fs, order=4):
+    """Zero-phase lowpass Butterworth filter."""
     nyq = 0.5 * fs
     normal_cutoff = max(20.0, min(cutoff, nyq - 50.0)) / nyq
     b, a = signal.butter(order, normal_cutoff, btype='low', analog=False)
     return signal.filtfilt(b, a, data, axis=0)
 
 def soft_clip(x, threshold=0.95):
+    """Hyperbolic tangent soft clipping saturation."""
     return np.tanh(x / threshold) * threshold
 
 def ensure_stereo(arr):
+    """Guarantees 2-channel float32 audio."""
     if arr.ndim == 1:
         return np.column_stack([arr, arr])
     elif arr.shape[1] > 2:
@@ -53,21 +139,308 @@ def ensure_stereo(arr):
     return arr
 
 def find_stem(files, keyword):
+    """Matches stem file by keyword (vocals, drums, bass, other)."""
     for f in files:
         base = os.path.basename(f).lower()
         if keyword in base and base.endswith(SUPPORTED_EXTS):
             return f
     return None
 
+# -----------------------------------------------------------------------------
+# 1. ITU-R BS.1770-4 / EBU R128 INTEGRATED LUFS METER
+# -----------------------------------------------------------------------------
+
+def _get_k_weighting_biquads(sr):
+    """Generates K-weighting biquad coefficients for ITU-R BS.1770-4."""
+    # Stage 1: Pre-filter high shelf (+3.99 dB at 1682 Hz)
+    f0 = 1681.974450955533
+    gain_db = 3.99984385397
+    Q = 0.7071752369274193
+    A = 10.0 ** (gain_db / 40.0)
+    w0 = 2.0 * np.pi * f0 / sr
+    alpha = np.sin(w0) / (2.0 * Q)
+    cos_w = np.cos(w0)
+    sqrt_A = np.sqrt(A)
+
+    b0 = A * ((A + 1.0) + (A - 1.0) * cos_w + 2.0 * sqrt_A * alpha)
+    b1 = -2.0 * A * ((A - 1.0) + (A + 1.0) * cos_w)
+    b2 = A * ((A + 1.0) + (A - 1.0) * cos_w - 2.0 * sqrt_A * alpha)
+    a0 = (A + 1.0) - (A - 1.0) * cos_w + 2.0 * sqrt_A * alpha
+    a1 = 2.0 * ((A - 1.0) - (A + 1.0) * cos_w)
+    a2 = (A + 1.0) - (A - 1.0) * cos_w - 2.0 * sqrt_A * alpha
+    b_shelf = np.array([b0, b1, b2]) / a0
+    a_shelf = np.array([a0, a1, a2]) / a0
+
+    # Stage 2: Highpass RLB (38.13 Hz, Q = 0.5003)
+    f0_hp = 38.13547087602444
+    Q_hp = 0.5003270373238773
+    w0_hp = 2.0 * np.pi * f0_hp / sr
+    alpha_hp = np.sin(w0_hp) / (2.0 * Q_hp)
+    cos_w_hp = np.cos(w0_hp)
+
+    b0_hp = (1.0 + cos_w_hp) / 2.0
+    b1_hp = -(1.0 + cos_w_hp)
+    b2_hp = (1.0 + cos_w_hp) / 2.0
+    a0_hp = 1.0 + alpha_hp
+    a1_hp = -2.0 * cos_w_hp
+    a2_hp = 1.0 - alpha_hp
+    b_hp = np.array([b0_hp, b1_hp, b2_hp]) / a0_hp
+    a_hp = np.array([a0_hp, a1_hp, a2_hp]) / a0_hp
+
+    return (b_shelf, a_shelf), (b_hp, a_hp)
+
+def calc_integrated_lufs(audio, sr):
+    """
+    Computes Integrated Loudness (LUFS / LKFS) per ITU-R BS.1770-4.
+    Includes K-weighting pre-filtering, 400ms blocks with 75% overlap,
+    absolute gating at -70 LKFS, and relative gating at -10 dB.
+    """
+    audio = ensure_stereo(audio)
+    (b1, a1), (b2, a2) = _get_k_weighting_biquads(sr)
+    
+    # K-weighting filter cascade
+    filtered = signal.lfilter(b1, a1, audio, axis=0)
+    filtered = signal.lfilter(b2, a2, filtered, axis=0)
+
+    block_size = int(0.400 * sr)
+    step_size = int(0.100 * sr)
+    
+    if len(filtered) < block_size:
+        total_p = np.mean(filtered**2, axis=0)
+        sum_p = np.sum(total_p)
+        return round(float(-0.691 + 10.0 * np.log10(max(1e-12, sum_p))), 2)
+
+    num_blocks = (len(filtered) - block_size) // step_size + 1
+    blocks = []
+    for i in range(num_blocks):
+        st = i * step_size
+        blocks.append(np.mean(filtered[st:st + block_size]**2, axis=0))
+    block_powers = np.array(blocks) # shape (N, 2)
+
+    total_powers = np.sum(block_powers, axis=1) # shape (N,)
+    loudness_blocks = -0.691 + 10.0 * np.log10(np.maximum(1e-12, total_powers))
+
+    # Absolute gate: -70 LKFS
+    abs_mask = loudness_blocks > -70.0
+    if not np.any(abs_mask):
+        return -70.0
+
+    # Relative gate: mean of un-gated blocks minus 10 dB
+    z_abs = total_powers[abs_mask]
+    rel_thresh = -0.691 + 10.0 * np.log10(np.mean(z_abs)) - 10.0
+
+    rel_mask = abs_mask & (loudness_blocks > rel_thresh)
+    if not np.any(rel_mask):
+        return round(float(-0.691 + 10.0 * np.log10(np.mean(z_abs))), 2)
+
+    final_lufs = -0.691 + 10.0 * np.log10(np.mean(total_powers[rel_mask]))
+    return round(float(final_lufs), 2)
+
+# -----------------------------------------------------------------------------
+# 2. AUTO SPECTRAL ANTIDOTE (INTELLIGENT FFT PEAK DETECTOR)
+# -----------------------------------------------------------------------------
+
+def detect_harsh_resonances(audio, sr, min_freq=3200, max_freq=7800):
+    """
+    Scans the audio spectrum using Welch PSD and detects unnatural sharp
+    AI resonant peaks (common in Suno/Udio generation artifacts).
+    Returns (detected_freq, adaptive_q, prominence_db).
+    """
+    if audio.ndim > 1:
+        mono = np.mean(audio, axis=1)
+    else:
+        mono = audio
+
+    nperseg = min(8192, len(mono))
+    if nperseg < 512:
+        return 5000.0, 2.8, 0.0
+
+    freqs, pxx = signal.welch(mono, fs=sr, nperseg=nperseg)
+    mask = (freqs >= min_freq) & (freqs <= max_freq)
+    f_band = freqs[mask]
+    p_band = 10.0 * np.log10(np.maximum(1e-12, pxx[mask]))
+
+    # Compute smoothed baseline via moving median filter
+    win_len = min(35, len(p_band) if len(p_band) % 2 == 1 else len(p_band) - 1)
+    if win_len >= 3:
+        baseline = signal.medfilt(p_band, win_len)
+    else:
+        baseline = p_band
+
+    prominence_curve = p_band - baseline
+    peaks, props = signal.find_peaks(prominence_curve, prominence=2.5, width=1.5)
+
+    if len(peaks) > 0:
+        best_peak_idx = peaks[np.argmax(props['prominences'])]
+        detected_freq = float(f_band[best_peak_idx])
+        max_prom = float(props['prominences'][np.argmax(props['prominences'])])
+        peak_w = float(props['widths'][np.argmax(props['prominences'])])
+        adaptive_q = float(np.clip(detected_freq / max(25.0, peak_w * (f_band[1] - f_band[0])), 2.0, 7.5))
+        return round(detected_freq, 1), round(adaptive_q, 1), round(max_prom, 1)
+
+    return 5000.0, 2.8, 0.0
+
+# -----------------------------------------------------------------------------
+# 3. DYNAMIC ANTI-AI DE-HARSHING (ENVELOPE-FOLLOWING MULTI-BAND DUCKER)
+# -----------------------------------------------------------------------------
+
+def dynamic_deharsh(audio, sr, center_freq=5000.0, q=2.8, depth=1.0):
+    """
+    Dynamic De-Harshing filter: Isolates the harsh resonant frequency band and
+    attenuates it proportionally ONLY when excessive energy is detected.
+    Prevents muffling quiet, soft passages while surgically squashing digital screeches.
+    """
+    audio = ensure_stereo(audio)
+    nyq = 0.5 * sr
+    center_freq = np.clip(center_freq, 1200.0, nyq - 200.0)
+    bw = center_freq / max(0.5, q)
+    f_low = max(200.0, center_freq - bw * 0.5) / nyq
+    f_high = min(nyq - 50.0, center_freq + bw * 0.5) / nyq
+
+    # 1. Bandpass filter to isolate the target harsh band
+    b_bp, a_bp = signal.butter(2, [f_low, f_high], btype='band')
+    harsh_band = signal.filtfilt(b_bp, a_bp, audio, axis=0)
+
+    # 2. Broad reference band (1.8 kHz - 12 kHz) to compare relative spectral balance
+    f_ref_low = max(600.0, center_freq * 0.4) / nyq
+    f_ref_high = min(nyq - 50.0, center_freq * 1.8) / nyq
+    b_ref, a_ref = signal.butter(2, [f_ref_low, f_ref_high], btype='band')
+    ref_band = signal.filtfilt(b_ref, a_ref, audio, axis=0)
+
+    # 3. Vectorized Envelope Followers (Attack ~5ms, Release ~45ms)
+    harsh_mono = np.max(np.abs(harsh_band), axis=1)
+    ref_mono = np.max(np.abs(ref_band), axis=1)
+
+    b_env, a_env = signal.butter(1, 35.0 / (0.5 * sr), btype='low')
+    env_harsh = signal.filtfilt(b_env, a_env, harsh_mono)
+    env_ref = signal.filtfilt(b_env, a_env, ref_mono)
+
+    # 4. Compute dynamic attenuation factor
+    # Expected band-to-reference ratio for normal acoustic spectral distribution
+    expected_ratio = bw / (center_freq * 1.35)
+    excess = np.maximum(0.0, env_harsh - env_ref * expected_ratio)
+    
+    # Gain ducking: up to 9-12 dB reduction when harsh resonance spikes
+    duck_amount = np.clip((excess / (env_harsh + 1e-6)) * depth, 0.0, 0.85)
+
+    # 5. Apply dynamic attenuation strictly to the isolated band
+    attenuation = duck_amount[:, np.newaxis] * harsh_band
+    deharsh_audio = audio - attenuation
+    return deharsh_audio.astype(np.float32)
+
+# -----------------------------------------------------------------------------
+# 4. TRUE-PEAK BRICKWALL LIMITER WITH 4X POLYPHASE OVERSAMPLING
+# -----------------------------------------------------------------------------
+
+def true_peak_limiter(audio, sr, target_ceiling_db=-0.3, oversample=4):
+    """
+    True-Peak Brickwall Limiter with 4x Polyphase Oversampling.
+    Detects and suppresses inter-sample peaks (ISPs) to guarantee DAC compliance.
+    """
+    audio = ensure_stereo(audio)
+    orig_len = len(audio)
+    target_ceiling = 10.0 ** (target_ceiling_db / 20.0)
+
+    # 4x Polyphase Oversampling
+    audio_4x = signal.resample_poly(audio, oversample, 1, axis=0)
+    sr_4x = sr * oversample
+
+    peak_4x = float(np.max(np.abs(audio_4x)))
+    if peak_4x <= target_ceiling:
+        true_peak_db = float(20.0 * np.log10(max(1e-9, peak_4x)))
+        return audio.astype(np.float32), round(true_peak_db, 2)
+
+    # Calculate required reduction curve
+    max_sample_4x = np.max(np.abs(audio_4x), axis=1)
+    needed_gain = np.minimum(1.0, target_ceiling / (max_sample_4x + 1e-12))
+
+    # Fast lookahead envelope smoothing (1.5ms window)
+    win_size = int(0.0015 * sr_4x) | 1
+    gain_ahead = minimum_filter1d(needed_gain, size=win_size, origin=0)
+
+    # Program-dependent release filter (approx 35ms)
+    b_rel, a_rel = signal.butter(1, 30.0 / (0.5 * sr_4x), btype='low')
+    gain_smooth = signal.filtfilt(b_rel, a_rel, gain_ahead)
+    gain_smooth = np.minimum(gain_smooth, gain_ahead)
+    gain_smooth = np.clip(gain_smooth, 0.05, 1.0)[:, np.newaxis]
+
+    limited_4x = audio_4x * gain_smooth
+
+    # Downsample back to 1x
+    limited_1x = signal.resample_poly(limited_4x, 1, oversample, axis=0)
+    if len(limited_1x) > orig_len:
+        limited_1x = limited_1x[:orig_len]
+    elif len(limited_1x) < orig_len:
+        limited_1x = np.pad(limited_1x, ((0, orig_len - len(limited_1x)), (0, 0)))
+
+    # Ensure peak at 1x doesn't exceed ceiling due to resampling phase
+    p_1x = float(np.max(np.abs(limited_1x)))
+    if p_1x > target_ceiling:
+        limited_1x = (limited_1x / p_1x) * target_ceiling
+
+    # True-peak measurement on the 4x signal
+    p_true = float(np.max(np.abs(limited_4x)))
+    true_peak_db = float(20.0 * np.log10(max(1e-9, p_true)))
+    return limited_1x.astype(np.float32), round(true_peak_db, 2)
+
+# -----------------------------------------------------------------------------
+# 5. DUAL-BALLISTIC ENVELOPE FOLLOWER DRUM TRANSIENT DESIGNER
+# -----------------------------------------------------------------------------
+
+def enhance_drum_transients(drums, sr, punch_factor=1.0):
+    """
+    Enhances acoustic transient impact using dual attack/release envelope followers.
+    Avoids differentiating noise floor (unlike np.diff) and focuses on true punch.
+    """
+    drums = ensure_stereo(drums)
+    if punch_factor <= 1.01:
+        return drums
+
+    drums_clean = butter_highpass(drums, 28, sr, order=4)
+    abs_d = np.abs(drums_clean)
+
+    # Fast attack filter (approx 2 ms cutoff = 250 Hz)
+    b_fast, a_fast = signal.butter(1, 250.0 / (0.5 * sr), btype='low')
+    env_fast = signal.lfilter(b_fast, a_fast, abs_d, axis=0)
+
+    # Slow release filter (approx 35 ms cutoff = 25 Hz)
+    b_slow, a_slow = signal.butter(1, 25.0 / (0.5 * sr), btype='low')
+    env_slow = signal.lfilter(b_slow, a_slow, abs_d, axis=0)
+
+    # Transient impulse = positive difference between fast attack and slow body
+    transient = np.maximum(0.0, env_fast - env_slow)
+    p_trans = np.percentile(transient, 99.8)
+
+    attack_mask = np.clip((transient / max(1e-6, p_trans)) * (punch_factor - 1.0) * 0.45, 0.0, 0.6)
+    drums_proc = drums_clean * (1.0 + attack_mask)
+    return soft_clip(drums_proc, 0.98).astype(np.float32)
+
+# -----------------------------------------------------------------------------
+# 6. COMPARATIVE METRICS & SPECTRAL CURVES
+# -----------------------------------------------------------------------------
+
 def calc_audio_metrics(orig, proc, sr, params=None):
-    """Calculates detailed comparative metrics and FFT curves for visualization."""
+    """Calculates detailed comparative metrics, True-Peak, LUFS, and FFT curves."""
     if params is None:
         params = DEFAULT_PARAMS
+
+    orig = ensure_stereo(orig)
+    proc = ensure_stereo(proc)
 
     p_orig = float(np.max(np.abs(orig)))
     p_proc = float(np.max(np.abs(proc)))
     rms_orig = float(np.sqrt(np.mean(orig**2)))
     rms_proc = float(np.sqrt(np.mean(proc**2)))
+
+    # True-Peak (approx over 4x check)
+    orig_4x = signal.resample_poly(orig[:min(len(orig), sr * 10)], 4, 1, axis=0)
+    proc_4x = signal.resample_poly(proc[:min(len(proc), sr * 10)], 4, 1, axis=0)
+    true_peak_orig_db = float(20.0 * np.log10(max(1e-9, np.max(np.abs(orig_4x)))))
+    true_peak_proc_db = float(20.0 * np.log10(max(1e-9, np.max(np.abs(proc_4x)))))
+
+    # Integrated LUFS loudness
+    lufs_orig = calc_integrated_lufs(orig, sr)
+    lufs_proc = calc_integrated_lufs(proc, sr)
 
     # Infrasonic reduction (< 32Hz)
     sub_cut = float(params.get('sub_cutoff', 32.0))
@@ -99,7 +472,7 @@ def calc_audio_metrics(orig, proc, sr, params=None):
     high_side_proc_rms = float(np.sqrt(np.mean(high_side_proc**2)))
     stereo_expansion = float(20 * np.log10(max(1e-9, high_side_proc_rms) / max(1e-9, high_side_orig_rms)))
 
-    # 5kHz harsh notch reduction
+    # Harsh frequency reduction
     deharsh_f = float(params.get('deharsh_freq', 5000.0))
     f_low = max(500.0, deharsh_f * 0.95) / (sr * 0.5)
     f_high = min(sr * 0.49, deharsh_f * 1.05) / (sr * 0.5)
@@ -110,8 +483,8 @@ def calc_audio_metrics(orig, proc, sr, params=None):
     harsh_proc_rms = float(np.sqrt(np.mean(harsh_proc**2)))
     harsh_reduction = float(20 * np.log10(max(1e-9, harsh_orig_rms) / max(1e-9, harsh_proc_rms)))
 
-    # Compute Welch spectral curves (approx 100 log points 20Hz - 20kHz)
-    analysis_len = min(len(orig), sr * 15)  # analyze up to 15s around loudest part
+    # Compute Welch spectral curves (120 log points 20Hz - 20kHz)
+    analysis_len = min(len(orig), sr * 15)
     mid_start = max(0, len(orig) // 2 - analysis_len // 2)
     sample_o = np.mean(orig[mid_start:mid_start + analysis_len], axis=1)
     sample_p = np.mean(proc[mid_start:mid_start + analysis_len], axis=1)
@@ -123,7 +496,7 @@ def calc_audio_metrics(orig, proc, sr, params=None):
     curve_o = np.interp(freq_pts, f, 10.0 * np.log10(np.maximum(pxx_o, 1e-12)))
     curve_p = np.interp(freq_pts, f, 10.0 * np.log10(np.maximum(pxx_p, 1e-12)))
 
-    # Compute mini-waveform envelope for UI display (300 points)
+    # Waveform preview envelope (300 points)
     n_points = 300
     chunk = len(orig) // n_points
     if chunk > 0:
@@ -133,13 +506,13 @@ def calc_audio_metrics(orig, proc, sr, params=None):
         wave_o = np.max(np.abs(orig), axis=1)
         wave_p = np.max(np.abs(proc), axis=1)
 
-    # 2048-point oscilloscope snapshot from the loudest peak section for instant CRT display
+    # 2048-point oscilloscope snapshot from the loudest peak section
     scope_len = 2048
     if len(orig) >= scope_len:
         loudest_idx = int(np.argmax(np.abs(sample_o)))
         start_idx = max(0, min(len(orig) - scope_len, mid_start + loudest_idx - scope_len // 2))
-        s_o = orig[start_idx:start_idx + scope_len, 0] if orig.ndim > 1 else orig[start_idx:start_idx + scope_len]
-        s_p = proc[start_idx:start_idx + scope_len, 0] if proc.ndim > 1 else proc[start_idx:start_idx + scope_len]
+        s_o = orig[start_idx:start_idx + scope_len, 0]
+        s_p = proc[start_idx:start_idx + scope_len, 0]
         byte_o = [int(np.clip(round(128.0 + float(x) * 127.0), 0, 255)) for x in s_o]
         byte_p = [int(np.clip(round(128.0 + float(x) * 127.0), 0, 255)) for x in s_p]
     else:
@@ -149,6 +522,10 @@ def calc_audio_metrics(orig, proc, sr, params=None):
     return {
         'peak_orig_db': round(float(20 * np.log10(max(1e-9, p_orig))), 2),
         'peak_proc_db': round(float(20 * np.log10(max(1e-9, p_proc))), 2),
+        'true_peak_orig_db': round(true_peak_orig_db, 2),
+        'true_peak_proc_db': round(true_peak_proc_db, 2),
+        'lufs_orig': lufs_orig,
+        'lufs_proc': lufs_proc,
         'rms_orig_db': round(float(20 * np.log10(max(1e-9, rms_orig))), 2),
         'rms_proc_db': round(float(20 * np.log10(max(1e-9, rms_proc))), 2),
         'sub_reduction_db': round(max(0.0, sub_reduction), 2),
@@ -166,10 +543,31 @@ def calc_audio_metrics(orig, proc, sr, params=None):
         'scope_sample_proc': byte_p
     }
 
+# -----------------------------------------------------------------------------
+# 7. MAIN MASTERING DSP PIPELINE
+# -----------------------------------------------------------------------------
+
 def process_audio_array(audio, sr, params=None):
-    """Processes stereo audio in-memory with given parameters and returns (processed_audio, metrics)."""
+    """
+    Processes stereo audio in-memory through the full PHARMAKON DSP mastering chain:
+    1. Auto Spectral Antidote resonance detection (if Auto mode)
+    2. Infrasonic highpass cut (sub_cutoff)
+    3. Lows True-Mono solidification (mono_crossover)
+    4. Dynamic Anti-AI De-Harshing (dynamic ducker)
+    5. Mid-Side 3D stereo width expansion
+    6. Analog tape saturation warmth
+    7. 4x Polyphase True-Peak Limiter
+    8. Surgical time-range punch-in blending (if region selected)
+    """
     if params is None:
-        params = DEFAULT_PARAMS
+        params = dict(DEFAULT_PARAMS)
+    else:
+        # If preset specified, merge preset values
+        preset_key = params.get('preset')
+        if preset_key and preset_key in PRESETS:
+            merged = dict(PRESETS[preset_key])
+            merged.update(params)
+            params = merged
 
     audio = ensure_stereo(audio)
     nyq = 0.5 * sr
@@ -179,52 +577,58 @@ def process_audio_array(audio, sr, params=None):
     deharsh_freq = float(params.get('deharsh_freq', 5000.0))
     deharsh_q = float(params.get('deharsh_q', 2.8))
     deharsh_depth = float(params.get('deharsh_depth', 1.0))
+    dynamic_mode = bool(params.get('dynamic_deharsh', True))
     tape_drive = float(params.get('tape_drive', 1.04))
     tape_ceiling = float(params.get('tape_ceiling', 0.98))
     side_stereo_boost = float(params.get('side_stereo_boost', 1.20))
     target_ceiling_db = float(params.get('target_ceiling_db', -0.3))
+    mode = params.get('mode', 'pharmakon1')
 
-    # 1. Infrasonic highpass cut
+    # 1. AUTO SPECTRAL ANTIDOTE (Intelligent resonance scanning)
+    detected_freq, detected_q, detected_prom = None, None, None
+    if mode == 'pharmakon1':
+        detected_freq, detected_q, detected_prom = detect_harsh_resonances(audio, sr)
+        if detected_prom >= 3.0:
+            deharsh_freq = detected_freq
+            deharsh_q = detected_q
+            print(f"  [AUTO ANTIDOTE] Detected AI Resonance: {detected_freq:.1f} Hz (Prominence: +{detected_prom:.1f} dB, Q={detected_q:.1f})")
+
+    # 2. Infrasonic highpass cut
     audio_sub = butter_highpass(audio, sub_cutoff, sr, order=4)
 
-    # 2. Crossover at mono_crossover
+    # 3. Crossover at mono_crossover
     low_band = butter_lowpass(audio_sub, mono_crossover, sr, order=4)
     high_band = butter_highpass(audio_sub, mono_crossover, sr, order=4)
 
-    # 3. Lows to 100% True Mono
+    # 4. Lows to 100% True Mono
     mono_low = np.mean(low_band, axis=1, keepdims=True)
     mono_low_stereo = np.repeat(mono_low, 2, axis=1)
 
-    # 4. Anti-AI De-Harshing Notch Filter
-    f_harsh = min(deharsh_freq, nyq - 50.0) / nyq
-    b_notch, a_notch = signal.iirnotch(f_harsh, deharsh_q)
-    high_notched = signal.filtfilt(b_notch, a_notch, high_band, axis=0)
-
-    if deharsh_depth < 0.99:
-        # Blend notch with original highs if depth < 1.0
-        high_deharsh = high_notched * deharsh_depth + high_band * (1.0 - deharsh_depth)
+    # 5. Anti-AI De-Harshing (Dynamic Multi-band Ducker vs Static Notch)
+    if dynamic_mode:
+        high_deharsh = dynamic_deharsh(high_band, sr, center_freq=deharsh_freq, q=deharsh_q, depth=deharsh_depth)
     else:
-        high_deharsh = high_notched
+        f_harsh = min(deharsh_freq, nyq - 50.0) / nyq
+        b_notch, a_notch = signal.iirnotch(f_harsh, deharsh_q)
+        high_notched = signal.filtfilt(b_notch, a_notch, high_band, axis=0)
+        high_deharsh = high_notched * deharsh_depth + high_band * (1.0 - deharsh_depth)
 
-    # 5. Mid-Side stereo widening on highs only
+    # 6. Mid-Side stereo widening on highs only
     mid = 0.5 * (high_deharsh[:, 0] + high_deharsh[:, 1])
     side = 0.5 * (high_deharsh[:, 0] - high_deharsh[:, 1])
     side_widened = side * side_stereo_boost
     high_proc = np.column_stack([mid + side_widened, mid - side_widened])
 
-    # 6. Summing
+    # 7. Summing
     full_mix = mono_low_stereo + high_proc
 
-    # 7. Analog tape saturation warmth
+    # 8. Analog tape saturation warmth
     full_mix = np.tanh(full_mix * tape_drive) * tape_ceiling
 
-    # 8. True-Peak Limiter
-    peak = np.max(np.abs(full_mix))
-    target_ceiling = 10.0 ** (target_ceiling_db / 20.0)
-    if peak > 0:
-        full_mix = (full_mix / peak) * target_ceiling
+    # 9. True-Peak Limiter with 4x Polyphase Oversampling
+    full_mix, true_peak_out = true_peak_limiter(full_mix, sr, target_ceiling_db=target_ceiling_db, oversample=4)
 
-    # 9. SURGICAL TIME-RANGE / REGION PUNCH-IN BLENDING
+    # 10. SURGICAL TIME-RANGE / REGION PUNCH-IN BLENDING
     region_mode = params.get('region_mode', 'full')
     range_start = float(params.get('range_start', 0.0))
     range_end = float(params.get('range_end', 0.0))
@@ -234,9 +638,8 @@ def process_audio_array(audio, sr, params=None):
         start_samp = int(np.clip(range_start * sr, 0, total_len))
         end_samp = int(np.clip(range_end * sr, start_samp, total_len))
 
-        # 35ms equal-power cosine crossfade to prevent any click/transient at splice boundary
+        # 35ms equal-power cosine crossfade to prevent boundary clicks
         fade_len = int(min(sr * 0.035, (end_samp - start_samp) // 4))
-
         final_out = np.copy(audio)
 
         if fade_len > 0:
@@ -262,16 +665,21 @@ def process_audio_array(audio, sr, params=None):
         full_mix = final_out
 
     metrics = calc_audio_metrics(audio, full_mix, sr, params)
+    if detected_freq:
+        metrics['detected_resonance_hz'] = detected_freq
+        metrics['detected_prominence_db'] = detected_prom
+
     return full_mix, metrics
 
 def process_single_file(file_path, params=None, open_folder=True):
+    """Processes a single audio file and outputs lossless master WAV + metrics."""
     file_path = file_path.strip().strip('"').strip("'")
     if not os.path.isfile(file_path):
         print(f"[ERROR] File not found: {file_path}")
         return None, None
 
     if params is None:
-        params = DEFAULT_PARAMS
+        params = dict(DEFAULT_PARAMS)
 
     base_dir = os.path.dirname(file_path)
     filename = os.path.basename(file_path)
@@ -291,8 +699,8 @@ def process_single_file(file_path, params=None, open_folder=True):
         return None, None
 
     print(f"[2/4] DSP Processing: Infrasonic Cut (<{params.get('sub_cutoff', 32)}Hz) & Mono Crossover (<{params.get('mono_crossover', 120)}Hz)...")
-    print(f"[3/4] Highs: Anti-AI De-Harshing ({params.get('deharsh_freq', 5000)}Hz Notch) & 3D Mid-Side (+{round((params.get('side_stereo_boost', 1.2)-1)*100)}% width)...")
-    print(f"[4/4] Summing, Analog Tape Warmth & True-Peak Limiter ({params.get('target_ceiling_db', -0.3)} dBFS)...")
+    print(f"[3/4] Highs: Anti-AI Dynamic De-Harshing & 3D Mid-Side (+{round((params.get('side_stereo_boost', 1.2)-1)*100)}% width)...")
+    print(f"[4/4] Summing, Analog Tape Warmth & 4x True-Peak Limiter ({params.get('target_ceiling_db', -0.3)} dBFS)...")
 
     full_mix, metrics = process_audio_array(audio, sr, params)
 
@@ -306,8 +714,8 @@ def process_single_file(file_path, params=None, open_folder=True):
     print(f"  SUCCESS! Remaster completed!")
     print(f"  Master file: {os.path.basename(out_file)}")
     print(f"  Location:    {out_dir}")
-    print(f"  Peak In/Out: {metrics['peak_orig_db']} dBFS -> {metrics['peak_proc_db']} dBFS")
-    print(f"  Analog Warmth: {metrics['rms_orig_db']} dBFS -> {metrics['rms_proc_db']} dBFS")
+    print(f"  True-Peak:   {metrics['true_peak_orig_db']} dBFS -> {metrics['true_peak_proc_db']} dBFS")
+    print(f"  Loudness:    {metrics['lufs_orig']} LUFS -> {metrics['lufs_proc']} LUFS")
     print(f"=======================================================\n")
 
     if open_folder and sys.platform == 'win32':
@@ -316,13 +724,14 @@ def process_single_file(file_path, params=None, open_folder=True):
     return out_file, metrics
 
 def process_stems_folder(target_folder, params=None, open_folder=True):
+    """Processes 4-stem folder (vocals, drums, bass, other) with individual stem treatments."""
     target_folder = target_folder.strip().strip('"').strip("'")
     if not os.path.isdir(target_folder):
         print(f"[ERROR] Folder not found: {target_folder}")
         return None, None
 
     if params is None:
-        params = DEFAULT_PARAMS
+        params = dict(DEFAULT_PARAMS)
 
     audio_files = []
     for ext in SUPPORTED_EXTS:
@@ -371,11 +780,11 @@ def process_stems_folder(target_folder, params=None, open_folder=True):
 
     raw_sum = vocals + drums + bass + other
 
-    # Sub & Mono params
+    # Extract DSP parameters
     sub_cut = float(params.get('sub_cutoff', 32.0))
     mono_cross = float(params.get('mono_crossover', 120.0))
     deharsh_f = float(params.get('deharsh_freq', 5000.0))
-    deharsh_q = float(params.get('deharsh_q', 2.5))
+    deharsh_q = float(params.get('deharsh_q', 2.8))
     deharsh_depth = float(params.get('deharsh_depth', 1.0))
     side_boost = float(params.get('side_stereo_boost', 1.25))
     punch_factor = float(params.get('drum_punch', 1.0))
@@ -392,25 +801,14 @@ def process_stems_folder(target_folder, params=None, open_folder=True):
     bass_proc = soft_clip(bass_proc * 1.05, 0.98)
 
     # --- DRUMS ---
-    print(f"[2/4] DRUMS: Sub-cut 28Hz, Transient kick punch enhancement (x{punch_factor})...")
-    drums_clean = butter_highpass(drums, 28, sr, order=4)
-    diff = np.diff(np.abs(drums_clean), axis=0, prepend=0)
-    attack_mask = np.clip(diff * (4.0 * punch_factor), 0.0, 0.35)
-    drums_proc = drums_clean * (1.0 + attack_mask)
-    drums_proc = soft_clip(drums_proc, 0.98)
+    print(f"[2/4] DRUMS: Envelope Follower Transient Punch (x{punch_factor})...")
+    drums_proc = enhance_drum_transients(drums, sr, punch_factor=punch_factor)
 
     # --- VOCALS ---
-    print(f"[3/4] VOCALS: De-essing AI harshness ({deharsh_f}Hz notch), Tape warmth...")
+    print(f"[3/4] VOCALS: Dynamic De-Harshing ({deharsh_f}Hz), Tape Warmth...")
     vocals_clean = butter_highpass(vocals, 85, sr, order=3)
-    nyq = 0.5 * sr
-    f_harsh = min(deharsh_f, nyq - 50.0) / nyq
-    b_notch, a_notch = signal.iirnotch(f_harsh, deharsh_q)
-    vocals_notched = signal.filtfilt(b_notch, a_notch, vocals_clean, axis=0)
-    if deharsh_depth < 0.99:
-        vocals_deharsh = vocals_notched * deharsh_depth + vocals_clean * (1.0 - deharsh_depth)
-    else:
-        vocals_deharsh = vocals_notched
-    vocals_proc = np.tanh(vocals_deharsh * 1.1) * 0.95
+    vocals_deharsh = dynamic_deharsh(vocals_clean, sr, center_freq=deharsh_f, q=deharsh_q, depth=deharsh_depth)
+    vocals_proc = np.tanh(vocals_deharsh * 1.08) * 0.96
 
     # --- OTHER / SYNTHS ---
     print(f"[4/4] SYNTHS: Highpass 115Hz, 3D Mid-Side (+{round((side_boost-1)*100)}% stereo)...")
@@ -420,13 +818,15 @@ def process_stems_folder(target_folder, params=None, open_folder=True):
     side_widened = side * side_boost
     other_proc = np.column_stack([mid + side_widened, mid - side_widened])
 
-    # --- MASTER SUM & LIMITER ---
-    print(f"\n>>> Summing to Master Mix and True-Peak Limiting ({target_ceiling_db} dBFS)...")
-    master_mix = drums_proc + bass_proc * 0.98 + vocals_proc * 1.05 + other_proc * 0.92
-    peak = np.max(np.abs(master_mix))
-    target_ceiling = 10.0 ** (target_ceiling_db / 20.0)
-    if peak > 0:
-        master_mix = (master_mix / peak) * target_ceiling
+    # --- MASTER SUM & 4X TRUE-PEAK LIMITER ---
+    print(f"\n>>> Summing to Master Mix and 4x True-Peak Limiting ({target_ceiling_db} dBFS)...")
+    v_g = float(params.get('vocals_gain', 1.0))
+    d_g = float(params.get('drums_gain', 1.0))
+    b_g = float(params.get('bass_gain', 1.0))
+    o_g = float(params.get('other_gain', 1.0))
+    
+    master_mix = drums_proc * d_g + bass_proc * b_g + vocals_proc * v_g + other_proc * o_g
+    master_mix, true_peak_out = true_peak_limiter(master_mix, sr, target_ceiling_db=target_ceiling_db, oversample=4)
 
     remaster_dir = os.path.join(target_folder, "Remaster")
     os.makedirs(remaster_dir, exist_ok=True)
@@ -454,6 +854,8 @@ def process_stems_folder(target_folder, params=None, open_folder=True):
     print(f"  SUCCESS! Remaster completed!")
     print(f"  Master file: {os.path.basename(master_path)}")
     print(f"  Location:    {remaster_dir}")
+    print(f"  True-Peak:   {metrics['true_peak_orig_db']} dBFS -> {metrics['true_peak_proc_db']} dBFS")
+    print(f"  Loudness:    {metrics['lufs_orig']} LUFS -> {metrics['lufs_proc']} LUFS")
     print(f"=======================================================\n")
 
     if open_folder and sys.platform == 'win32':

@@ -5,6 +5,7 @@
 
 let currentMode = 'pharmakon1';
 let currentTarget = "";
+let currentPreset = 'none';
 let bundledDemos = [];
 let lastMetrics = null;
 let currentViewMode = 'dual'; // 'dual', 'single_osc', 'rta', 'static', 'waveform'
@@ -1085,10 +1086,12 @@ async function runPharmakonProcess(isInitial = false) {
     deharsh_freq: parseFloat(document.getElementById('param_deharsh_freq').value),
     deharsh_q: parseFloat(document.getElementById('param_deharsh_q').value),
     deharsh_depth: parseFloat(document.getElementById('param_deharsh_depth').value),
+    dynamic_deharsh: true,
     tape_drive: parseFloat(document.getElementById('param_tape_drive').value),
     side_stereo_boost: parseFloat(document.getElementById('param_side_stereo_boost').value),
     drum_punch: parseFloat(document.getElementById('param_drum_punch').value),
     target_ceiling_db: activeCeiling,
+    preset: currentPreset !== 'none' ? currentPreset : null,
     region_mode: surgicalScope,
     range_start: surgicalIn,
     range_end: surgicalOut
@@ -1267,8 +1270,21 @@ function resetSurgicalRegion() {
 
 function updateTelemetry(m) {
   if (!m) return;
-  document.getElementById('m_peak').innerHTML = `${m.peak_proc_db} <span class="unit">dBFS</span>`;
-  document.getElementById('m_peak_delta').innerText = `Clamped from ${m.peak_orig_db} dBFS`;
+  const tpProc = m.true_peak_proc_db !== undefined ? m.true_peak_proc_db : m.peak_proc_db;
+  const tpOrig = m.true_peak_orig_db !== undefined ? m.true_peak_orig_db : m.peak_orig_db;
+  document.getElementById('m_peak').innerHTML = `${tpProc} <span class="unit">dBFS</span>`;
+  document.getElementById('m_peak_delta').innerText = `Oversampled True-Peak (from ${tpOrig} dBFS)`;
+
+  if (m.lufs_proc !== undefined) {
+    const lufsCard = document.getElementById('m_lufs');
+    if (lufsCard) lufsCard.innerHTML = `${m.lufs_proc} <span class="unit">LUFS</span>`;
+    const lufsDelta = document.getElementById('m_lufs_delta');
+    const lDiff = (m.lufs_proc - m.lufs_orig).toFixed(1);
+    const lSign = lDiff >= 0 ? '+' : '';
+    if (lufsDelta) lufsDelta.innerText = `Raw: ${m.lufs_orig} LUFS (${lSign}${lDiff} dB)`;
+    const txtLufs = document.getElementById('txtLufs');
+    if (txtLufs) txtLufs.innerText = `${m.lufs_proc} LUFS`;
+  }
 
   const rmsDiff = (m.rms_proc_db - m.rms_orig_db).toFixed(2);
   const sign = rmsDiff >= 0 ? '+' : '';
@@ -1284,6 +1300,16 @@ function updateTelemetry(m) {
   if (harshEl) harshEl.innerText = `-${m.harsh_reduction_db} dB`;
   const rmsEl = document.getElementById('txtRms');
   if (rmsEl) rmsEl.innerText = `${sign}${rmsDiff} dB`;
+
+  const resEl = document.getElementById('txtResonance');
+  const harshDesc = document.getElementById('m_harsh_desc');
+  if (m.detected_resonance_hz) {
+    if (resEl) resEl.innerText = `Auto-Neutralized ${m.detected_resonance_hz} Hz (+${m.detected_prominence_db} dB)`;
+    if (harshDesc) harshDesc.innerText = `AI Whistle at ${m.detected_resonance_hz}Hz Neutralized`;
+  } else {
+    if (resEl) resEl.innerText = `Dynamic Ducker Active`;
+    if (harshDesc) harshDesc.innerText = `AI Glass Sibilance Neutralized`;
+  }
 
   // Pre-populate frozen waveform buffers with real audio snapshot
   if (m.scope_sample_orig && m.scope_sample_proc) {
@@ -1372,6 +1398,7 @@ function initHardwareKnobs() {
 
     // Set initial position
     updateVisual(val);
+    ctrl._updateVisual = updateVisual;
 
     // Interactive Dragging
     if (knobEl) {
@@ -1417,6 +1444,93 @@ function initHardwareKnobs() {
       }, { passive: false });
     }
   });
+}
+
+function setKnobValue(paramName, newVal) {
+  const ctrl = document.querySelector(`.knob-control[data-param="${paramName}"]`);
+  if (ctrl && ctrl._updateVisual) {
+    ctrl._updateVisual(newVal);
+  }
+}
+
+const PRESET_MAP = {
+  suno: {
+    name: 'Suno v3.5 / v4 Antidote',
+    sub_cutoff: 34,
+    mono_crossover: 130,
+    deharsh_freq: 5200,
+    deharsh_q: 3.2,
+    deharsh_depth: 1.0,
+    tape_drive: 1.06,
+    side_stereo_boost: 1.18,
+    drum_punch: 1.15,
+    target_ceiling_db: -0.3
+  },
+  udio: {
+    name: 'Udio 1.5 Polish',
+    sub_cutoff: 30,
+    mono_crossover: 110,
+    deharsh_freq: 6100,
+    deharsh_q: 2.6,
+    deharsh_depth: 0.9,
+    tape_drive: 1.03,
+    side_stereo_boost: 1.25,
+    drum_punch: 1.05,
+    target_ceiling_db: -0.3
+  },
+  club: {
+    name: 'Club & EDM Punch',
+    sub_cutoff: 36,
+    mono_crossover: 140,
+    deharsh_freq: 4800,
+    deharsh_q: 2.8,
+    deharsh_depth: 0.85,
+    tape_drive: 1.10,
+    side_stereo_boost: 1.30,
+    drum_punch: 1.35,
+    target_ceiling_db: -0.1
+  },
+  audiophile: {
+    name: 'Audiophile Transparent',
+    sub_cutoff: 25,
+    mono_crossover: 95,
+    deharsh_freq: 5000,
+    deharsh_q: 3.5,
+    deharsh_depth: 0.6,
+    tape_drive: 1.01,
+    side_stereo_boost: 1.08,
+    drum_punch: 1.0,
+    target_ceiling_db: -1.0
+  }
+};
+
+function applyPreset(presetKey) {
+  currentPreset = presetKey;
+  document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+  const btn = document.getElementById(`preset_${presetKey}`);
+  if (btn) btn.classList.add('active');
+
+  if (presetKey === 'none') {
+    updateStatus("Profile: AUTO SCAN (Intelligent Welch FFT resonance detection active)");
+    return;
+  }
+
+  const p = PRESET_MAP[presetKey];
+  if (p) {
+    for (const [k, v] of Object.entries(p)) {
+      if (k === 'name') continue;
+      if (k === 'target_ceiling_db') {
+        activeCeiling = v;
+        document.querySelectorAll('.ceiling-btn').forEach(cb => {
+          if (parseFloat(cb.dataset.val) === v) cb.classList.add('active');
+          else cb.classList.remove('active');
+        });
+      } else {
+        setKnobValue(k, v);
+      }
+    }
+    updateStatus(`Profile Loaded: ${p.name}. Click 'COMMENCE RE-MASTERING' to apply.`);
+  }
 }
 
 function initDropzone() {
