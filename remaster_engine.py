@@ -1373,14 +1373,28 @@ def split_audio_to_stems(input_path, output_stems_dir=None):
     _, harm_R_sig = signal.istft(Zxx_R * mask_h_R, fs=sr, nperseg=nperseg, noverlap=noverlap)
     harm_sig = np.column_stack([harm_L_sig[:orig_len], harm_R_sig[:orig_len]])
 
-    # 4. Separate Vocals from Other
+    # 4. Separate Vocals from Other (Formant bandpass + Center-Purity stereo coherence)
     mid = 0.5 * (harm_sig[:, 0] + harm_sig[:, 1])
-    b_voc_lo, a_voc_lo = signal.butter(2, 280.0 / nyq, btype='high')
-    b_voc_hi, a_voc_hi = signal.butter(2, min(5000.0, nyq - 50.0) / nyq, btype='low')
-    mid_voc = signal.filtfilt(b_voc_hi, a_voc_hi, signal.filtfilt(b_voc_lo, a_voc_lo, mid))
-    vocals_stem = np.column_stack([mid_voc, mid_voc])
+    side = 0.5 * (harm_sig[:, 0] - harm_sig[:, 1])
 
-    other_stem = harm_sig - vocals_stem * 0.8
+    # Core vocal formant filter (300 Hz - 3800 Hz)
+    b_voc_lo, a_voc_lo = signal.butter(2, 300.0 / nyq, btype='high')
+    b_voc_hi, a_voc_hi = signal.butter(2, min(3800.0, nyq - 50.0) / nyq, btype='low')
+    mid_voc = signal.filtfilt(b_voc_hi, a_voc_hi, signal.filtfilt(b_voc_lo, a_voc_lo, mid))
+
+    # Center-Purity weighting: penalize any signal that has side/stereo spread (reverbs, panned guitars)
+    side_mag = np.abs(side)
+    mid_mag = np.abs(mid)
+    purity = np.clip(1.0 - 2.2 * (side_mag / (mid_mag + side_mag + 1e-6)), 0.0, 1.0)
+    # Smooth purity envelope
+    b_pur, a_pur = signal.butter(1, 40.0 / nyq, btype='low')
+    purity_smooth = signal.filtfilt(b_pur, a_pur, purity)
+
+    clean_mid_voc = mid_voc * np.clip(purity_smooth, 0.0, 1.0)
+    vocals_stem = np.column_stack([clean_mid_voc, clean_mid_voc])
+
+    # Other contains all remaining harmonics, lead guitars, pads and stereo air
+    other_stem = harm_sig - vocals_stem * 0.85
 
     # Pad or trim to orig_len
     def _fit(arr):

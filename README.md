@@ -126,7 +126,27 @@
 
 ---
 
-## 7. Сертификат мастеринга и сохранение файлов
+## 7. Разделение стэмов: Встроенный DSP vs Внешние нейросети (Demucs / UVR5)
+
+В PHARMAKON 2.0 предусмотрено два удобных пути работы со стэмами:
+
+### 1. Автономный встроенный сплиттер (кнопка `🧬 SPLIT & STEM MASTER`):
+* **Как устроен:** Наш собственный легковесный математический DSP-алгоритм на базе SciPy (быстрое преобразование Фурье STFT, медианные фильтры Винера для разделения гармоник и транзиентов, фазовый Mid/Side кроссовер с контролем стерео-когерентности).
+* **Преимущества:** Занимает ровно 0 МБ диска, запускается за долю секунды, не требует видеокарты и отдельной установки Torch. За 5–15 секунд раскладывает трек на 4 стэма: ударные (Drums), монофонизированный саб-низ (Bass), центральный вокал (Vocals) и стерео-панораму (Other).
+* **Акустическое ограничение:** Поскольку это чистая математика спектрограмм без нейросетевого «слуха», если в треке прямо по центру панорамы одновременно с голосом громко звучит перегруженное гитарное соло в том же диапазоне 1–3 кГц, часть обертонов гитары может подмешаться в вокальный стэм.
+
+### 2. Хирургическая студийная изоляция (Рекомендованные открытые AI-сплиттеры):
+Если вам требуется абсолютная студийная изоляция вокала («чистая а капелла» без гитарных соло и примесей), мы рекомендуем предварительно разделить трек через признанные открытые мировые нейросети:
+* 🔗 **[Meta AI Demucs](https://github.com/facebookresearch/demucs)** (автор Alexandre Défossez, лицензия MIT) — флагманская глубокая нейросеть, которая анализирует микротембр связок человека и безупречно отделяет голос от электрогитар, даже если они играют в унисон.
+* 🔗 **[Ultimate Vocal Remover GUI (UVR5)](https://github.com/Anjok07/ultimatevocalremovergui)** — самый популярный в мире бесплатный инструмент с открытым исходным кодом, объединяющий лучшие нейросетевые модели (MDX-Net, VR-Arch, Demucs v4).
+
+> **Студийный пайплайн:**  
+> Разложите ваш трек в UVR5 или Demucs на 4 дорожки (`vocals.wav`, `drums.wav`, `bass.wav`, `other.wav`), сложите в одну папку и нажмите кнопку **`📁 BROWSE STEMS...`** в Section 01.  
+> PHARMAKON мгновенно подхватит их, проведет фазовую авто-синхронизацию бочки с басом (**Sub Sync Phase Alignment**), устранит ядовитые AI-резонансы, накачает транзиенты барабанов и отмастерит через аналоговую ленту и 4x True-Peak лимитер!
+
+---
+
+## 8. Сертификат мастеринга и сохранение файлов
 
 1. **📄 OPEN FULL REPORT:** Открывает автономный интерактивный диагностический отчёт в основном браузере (HTML с векторными SVG-спектрограммами, таблицей метрик LUFS/True-Peak/RMS и серийным номером).
 2. **📸 EXPORT PNG CARD:** Генерирует графическую карточку студийного паспорта качества с вызовом нативного диалога Windows «Сохранить как...» в любую выбранную папку.
@@ -134,7 +154,7 @@
 
 ---
 
-## 8. 🚀 Быстрый запуск
+## 9. 🚀 Быстрый запуск
 
 ### 1. Клонирование репозитория
 ```bash
@@ -223,18 +243,38 @@ Fusing **Abbey Road 1974** analog tape warmth with **Blade Runner 2049** telemet
 
 ---
 
-## 6. Studio Mastering Certificate & Export
+## 7. Stem Separation: Built-In Fast DSP vs Dedicated AI Splitters (Demucs / UVR5)
+
+PHARMAKON 2.0 provides two streamlined workflows for stem mastering:
+
+### 1. Autonomous Built-in Splitter (`🧬 SPLIT & STEM MASTER` button):
+* **Technology:** Proprietary lightweight pure SciPy mathematical DSP (STFT Harmonic-Percussive Source Separation with Wiener soft masks and stereo coherence filtering).
+* **Advantages:** Zero downloads, 0 MB disk footprint, no PyTorch required, runs in seconds on any laptop CPU. Instantly isolates Drums transients, True-Mono Bass, Center Vocals, and Stereo Other.
+* **Acoustic Limitation:** Pure spectral math cannot distinguish human vocal formants from distorted lead guitars playing simultaneously in the exact same center mid-range.
+
+### 2. High-Precision Studio Vocal Extraction (Recommended Open-Source AI Tools):
+If your production demands surgically isolated acapellas free of centered guitar solos:
+* 🔗 **[Meta AI Demucs](https://github.com/facebookresearch/demucs)** (by Alexandre Défossez, MIT License) — state-of-the-art deep neural separation distinguishing vocal timbres from instrument overtones.
+* 🔗 **[Ultimate Vocal Remover GUI (UVR5)](https://github.com/Anjok07/ultimatevocalremovergui)** — the gold standard free open-source desktop application housing top MDX-Net, Demucs, and VR-Arch separation engines.
+
+> **Studio Workflow:**  
+> Separate your song in Demucs or UVR5 into 4 stems (`vocals.wav`, `drums.wav`, `bass.wav`, `other.wav`), place them in a folder, and click **`📁 BROWSE STEMS...`** in Section 01.  
+> PHARMAKON will lock low-end kick/bass phase (**Sub Sync Alignment**), tame AI vocoder harshness, punch drum transients, and master through the 4x True-Peak analog console!
+
+---
+
+## 8. Studio Mastering Certificate & Export
 
 - **Interactive Diagnostic HTML Report:** Complete spectral analysis, LUFS readings, and serial number.
 - **Save As File Dialogs:** Direct destination folder selection for Master WAV files and PNG Certificate cards via modern File System Access API and native desktop dialogs.
 
 ---
 
-## 7. Author & Credits
+## 9. Author & Credits
 Created with acoustic passion by **Lex Gerek**  
 - Sound Architect, Mastering Engineer & Producer  
 - YouTube / Portfolio: [Lex Gerek](https://www.youtube.com/@alex-gerek)  
 - GitHub: [@alex-gerek](https://github.com/alex-gerek)
 
-## 8. License
+## 10. License
 Released under the **MIT License**. Free for personal, commercial, and studio use.
