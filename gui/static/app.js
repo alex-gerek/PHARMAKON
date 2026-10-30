@@ -1506,7 +1506,7 @@ const PRESET_MAP = {
 
 function applyPreset(presetKey) {
   currentPreset = presetKey;
-  document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.preset-rack-chip').forEach(b => b.classList.remove('active'));
   const btn = document.getElementById(`preset_${presetKey}`);
   if (btn) btn.classList.add('active');
 
