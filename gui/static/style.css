@@ -2216,3 +2216,8 @@ body.theme-cybernoir {
   color: #ffffff;
   transform: translateY(-1px);
 }
+
+/* CINEMATIC CAPTURE MODE: Completely hide mouse cursor during video recordings */
+body.cinematic-hide-cursor, body.cinematic-hide-cursor * {
+  cursor: none !important;
+}

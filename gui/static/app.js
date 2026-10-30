@@ -2348,6 +2348,10 @@ function setupKeyboardShortcuts() {
       setViewMode('waveform');
     } else if (e.code === 'Digit6') {
       setViewMode('goniometer');
+    } else if (e.code === 'KeyC') {
+      const isHidden = document.body.classList.toggle('cinematic-hide-cursor');
+      playHardwareClick('toggle');
+      updateStatus(isHidden ? '🎬 CINEMATIC RECORDING MODE: Mouse cursor HIDDEN. Press [C] to restore.' : '🖱️ STANDARD MODE: Mouse cursor visible.');
     }
   });
 }
