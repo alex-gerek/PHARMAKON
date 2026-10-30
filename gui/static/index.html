@@ -541,6 +541,9 @@
           </div>
 
           <div class="transport-right">
+            <button id="btnMasteringReport" class="btn-report" onclick="openMasteringReportModal()" title="View & Export Mastering Certificate & Spectral Diagnosis">
+              📜 MASTERING REPORT
+            </button>
             <button class="btn-reveal" onclick="openOutputFolder()" title="Open destination folder in Windows Explorer">
               📂 REVEAL IN EXPLORER
             </button>
@@ -559,6 +562,27 @@
       <div>DUAL 60 FPS REAL-TIME OSCILLOSCOPES &bull; NEURAL AUDIO ANTIDOTE &bull; ANALOG SATURATION</div>
     </footer>
 
+  </div>
+
+  <!-- MASTERING REPORT MODAL DIALOG -->
+  <div id="reportModal" class="modal-backdrop" style="display:none;" onclick="if(event.target===this)closeReportModal()">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <span class="jewel-lamp jewel-lamp-amber"></span>
+          <h3>MASTERING &amp; SPECTRAL DIAGNOSIS CERTIFICATE</h3>
+        </div>
+        <button class="modal-close" onclick="closeReportModal()">&times;</button>
+      </div>
+      <div class="modal-body" id="reportBody">
+        <!-- Rendered live certificate -->
+      </div>
+      <div class="modal-footer">
+        <button class="btn-modal-action" onclick="downloadReportPNG()">📸 EXPORT PNG CARD</button>
+        <button class="btn-modal-action" onclick="openReportInNewTab()">📄 OPEN FULL REPORT</button>
+        <button class="btn-modal-secondary" onclick="closeReportModal()">CLOSE</button>
+      </div>
+    </div>
   </div>
 
   <script src="/static/app.js?v=dsp4"></script>

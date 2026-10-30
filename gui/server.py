@@ -191,6 +191,18 @@ def stream_audio(path: str):
         raise HTTPException(status_code=404, detail="Audio file not found")
     return FileResponse(clean_path, media_type="audio/wav")
 
+@app.get("/api/report")
+def get_mastering_report(path: str):
+    """Serves the standalone HTML Mastering Report & Certificate."""
+    clean_path = urllib.parse.unquote(path).strip().strip('"').strip("'")
+    if not os.path.isfile(clean_path):
+        candidate = PROJECT_DIR / clean_path
+        if candidate.exists():
+            clean_path = str(candidate.resolve())
+    if not os.path.isfile(clean_path):
+        raise HTTPException(status_code=404, detail="Mastering report not found")
+    return FileResponse(clean_path, media_type="text/html")
+
 def _run_save_as_dialog(master_path: str) -> str:
     """Threaded native Tkinter Save As dialog helper."""
     import tkinter as tk
