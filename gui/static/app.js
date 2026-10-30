@@ -1532,9 +1532,9 @@ function loadBundledDemo(demoId, autoProcess = true) {
   const demo = bundledDemos.find(d => d.id === demoId) || (bundledDemos.length > 0 ? bundledDemos[0] : null);
   if (!demo) return;
 
-  currentTarget = demo.path;
+  currentTarget = demo.rel_path || demo.path;
   const inputEl = document.getElementById('targetPathInput');
-  if (inputEl) inputEl.value = demo.path;
+  if (inputEl) inputEl.value = demo.rel_path || demo.path;
 
   // Toggle chip classes
   const chipBronze = document.getElementById('chipDemoBronze');

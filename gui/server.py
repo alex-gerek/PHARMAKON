@@ -38,6 +38,7 @@ DEMO_TRACKS = [
         "title": "Bronze Psalter (Single WAV)",
         "subtitle": "AI De-Harshing & Tape Saturation",
         "path": str(DEMO_DIR / "bronze_psalter" / "Bronze_Psalter_Demo.wav"),
+        "rel_path": "demo_audio/bronze_psalter/Bronze_Psalter_Demo.wav",
         "type": "file"
     },
     {
@@ -45,6 +46,7 @@ DEMO_TRACKS = [
         "title": "GRAVITY HAS AN ADDRESS (4 Stems)",
         "subtitle": "Stem Mastering & Sub Crossover",
         "path": str(DEMO_DIR / "gravity_stems"),
+        "rel_path": "demo_audio/gravity_stems",
         "type": "stems"
     }
 ]
@@ -102,6 +104,12 @@ async def process_target(request: Request):
         target_path = body.get("target_path", "").strip().strip('"').strip("'")
         mode = body.get("mode", "pharmakon1")
         custom_params = body.get("params", {})
+
+        # Resolve relative paths against project root (e.g. demo_audio/...)
+        if target_path and not os.path.exists(target_path):
+            rel_candidate = PROJECT_DIR / target_path
+            if rel_candidate.exists():
+                target_path = str(rel_candidate.resolve())
 
         params = dict(remaster_engine.DEFAULT_PARAMS)
         params.update(custom_params)
