@@ -7,8 +7,12 @@
 ### Created by Lex Gerek // Abbey Road 1974 × Blade Runner 2049
 
 <p align="center">
+  <a href="https://youtu.be/GyJ8nCmqhMc" target="_blank">
+    <img src="https://img.shields.io/badge/▶%20Смотреть%20видео--обзор%20консоли%20%7C%20Watch%20Studio%20Walkthrough-FF0000?style=for-the-badge&logo=youtube&logoColor=white" alt="Watch Studio Walkthrough">
+  </a>
+  &nbsp;
   <a href="https://github.com/alex-gerek/PHARMAKON/archive/refs/heads/master.zip">
-    <img src="https://img.shields.io/badge/📥%20Скачать%20ZIP%20%7C%20Download%20ZIP%20(Direct%20Link)-238636?style=for-the-badge&logo=github&logoColor=white" alt="Download ZIP">
+    <img src="https://img.shields.io/badge/📥%20Скачать%20ZIP%20%7C%20Download%20ZIP-238636?style=for-the-badge&logo=github&logoColor=white" alt="Download ZIP">
   </a>
 </p>
 
@@ -34,6 +38,10 @@
 # 🇷🇺 Русская версия
 
 ## 1. Зачем создан PHARMAKON: Анатомия «Нейросетевого Яда»
+
+> 📺 **Официальный видео-обзор консоли в студии (A/B и Дельта тесты):**  
+> [**Смотреть на YouTube: Treating Generative Audio: Pure Mathematical DSP | PHARMAKON 2.0**](https://youtu.be/GyJ8nCmqhMc)
+
 
 > **Pharmakon** *(др.-греч. φάρμακον)* — античный философский концепт: вещество, являющееся одновременно **ядом**, **лекарством** и **противоядием**.
 
