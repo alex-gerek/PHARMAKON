@@ -12,3 +12,5 @@ backup_*/
 !demo_audio/**/*.wav
 demo_audio/**/Remaster/
 
+
+uploads/

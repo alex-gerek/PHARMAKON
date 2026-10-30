@@ -2054,6 +2054,96 @@ async function openOutputFolder() {
   }
 }
 
+
+// -----------------------------------------------------------------------------
+// DOWNLOAD OR EXPORT STEMS PACK AS ZIP
+// -----------------------------------------------------------------------------
+async function downloadOrSaveStems(e) {
+  if (e) e.preventDefault();
+
+  let stemsDir = lastResult?.stems_dir;
+  if (!stemsDir && currentTarget) {
+    // Check if current target itself is a stems directory
+    if (currentTarget.includes('_Stems') || currentTarget.includes('gravity_stems')) {
+      stemsDir = currentTarget;
+    } else {
+      // Check candidate _Stems dir
+      const dotIdx = currentTarget.lastIndexOf('.');
+      const candidate = (dotIdx !== -1) ? `${currentTarget.substring(0, dotIdx)}_Stems` : `${currentTarget}_Stems`;
+      stemsDir = candidate;
+    }
+  }
+
+  if (!stemsDir) {
+    updateStatus("Notice: No separated stems found. Click '🧬 SPLIT & STEM MASTER' first to generate stems!");
+    return;
+  }
+
+  const trackName = lastResult?.track_name || (currentTarget ? currentTarget.split(/[\\/]/).pop().replace(/\.[^/.]+$/, '') : "Track");
+  const suggestedName = `${trackName} - STEMS.zip`;
+  updateStatus("Choosing destination folder for Stems ZIP archive...");
+
+  // Tier 1: Modern File System Access API
+  if (window.showSaveFilePicker) {
+    try {
+      const handle = await window.showSaveFilePicker({
+        suggestedName: suggestedName,
+        types: [{
+          description: 'ZIP Archive (*.zip)',
+          accept: { 'application/zip': ['.zip'] }
+        }]
+      });
+      updateStatus("Downloading and compressing stems into ZIP archive...");
+      const streamUrl = `/api/download-stems?stems_dir=${encodeURIComponent(stemsDir)}`;
+      const response = await fetch(streamUrl);
+      if (!response.ok) {
+        throw new Error("Stems directory not found on server");
+      }
+      const blob = await response.blob();
+      const writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      updateStatus(`Stems ZIP saved successfully: ${handle.name}`);
+      return;
+    } catch (pickerErr) {
+      if (pickerErr.name === 'AbortError') {
+        updateStatus("Save cancelled.");
+        return;
+      }
+      console.warn("showSaveFilePicker notice, falling back to server dialog:", pickerErr);
+    }
+  }
+
+  // Tier 2: Native Windows Save As dialog via local server
+  try {
+    const res = await fetch('/api/save-stems-as', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ stems_dir: stemsDir })
+    });
+    const data = await res.json();
+    if (data.success && data.saved_path) {
+      updateStatus(`Stems ZIP saved to: ${data.saved_path}`);
+      return;
+    } else if (data.cancelled) {
+      updateStatus("Save cancelled.");
+      return;
+    }
+  } catch (err) {
+    console.warn("Server save-stems-as notice:", err);
+  }
+
+  // Tier 3: Direct browser download trigger fallback
+  const dlLink = document.createElement('a');
+  dlLink.href = `/api/download-stems?stems_dir=${encodeURIComponent(stemsDir)}`;
+  dlLink.download = suggestedName;
+  document.body.appendChild(dlLink);
+  dlLink.click();
+  document.body.removeChild(dlLink);
+  updateStatus(`Stems ZIP downloaded: ${suggestedName}`);
+}
+
+
 async function downloadOrSaveMaster(e) {
   if (e) e.preventDefault();
 

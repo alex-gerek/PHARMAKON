@@ -320,6 +320,102 @@ async def save_image_as(request: Request):
     except Exception as e:
         return {"success": False, "error": str(e)}
 
+def _run_save_stems_zip_dialog(default_name: str) -> str:
+    """Threaded native Tkinter Save As dialog for Stems ZIP archive."""
+    import tkinter as tk
+    import tkinter.filedialog as fd
+
+    root = tk.Tk()
+    root.withdraw()
+    root.attributes('-topmost', True)
+
+    init_dir = os.path.expanduser("~/Music")
+    if not os.path.exists(init_dir):
+        init_dir = os.path.expanduser("~/Desktop")
+
+    save_dest = fd.asksaveasfilename(
+        title="PHARMAKON // Save Stems Pack ZIP As...",
+        initialdir=init_dir,
+        initialfile=default_name,
+        defaultextension=".zip",
+        filetypes=[
+            ("ZIP Archive (*.zip)", "*.zip"),
+            ("All Files (*.*)", "*.*")
+        ]
+    )
+    root.destroy()
+    return save_dest
+
+@app.get("/api/download-stems")
+async def download_stems_zip(stems_dir: str):
+    """Packages 4 stems from stems_dir into a high-speed zip file for direct download."""
+    import zipfile
+    from fastapi.responses import FileResponse
+
+    clean_dir = urllib.parse.unquote(stems_dir).strip().strip('"').strip("'")
+    if not os.path.isdir(clean_dir):
+        candidate = PROJECT_DIR / clean_dir
+        if candidate.is_dir():
+            clean_dir = str(candidate.resolve())
+
+    if not os.path.isdir(clean_dir):
+        raise HTTPException(status_code=404, detail="Stems directory not found")
+
+    track_name = os.path.basename(clean_dir).replace("_Stems", "")
+    zip_filename = f"{track_name} - STEMS.zip"
+    cached_zip = os.path.join(clean_dir, zip_filename)
+
+    def _pack_zip():
+        with zipfile.ZipFile(cached_zip, "w", zipfile.ZIP_STORED) as zf:
+            for f in os.listdir(clean_dir):
+                if f.lower().endswith(('.wav', '.flac', '.mp3', '.ogg')) and not f.startswith('.'):
+                    if not f.endswith('.zip'):
+                        fp = os.path.join(clean_dir, f)
+                        if os.path.isfile(fp):
+                            zf.write(fp, arcname=f)
+
+    await asyncio.to_thread(_pack_zip)
+
+    return FileResponse(
+        cached_zip,
+        media_type="application/zip",
+        filename=zip_filename
+    )
+
+@app.post("/api/save-stems-as")
+async def save_stems_zip_as(request: Request):
+    """Opens native Windows Save-As dialog and packages stems into user-selected ZIP file."""
+    try:
+        import zipfile
+        body = await request.json()
+        stems_dir = body.get("stems_dir", "").strip().strip('"').strip("'")
+        if not stems_dir or not os.path.isdir(stems_dir):
+            candidate = PROJECT_DIR / stems_dir
+            if candidate.is_dir():
+                stems_dir = str(candidate.resolve())
+
+        if not stems_dir or not os.path.isdir(stems_dir):
+            return {"success": False, "error": f"Stems directory not found: {stems_dir}"}
+
+        track_name = os.path.basename(stems_dir).replace("_Stems", "")
+        default_name = f"{track_name} - STEMS.zip"
+        save_dest = await asyncio.to_thread(_run_save_stems_zip_dialog, default_name)
+
+        if save_dest:
+            save_dest = os.path.normpath(save_dest)
+            with zipfile.ZipFile(save_dest, "w", zipfile.ZIP_DEFLATED) as zip_file:
+                for f in os.listdir(stems_dir):
+                    if f.lower().endswith(('.wav', '.flac', '.mp3', '.ogg')) and not f.startswith('.'):
+                        fp = os.path.join(stems_dir, f)
+                        if os.path.isfile(fp):
+                            zip_file.write(fp, arcname=f)
+            return {"success": True, "saved_path": save_dest, "filename": os.path.basename(save_dest)}
+        else:
+            return {"success": False, "cancelled": True}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
 def _run_save_as_dialog(master_path: str) -> str:
     """Threaded native Tkinter Save As dialog helper."""
     import tkinter as tk
