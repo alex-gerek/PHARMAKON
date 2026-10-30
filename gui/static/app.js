@@ -176,7 +176,96 @@ function setupAudioStreams(origPath, masterPath) {
   });
 }
 
+// --------------------------------------------------------------------------
+// ANALOG HARDWARE RELAY & TACTILE SWITCH SYNTHESIS (TSAK-TSAK)
+// --------------------------------------------------------------------------
+let lastKnobClickTime = 0;
+
+function playHardwareClick(type = 'relay') {
+  try {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (!audioCtx) {
+      audioCtx = new AudioContext();
+    }
+    if (audioCtx.state === 'suspended') {
+      audioCtx.resume();
+    }
+    const t = audioCtx.currentTime;
+
+    if (type === 'relay') {
+      // 1. Heavy physical chassis impact thump (38Hz - 110Hz body resonance)
+      const osc = audioCtx.createOscillator();
+      const oscGain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(115, t);
+      osc.frequency.exponentialRampToValueAtTime(36, t + 0.038);
+      oscGain.gain.setValueAtTime(0.35, t);
+      oscGain.gain.exponentialRampToValueAtTime(0.001, t + 0.038);
+      osc.connect(oscGain);
+      oscGain.connect(audioCtx.destination);
+      osc.start(t);
+      osc.stop(t + 0.04);
+
+      // 2. High metallic spring/contact snap (bandpassed white noise micro-burst)
+      const bufSize = Math.floor(audioCtx.sampleRate * 0.02);
+      const noiseBuffer = audioCtx.createBuffer(1, bufSize, audioCtx.sampleRate);
+      const output = noiseBuffer.getChannelData(0);
+      for (let i = 0; i < bufSize; i++) {
+        output[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufSize * 0.22));
+      }
+      const noise = audioCtx.createBufferSource();
+      noise.buffer = noiseBuffer;
+      const filter = audioCtx.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.setValueAtTime(3200, t);
+      filter.Q.setValueAtTime(2.6, t);
+      const noiseGain = audioCtx.createGain();
+      noiseGain.gain.setValueAtTime(0.42, t + 0.002);
+      noiseGain.gain.exponentialRampToValueAtTime(0.001, t + 0.022);
+      noise.connect(filter);
+      filter.connect(noiseGain);
+      noiseGain.connect(audioCtx.destination);
+      noise.start(t + 0.001);
+
+    } else if (type === 'knob') {
+      // Subtle stepped detent click for rotary hardware knobs (throttled)
+      const nowMs = performance.now();
+      if (nowMs - lastKnobClickTime < 45) return;
+      lastKnobClickTime = nowMs;
+
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(1100, t);
+      osc.frequency.exponentialRampToValueAtTime(280, t + 0.008);
+      gain.gain.setValueAtTime(0.08, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.008);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start(t);
+      osc.stop(t + 0.01);
+
+    } else {
+      // Crisp toggle switch snap (for preset chips, scopes, tabs)
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(780, t);
+      osc.frequency.exponentialRampToValueAtTime(190, t + 0.022);
+      gain.gain.setValueAtTime(0.24, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.022);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start(t);
+      osc.stop(t + 0.025);
+    }
+  } catch (e) {
+    // Graceful fallback
+  }
+}
+
 function selectAudioSource(source) {
+  playHardwareClick('relay');
   initWebAudio();
   if (audioCtx.state === 'suspended') {
     audioCtx.resume();
@@ -644,6 +733,7 @@ function drawGraticule(ctx, w, h, isHealed = false) {
 // SINGLE FULL VIEW MODES (RTA & STATIC)
 // --------------------------------------------------------------------------
 function setViewMode(mode) {
+  playHardwareClick('toggle');
   currentViewMode = mode;
   const bDual = document.getElementById('btnViewDual');
   const bSingle = document.getElementById('btnViewSingleOsc');
@@ -971,6 +1061,7 @@ function captureDualSnapshot() {
 }
 
 function toggleFreeze() {
+  playHardwareClick('toggle');
   isFrozen = !isFrozen;
   if (isFrozen) {
     captureDualSnapshot();
@@ -1855,6 +1946,7 @@ const PRESET_MAP = {
 };
 
 function applyPreset(presetKey) {
+  playHardwareClick('toggle');
   currentPreset = presetKey;
   document.querySelectorAll('.preset-rack-chip').forEach(b => b.classList.remove('active'));
   const btn = document.getElementById(`preset_${presetKey}`);
