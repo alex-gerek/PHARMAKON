@@ -137,6 +137,7 @@ async def process_target(request: Request):
                 "original_path": target_path,
                 "master_path": out_file,
                 "output_dir": out_dir,
+                "report_path": metrics.get("report_path") if metrics else None,
                 "track_name": os.path.splitext(os.path.basename(target_path))[0],
                 "metrics": metrics
             }
@@ -152,6 +153,7 @@ async def process_target(request: Request):
                 "original_path": raw_path,
                 "master_path": master_path,
                 "output_dir": out_dir,
+                "report_path": metrics.get("report_path") if metrics else None,
                 "track_name": os.path.basename(target_path),
                 "metrics": metrics
             }
@@ -202,6 +204,75 @@ def get_mastering_report(path: str):
     if not os.path.isfile(clean_path):
         raise HTTPException(status_code=404, detail="Mastering report not found")
     return FileResponse(clean_path, media_type="text/html")
+
+@app.post("/api/open-report")
+async def open_report_file(request: Request):
+    """Opens HTML report in system default web browser (Chrome, Edge, etc.)."""
+    try:
+        body = await request.json()
+        report_path = body.get("path", "").strip().strip('"').strip("'")
+        report_path = urllib.parse.unquote(report_path)
+        if report_path.startswith("file:///"):
+            report_path = report_path[8:]
+
+        # Smart fallback: if path is empty or not on disk, search candidate directories
+        if not report_path or not os.path.isfile(report_path):
+            candidates = [
+                PROJECT_DIR / report_path if report_path else None,
+                PROJECT_DIR / "demo_audio" / "bronze_psalter" / "Remaster" / "Bronze_Psalter_Demo - MASTERING_REPORT.html",
+                PROJECT_DIR / "demo_audio" / "gravity_stems" / "Remaster" / "Gravity_Has_An_Address - MASTERING_REPORT.html",
+            ]
+            for c in candidates:
+                if c and c.exists() and os.path.isfile(str(c)):
+                    report_path = str(c.resolve())
+                    break
+
+        if not report_path or not os.path.isfile(report_path):
+            # Also search for any *MASTERING_REPORT.html in PROJECT_DIR
+            for root, dirs, files in os.walk(str(PROJECT_DIR)):
+                for f in files:
+                    if f.endswith("MASTERING_REPORT.html"):
+                        candidate = os.path.join(root, f)
+                        if os.path.isfile(candidate):
+                            report_path = candidate
+                            break
+                if report_path and os.path.isfile(report_path):
+                    break
+
+        if not report_path or not os.path.isfile(report_path):
+            return {"success": False, "error": "Report not found on disk. Please render a master first!"}
+
+        report_path = os.path.normpath(report_path)
+        if sys.platform == "win32":
+            os.startfile(report_path)
+            return {"success": True, "opened": report_path}
+
+        return {"success": False, "error": "Platform not supported"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+@app.post("/api/save-image-as")
+async def save_image_as(request: Request):
+    """Opens native Windows Save-As dialog to save PNG image to user-chosen directory."""
+    try:
+        import base64
+        body = await request.json()
+        default_name = body.get("filename", "MASTERING_CERTIFICATE.png")
+        data_url = body.get("data_url", "")
+        if "," in data_url:
+            data_url = data_url.split(",", 1)[1]
+
+        image_bytes = base64.b64decode(data_url)
+        save_dest = await asyncio.to_thread(_run_save_image_dialog, default_name)
+
+        if save_dest:
+            save_dest = os.path.normpath(save_dest)
+            with open(save_dest, "wb") as f:
+                f.write(image_bytes)
+            return {"success": True, "saved_path": save_dest, "filename": os.path.basename(save_dest)}
+        return {"success": False, "cancelled": True}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
 def _run_save_as_dialog(master_path: str) -> str:
     """Threaded native Tkinter Save As dialog helper."""

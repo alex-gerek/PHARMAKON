@@ -118,6 +118,22 @@ function initWebAudio() {
   timeDataHealed = new Uint8Array(analyserHealed.fftSize);
   freqDataRaw = new Uint8Array(analyserRaw.frequencyBinCount);
   freqDataHealed = new Uint8Array(analyserHealed.frequencyBinCount);
+
+  // Phase Scope Goniometer Stereo L/R Splitter
+  splitterNode = audioCtx.createChannelSplitter(2);
+  analyserL = audioCtx.createAnalyser();
+  analyserR = audioCtx.createAnalyser();
+  analyserL.fftSize = 1024;
+  analyserR.fftSize = 1024;
+  analyserL.smoothingTimeConstant = 0.7;
+  analyserR.smoothingTimeConstant = 0.7;
+
+  sourceHealed.connect(splitterNode);
+  splitterNode.connect(analyserL, 0);
+  splitterNode.connect(analyserR, 1);
+
+  floatDataL = new Float32Array(analyserL.fftSize);
+  floatDataR = new Float32Array(analyserR.fftSize);
 }
 
 function setupAudioStreams(origPath, masterPath) {
@@ -165,6 +181,7 @@ function selectAudioSource(source) {
   const btnHealed = document.getElementById('btnSourceHealed');
   const topBtnRaw = document.getElementById('scopeBtnRaw');
   const topBtnHealed = document.getElementById('scopeBtnHealed');
+  const topBtnDelta = document.getElementById('scopeBtnDelta');
   const pillRaw = document.getElementById('activePillRaw');
   const pillHealed = document.getElementById('activePillHealed');
   const cardRaw = document.querySelector('.raw-card');
@@ -178,6 +195,7 @@ function selectAudioSource(source) {
     if (btnHealed) btnHealed.classList.remove('active');
     if (topBtnRaw) topBtnRaw.classList.add('active');
     if (topBtnHealed) topBtnHealed.classList.remove('active');
+    if (topBtnDelta) topBtnDelta.classList.remove('active');
     if (pillRaw) pillRaw.classList.add('active');
     if (pillHealed) pillHealed.classList.remove('active');
     if (cardRaw) cardRaw.classList.add('active-monitor');
@@ -185,11 +203,29 @@ function selectAudioSource(source) {
 
     gainRaw.gain.setTargetAtTime(1.0, now, crossfadeTime);
     gainHealed.gain.setTargetAtTime(0.0, now, crossfadeTime);
+    updateStatus("MONITORING [A] RAW DIGITAL AI: Unadulterated original input with digital artifacts.");
+  } else if (source === 'delta') {
+    if (btnRaw) btnRaw.classList.remove('active');
+    if (btnHealed) btnHealed.classList.remove('active');
+    if (topBtnRaw) topBtnRaw.classList.remove('active');
+    if (topBtnHealed) topBtnHealed.classList.remove('active');
+    if (topBtnDelta) topBtnDelta.classList.add('active');
+    if (pillRaw) pillRaw.classList.remove('active');
+    if (pillHealed) pillHealed.classList.remove('active');
+    if (cardRaw) cardRaw.classList.remove('active-monitor');
+    if (cardHealed) cardHealed.classList.remove('active-monitor');
+
+    // DELTA RESIDUE: Raw - Master (inverted phase on master)
+    // +6 dB boost (2.0x) so subtle removed harshness & rumble are clearly audible
+    gainRaw.gain.setTargetAtTime(2.0, now, crossfadeTime);
+    gainHealed.gain.setTargetAtTime(-2.0, now, crossfadeTime);
+    updateStatus("MONITORING [Δ] DELTA RESIDUE: Auditioning extracted poison & removed harshness (+6dB boost).");
   } else {
     if (btnRaw) btnRaw.classList.remove('active');
     if (btnHealed) btnHealed.classList.add('active');
     if (topBtnRaw) topBtnRaw.classList.remove('active');
     if (topBtnHealed) topBtnHealed.classList.add('active');
+    if (topBtnDelta) topBtnDelta.classList.remove('active');
     if (pillRaw) pillRaw.classList.remove('active');
     if (pillHealed) pillHealed.classList.add('active');
     if (cardRaw) cardRaw.classList.remove('active-monitor');
@@ -197,6 +233,7 @@ function selectAudioSource(source) {
 
     gainRaw.gain.setTargetAtTime(0.0, now, crossfadeTime);
     gainHealed.gain.setTargetAtTime(1.0, now, crossfadeTime);
+    updateStatus("MONITORING [B] PHARMAKON MASTER: Polished, glued analog master with True-Peak protection.");
   }
 }
 
@@ -368,6 +405,8 @@ function renderLoop() {
     renderSingleStatic();
   } else if (currentViewMode === 'waveform') {
     renderSingleWaveform();
+  } else if (currentViewMode === 'goniometer') {
+    renderGoniometerScope();
   }
 
   requestAnimationFrame(renderLoop);
@@ -601,12 +640,14 @@ function setViewMode(mode) {
   const bRta = document.getElementById('btnViewRta');
   const bStatic = document.getElementById('btnViewStatic');
   const bWave = document.getElementById('btnViewWaveform');
+  const bGonio = document.getElementById('btnViewGoniometer');
 
   if (bDual) bDual.classList.toggle('active', mode === 'dual');
   if (bSingle) bSingle.classList.toggle('active', mode === 'single_osc');
   if (bRta) bRta.classList.toggle('active', mode === 'rta');
   if (bStatic) bStatic.classList.toggle('active', mode === 'static');
   if (bWave) bWave.classList.toggle('active', mode === 'waveform');
+  if (bGonio) bGonio.classList.toggle('active', mode === 'goniometer');
 
   const dualGrid = document.getElementById('dualScreensContainer');
   const singleView = document.getElementById('altViewContainer');
@@ -1089,6 +1130,7 @@ async function runPharmakonProcess(isInitial = false) {
     dynamic_deharsh: true,
     tape_drive: parseFloat(document.getElementById('param_tape_drive').value),
     side_stereo_boost: parseFloat(document.getElementById('param_side_stereo_boost').value),
+    air_exciter: (parseFloat(document.getElementById('param_air_exciter')?.value || 12) / 100.0),
     drum_punch: parseFloat(document.getElementById('param_drum_punch').value),
     target_ceiling_db: activeCeiling,
     preset: currentPreset !== 'none' ? currentPreset : null,
@@ -1809,6 +1851,8 @@ function setupKeyboardShortcuts() {
       selectAudioSource('raw');
     } else if (e.code === 'KeyB') {
       selectAudioSource('healed');
+    } else if (e.code === 'KeyD') {
+      selectAudioSource(activeSource === 'delta' ? 'healed' : 'delta');
     } else if (e.code === 'KeyL') {
       toggleLoopFragment();
     } else if (e.code === 'Digit1') {
@@ -1821,6 +1865,8 @@ function setupKeyboardShortcuts() {
       setViewMode('static');
     } else if (e.code === 'Digit5') {
       setViewMode('waveform');
+    } else if (e.code === 'Digit6') {
+      setViewMode('goniometer');
     }
   });
 }
@@ -1964,17 +2010,33 @@ function closeReportModal() {
 }
 
 function openReportInNewTab() {
-  if (lastResult && lastResult.report_path) {
-    window.open(`/api/report?path=${encodeURIComponent(lastResult.report_path)}`, '_blank');
+  const rPath = lastResult?.report_path || lastResult?.metrics?.report_path;
+  if (rPath) {
+    // 1. Tell local server to open HTML report in system default browser via os.startfile
+    fetch('/api/open-report', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: rPath })
+    }).catch(err => console.warn("API open-report notice:", err));
+
+    // 2. Also try window.open in case running in a normal web browser tab
+    try {
+      window.open(`/api/report?path=${encodeURIComponent(rPath)}`, '_blank');
+    } catch (e) {}
+
+    updateStatus(`Opened Mastering Report in browser: ${rPath}`);
   } else {
-    updateStatus("Opening report...");
-    openMasteringReportModal();
+    updateStatus("Report path not found yet. Click 'COMMENCE RE-MASTERING' first!");
+    openOutputFolder();
   }
 }
 
 async function downloadReportPNG() {
-  if (!lastResult || !lastMetrics) return;
-  updateStatus("Generating high-resolution Mastering Certificate PNG card...");
+  if (!lastResult || !lastMetrics) {
+    updateStatus("Please render a master first before exporting certificate.");
+    return;
+  }
+  updateStatus("Choosing destination folder for Certificate PNG card...");
   
   const m = lastMetrics;
   const trackName = lastResult.track_name || "Audio Target";
@@ -2156,12 +2218,59 @@ async function downloadReportPNG() {
   ctx.font = 'bold 11px monospace';
   ctx.fillText('✓ VERIFIED STREAMING COMPLIANT • ZERO INTER-SAMPLE PEAKS (-0.3 dBFS)', canvas.width - 50, canvas.height - 28);
 
-  // Trigger Download
+  const filename = `${trackName} - MASTERING_CERTIFICATE.png`;
+
+  // Tier 1: Modern File System Access API (showSaveFilePicker for native Windows Save As dialog)
+  if (window.showSaveFilePicker) {
+    try {
+      const handle = await window.showSaveFilePicker({
+        suggestedName: filename,
+        types: [{
+          description: 'PNG Image (*.png)',
+          accept: { 'image/png': ['.png'] }
+        }]
+      });
+      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+      const writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      updateStatus(`Certificate saved: ${handle.name}`);
+      return;
+    } catch (pickerErr) {
+      if (pickerErr.name === 'AbortError') {
+        updateStatus("Save cancelled.");
+        return;
+      }
+      console.warn("showSaveFilePicker notice:", pickerErr);
+    }
+  }
+
+  // Tier 2: Native Windows Save As dialog via local server
+  try {
+    const dataUrl = canvas.toDataURL('image/png');
+    const res = await fetch('/api/save-image-as', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filename: filename, data_url: dataUrl })
+    });
+    const data = await res.json();
+    if (data.success && data.saved_path) {
+      updateStatus(`Certificate saved to: ${data.saved_path}`);
+      return;
+    } else if (data.cancelled) {
+      updateStatus("Save cancelled.");
+      return;
+    }
+  } catch (err) {
+    console.warn("Server save-image-as fallback error:", err);
+  }
+
+  // Tier 3: Browser download trigger fallback
   const link = document.createElement('a');
-  link.download = `${trackName} - MASTERING_CERTIFICATE.png`;
+  link.download = filename;
   link.href = canvas.toDataURL('image/png');
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
-  updateStatus(`Mastering Certificate saved as PNG: ${link.download}`);
+  updateStatus(`Certificate downloaded: ${filename}`);
 }

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PHARMAKON // Studio Audio Antidote & Mastering Console</title>
-  <link rel="stylesheet" href="/static/style.css?v=dsp4">
+  <link rel="stylesheet" href="/static/style.css?v=phase3">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;800&family=Orbitron:wght@500;700;900&family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
@@ -235,7 +235,7 @@
 
           <!-- TAPE WARMTH & 3D MATRIX -->
           <div class="rack-unit">
-            <div class="unit-title">TAPE SATURATION & 3D M/S</div>
+            <div class="unit-title">TAPE WARMTH, 3D M/S &amp; AIR EXCITER</div>
             <div class="knobs-row">
               <div class="knob-control" data-param="tape_drive" data-min="1.00" data-max="1.25" data-val="1.04" data-step="0.01" data-unit="x">
                 <label>TAPE DRIVE</label>
@@ -250,7 +250,8 @@
                 <div class="knob-readout"><span class="val">1.04</span>x</div>
                 <div class="param-desc">Tanh Analog Warmth</div>
               </div>
-              <div class="knob-control" data-param="side_stereo_boost" data-min="1.00" data-max="1.45" data-val="1.20" data-step="0.05" data-unit="%" data-mult="100" data-add="-100">
+
+              <div class="knob-control" data-param="side_stereo_boost" data-min="1.00" data-max="1.50" data-val="1.20" data-step="0.05" data-unit="%">
                 <label>3D AIR WIDTH</label>
                 <div class="knob-housing">
                   <div class="knob-ticks"></div>
@@ -262,6 +263,20 @@
                 <input type="hidden" id="param_side_stereo_boost" value="1.20">
                 <div class="knob-readout">+<span class="val">20</span> %</div>
                 <div class="param-desc">Mid-Side Side Gain</div>
+              </div>
+
+              <div class="knob-control" data-param="air_exciter" data-min="0" data-max="30" data-val="12" data-step="1" data-unit="%">
+                <label>AIR EXCITER</label>
+                <div class="knob-housing">
+                  <div class="knob-ticks"></div>
+                  <div class="knob-3d" id="knob_air_exciter">
+                    <div class="knob-cap"></div>
+                    <div class="knob-indicator glow-cyan" id="ind_air_exciter"></div>
+                  </div>
+                </div>
+                <input type="hidden" id="param_air_exciter" value="12">
+                <div class="knob-readout"><span class="val">12</span>%</div>
+                <div class="param-desc">&gt;16kHz Silk Synthesizer</div>
               </div>
             </div>
           </div>
@@ -340,6 +355,9 @@
             <button id="btnViewWaveform" class="view-mode-btn" onclick="setViewMode('waveform')">
               🌊 WAVEFORM
             </button>
+            <button id="btnViewGoniometer" class="view-mode-btn" onclick="setViewMode('goniometer')" title="Lissajous X/Y Phase Goniometer &amp; Phase Correlation Scope">
+              🧭 PHASE SCOPE
+            </button>
           </div>
 
           <!-- TIMEBASE MACRO ZOOM & FREEZE -->
@@ -358,6 +376,9 @@
             </button>
             <button id="scopeBtnHealed" class="scope-ab-btn active" onclick="selectAudioSource('healed')" title="Audition Pharmakon Master [B]">
               <span class="ab-indicator-dot dot-emerald"></span> [B] PHARMAKON MASTER (ROUNDED / GLUED)
+            </button>
+            <button id="scopeBtnDelta" class="scope-ab-btn" onclick="selectAudioSource('delta')" title="Audition Extracted Venom / Removed Artifacts (Raw - Master Inverted Phase) [D]">
+              <span class="ab-indicator-dot dot-amber"></span> [Δ] DELTA RESIDUE (POISON EXTRACTED)
             </button>
           </div>
         </div>
@@ -585,6 +606,6 @@
     </div>
   </div>
 
-  <script src="/static/app.js?v=dsp4"></script>
+  <script src="/static/app.js?v=phase3"></script>
 </body>
 </html>
