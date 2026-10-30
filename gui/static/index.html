@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PHARMAKON // Studio Audio Antidote & Mastering Console</title>
-  <link rel="stylesheet" href="/static/style.css?v=dsp2">
+  <link rel="stylesheet" href="/static/style.css?v=dsp4">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;800&family=Orbitron:wght@500;700;900&family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
@@ -95,32 +95,42 @@
         <div class="preset-selector-bar">
           <div class="preset-badge-label">
             <span class="jewel-lamp jewel-lamp-cyan"></span>
-            <span>AI ENGINE PROFILE:</span>
+            <span>AI PROFILE:</span>
           </div>
           <div class="preset-chips-group">
             <button class="preset-rack-chip active" id="preset_none" onclick="applyPreset('none')" title="Adaptive FFT Spectral Scan">
-              <span class="chip-status-led"></span>
-              <span class="chip-title">⚡ AUTO SCAN</span>
+              <div class="chip-top-row">
+                <span class="chip-status-led"></span>
+                <span class="chip-title">AUTO SCAN</span>
+              </div>
               <span class="chip-tag tag-auto">ADAPTIVE FFT</span>
             </button>
             <button class="preset-rack-chip" id="preset_suno" onclick="applyPreset('suno')" title="Optimized for Suno v3.5 & v4 high-frequency glassiness">
-              <span class="chip-status-led"></span>
-              <span class="chip-title">🟡 SUNO v3.5/v4</span>
+              <div class="chip-top-row">
+                <span class="chip-status-led"></span>
+                <span class="chip-title">SUNO v3.5/v4</span>
+              </div>
               <span class="chip-tag tag-suno">5200Hz DUCKER</span>
             </button>
             <button class="preset-rack-chip" id="preset_udio" onclick="applyPreset('udio')" title="Optimized for Udio 1.5 sibilance and stereo phase blur">
-              <span class="chip-status-led"></span>
-              <span class="chip-title">🟣 UDIO 1.5</span>
+              <div class="chip-top-row">
+                <span class="chip-status-led"></span>
+                <span class="chip-title">UDIO 1.5</span>
+              </div>
               <span class="chip-tag tag-udio">6100Hz POLISH</span>
             </button>
             <button class="preset-rack-chip" id="preset_club" onclick="applyPreset('club')" title="Club & EDM maximum transient punch, mono sub 140Hz">
-              <span class="chip-status-led"></span>
-              <span class="chip-title">🔴 CLUB PUNCH</span>
+              <div class="chip-top-row">
+                <span class="chip-status-led"></span>
+                <span class="chip-title">CLUB PUNCH</span>
+              </div>
               <span class="chip-tag tag-club">EDM TRANSIENT</span>
             </button>
             <button class="preset-rack-chip" id="preset_audiophile" onclick="applyPreset('audiophile')" title="Transparent audiophile mastering (-1.0 dBFS True-Peak)">
-              <span class="chip-status-led"></span>
-              <span class="chip-title">⚪ AUDIOPHILE</span>
+              <div class="chip-top-row">
+                <span class="chip-status-led"></span>
+                <span class="chip-title">AUDIOPHILE</span>
+              </div>
               <span class="chip-tag tag-audio">TRANSPARENT</span>
             </button>
           </div>
@@ -551,6 +561,6 @@
 
   </div>
 
-  <script src="/static/app.js?v=dsp2"></script>
+  <script src="/static/app.js?v=dsp4"></script>
 </body>
 </html>
