@@ -14,3 +14,10 @@ demo_audio/**/Remaster/
 
 
 uploads/
+
+# Proprietary & Confidential Docs
+internal_docs/
+*confidential*
+*.lic
+*.secret
+
