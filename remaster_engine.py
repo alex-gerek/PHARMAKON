@@ -571,16 +571,20 @@ def calc_audio_metrics(orig, proc, sr, params=None):
 # PSYCHOACOUSTIC HARMONIC AIR EXCITER (>16 kHz SILK SYNTHESIZER)
 # -----------------------------------------------------------------------------
 
-def harmonic_air_exciter(audio, sr, drive=0.12, cutoff=15500.0, donor_band=(8000.0, 13000.0)):
+def harmonic_air_exciter(audio, sr, drive=0.12, cutoff=15500.0, donor_band=(8000.0, 12500.0), oversample=4):
     """
-    Psychoacoustic Harmonic Air Exciter:
+    Psychoacoustic Harmonic Air Exciter with 4X Polyphase Anti-Aliasing:
     Restores lost high-frequency acoustic sheen (>16 kHz) truncated by
-    neural vocoders (Suno/Udio) without amplifying baseline quantization noise.
+    neural vocoders and lossy codecs without amplifying baseline quantization noise.
+    
+    Employs 4X polyphase upsampling to completely eliminate 3rd-harmonic aliasing
+    reflections, followed by pre-filter soft tanh saturation and steep 4th-order zero-phase highpass.
     """
     if drive <= 0.001 or sr < 38000:
         return audio
 
     audio = ensure_stereo(audio)
+    orig_len = len(audio)
     nyq = 0.5 * sr
     low_cut = donor_band[0] / nyq
     high_cut = min(donor_band[1], nyq - 50.0) / nyq
@@ -588,24 +592,36 @@ def harmonic_air_exciter(audio, sr, drive=0.12, cutoff=15500.0, donor_band=(8000
     if low_cut >= high_cut or high_cut >= 1.0:
         return audio
 
-    # 1. Extract donor band
+    # 1. Extract intact donor band
     b_donor, a_donor = signal.butter(2, [low_cut, high_cut], btype='bandpass')
     donor = signal.filtfilt(b_donor, a_donor, audio, axis=0)
 
-    # 2. Asymmetric non-linear distortion (synthesizes 2nd & 3rd harmonics reaching into >16 kHz)
-    harmonics = donor + 0.65 * (donor ** 2) - 0.25 * (donor ** 3)
+    # 2. 4X Polyphase Oversampling to expand Nyquist headroom (e.g. 48kHz -> 192kHz)
+    # Eliminates all foldover aliasing from 2nd (up to 25 kHz) and 3rd harmonics (up to 37.5 kHz)
+    donor_4x = signal.resample_poly(donor, oversample, 1, axis=0)
+    sr_4x = sr * oversample
+    nyq_4x = 0.5 * sr_4x
 
-    # 3. Highpass filter generated harmonics strictly above cutoff (e.g. 15.5 kHz)
-    f_hp = min(cutoff, nyq - 100.0) / nyq
-    if f_hp >= 1.0:
-        return audio
-    b_air, a_air = signal.butter(3, f_hp, btype='highpass')
-    air_layer = signal.filtfilt(b_air, a_air, harmonics, axis=0)
+    # 3. Asymmetric non-linear harmonic generation in 4X oversampled domain
+    harmonics_4x = donor_4x + 0.65 * (donor_4x ** 2) - 0.25 * (donor_4x ** 3)
 
-    # 4. Soft saturation ceiling on air layer to prevent harshness
-    air_layer = np.tanh(air_layer * 2.5) * 0.4
+    # 4. Pre-filter analog tanh saturation (tames harmonic peaks BEFORE highpass)
+    harmonics_4x = np.tanh(harmonics_4x * 2.2) * 0.45
 
-    # 5. Blend silk sheen
+    # 5. Steep 4th-order Highpass filter (cuts all low-frequency intermodulation products)
+    f_hp = min(cutoff, nyq_4x - 100.0) / nyq_4x
+    b_air, a_air = signal.butter(4, f_hp, btype='highpass')
+    air_4x = signal.filtfilt(b_air, a_air, harmonics_4x, axis=0)
+
+    # 6. Polyphase downsampling back to original 1X sample rate
+    air_layer = signal.resample_poly(air_4x, 1, oversample, axis=0)
+    if len(air_layer) > orig_len:
+        air_layer = air_layer[:orig_len]
+    elif len(air_layer) < orig_len:
+        pad = np.zeros((orig_len - len(air_layer), air_layer.shape[1]), dtype=air_layer.dtype)
+        air_layer = np.vstack([air_layer, pad])
+
+    # 7. Coherent silk blend into master audio
     excited_audio = audio + air_layer * drive
     return excited_audio.astype(np.float32)
 
