@@ -359,7 +359,12 @@ def _true_peak_limiter_block(audio, sr, target_ceiling_db=-0.3, oversample=4):
     """
     Core 4x polyphase oversampled brickwall limiter for audio segment.
     ITU-R BS.1770-4 / EBU R128 compliant with decimation peak-regrowth compensation.
+    100% Stereo-Linked envelope follower prevents phantom center shifts.
     """
+    is_1d = audio.ndim == 1
+    if is_1d:
+        audio = audio[:, None]
+
     orig_len = len(audio)
     target_ceiling = 10.0 ** (target_ceiling_db / 20.0)
 
@@ -370,8 +375,10 @@ def _true_peak_limiter_block(audio, sr, target_ceiling_db=-0.3, oversample=4):
     peak_4x = float(np.max(np.abs(audio_4x)))
     if peak_4x <= target_ceiling:
         true_peak_db = float(20.0 * np.log10(max(1e-9, peak_4x)))
-        return audio.astype(np.float32), round(true_peak_db, 2)
+        out_aud = audio.squeeze() if is_1d else audio
+        return out_aud.astype(np.float32), round(true_peak_db, 2)
 
+    # 100% Stereo-Linked peak detection across channels
     max_sample_4x = np.max(np.abs(audio_4x), axis=1)
 
     # 0.15 dB safety margin on internal 4X ceiling to absorb decimation filter Gibbs ringing (Peak Regrowth)
@@ -398,6 +405,8 @@ def _true_peak_limiter_block(audio, sr, target_ceiling_db=-0.3, oversample=4):
 
     actual_tp = float(np.max(np.abs(limited_4x)))
     true_peak_db = float(20.0 * np.log10(max(1e-9, actual_tp)))
+    if is_1d:
+        limited_1x = limited_1x.squeeze()
     return limited_1x.astype(np.float32), round(true_peak_db, 2)
 
 
