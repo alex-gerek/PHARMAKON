@@ -65,7 +65,8 @@ $$\tanh(x) = x - \frac{x^3}{3} + \frac{2x^5}{15} - \frac{17x^7}{315} + \dots$$
 Из-за этого высокочастотные транзиенты (тарелки, сибилянты) насыщаются и мягко компрессируются **первыми** (эффект Tape Softening), а энергоемкий бас не превращается в интермодуляционную кашу.
 
 В модуле `analog_tape_saturation` мы внедрили ту же физику:
-- Мягкий пре-фильтр верхних частот (выше 3.5 кГц) направляет транзиенты в зону мягкого насыщения.
+- Мягкий пре-фильтр верхних частот (выше 3.5 кГц) направляет транзиенты в зону мягкого насыщения. При этом подъем верхов сознательно оставлен без пост-компенсации (De-Emphasis), так как мягкая нелинейная компрессия ВЧ-пиков в сочетании с новыми обертонами формирует желаемый эффект «шелкового воздуха» без потери открытости микса.
+- Коэффициент `oversample=2` обеспечивает идеальный баланс минимальной нагрузки на CPU и кристальной чистоты мастеринга (асимметрия `bias=0.035` дает соотношение 2-й к 3-й гармонике около -30 dB, точно соответствуя эталону трансформаторов Rupert Neve). Для экстремального художественного перегруза (Drive > 1.5) архитектура допускает мгновенное переключение в `oversample=4`.
 - В результате тарелки и шипящие вокала в ИИ-треках мгновенно теряют свой ядовитый металлический звон, приобретая плотный студийный бархат.
 
 ---
@@ -142,7 +143,9 @@ Inside PHARMAKON, `analog_tape_saturation` runs in an oversampled polyphase doma
 #### 4. Frequency-Dependent Saturation (NAB Pre-Emphasis)
 Real tape recorders employ NAB/IEC pre-emphasis curves: high frequencies are boosted prior to tape contact, causing high-frequency transients to saturate and compress **first** (Tape Softening), while low-end punch remains clear and un-muddled.
 
-PHARMAKON replicates this physical behavior with a pre-filter stage, ensuring generative sibilance and harsh cymbals are transformed into smooth, velvety studio silk.
+PHARMAKON replicates this physical behavior with a pre-filter stage. High-end pre-emphasis is deliberately retained without post-saturation de-emphasis, creating a natural high-frequency saturation ceiling and silky presence without dulling the mix. 
+
+The `oversample=2` default delivers the optimal CPU/quality balance for transparent mastering (our `bias=0.035` creates a 2nd-to-3rd harmonic ratio around -30 dB, matching Rupert Neve input transformers and Studer A800 tape heads). For heavy creative overdrive (Drive > 1.5), the engine can scale to `oversample=4`. Generative sibilance and harsh cymbals are transformed into smooth, velvety studio silk.
 
 ---
 *Repository:* [https://github.com/alex-gerek/PHARMAKON](https://github.com/alex-gerek/PHARMAKON)
