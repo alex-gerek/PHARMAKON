@@ -127,6 +127,32 @@ def soft_clip(x, threshold=0.95):
     """Hyperbolic tangent soft clipping saturation."""
     return np.tanh(x / threshold) * threshold
 
+def analog_tape_saturation(audio, sr, drive=1.05, ceiling=0.98, bias=0.035, oversample=2):
+    """
+    Broadcast-Grade Analog Tape Saturation:
+    - NAB/IEC High-Frequency Pre-Emphasis (highs saturate & soften first, avoiding bass mud).
+    - 2X Polyphase Oversampling (eliminates Taylor expansion aliasing foldover).
+    - Asymmetric tanh bias: y = tanh(x*drive + bias) - tanh(bias) to generate musical 2nd AND 3rd harmonics.
+    - Polyphase decimation back to 1X without high-frequency ringing.
+    """
+    if drive <= 1.001:
+        return audio
+    orig_len = len(audio)
+    nyq = 0.5 * sr
+    f0 = min(3500.0, nyq - 50.0) / nyq
+    b_pre, a_pre = signal.butter(1, f0, btype='high')
+    audio_pre = audio + 0.20 * signal.filtfilt(b_pre, a_pre, audio, axis=0)
+    audio_up = signal.resample_poly(audio_pre, oversample, 1, axis=0)
+    bias_offset = np.tanh(bias)
+    sat_up = (np.tanh(audio_up * drive + bias) - bias_offset) * ceiling
+    sat_down = signal.resample_poly(sat_up, 1, oversample, axis=0)
+    if len(sat_down) > orig_len:
+        sat_down = sat_down[:orig_len]
+    elif len(sat_down) < orig_len:
+        pad = np.zeros((orig_len - len(sat_down), sat_down.shape[1]), dtype=sat_down.dtype)
+        sat_down = np.vstack([sat_down, pad])
+    return sat_down.astype(np.float32)
+
 def ensure_stereo(arr):
     """Guarantees 2-channel float32 audio."""
     if arr.ndim == 1:
@@ -747,8 +773,8 @@ def process_audio_array(audio, sr, params=None):
     # 7. Summing
     full_mix = mono_low_stereo + high_proc
 
-    # 8. Analog tape saturation warmth
-    full_mix = np.tanh(full_mix * tape_drive) * tape_ceiling
+    # 8. Analog tape saturation warmth (Oversampled Asymmetric Saturation with NAB Pre-Emphasis)
+    full_mix = analog_tape_saturation(full_mix, sr, drive=tape_drive, ceiling=tape_ceiling, bias=0.035, oversample=2)
 
     # 9. Psychoacoustic Harmonic Air Exciter (>16 kHz silk synthesis)
     air_drive = float(params.get('air_exciter', 0.12))

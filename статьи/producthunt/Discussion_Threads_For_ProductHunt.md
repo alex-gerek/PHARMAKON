@@ -46,11 +46,12 @@ Ever noticed how 30 seconds of listening to raw generative music often leaves yo
 
 The culprit is usually digital hard clipping. When unmastered AI transients hit 0 dBFS, they don't round off like vintage tape machines (Ampex or Studer). They hit a digital concrete ceiling, slicing the top of the wave at sharp 90-degree right angles. In acoustics, that geometry creates an explosion of harsh odd harmonics up to 20 kHz.
 
-We swapped heavy multi-gigabyte tape plugins with a single line of trigonometry:
+We replaced heavy multi-gigabyte tape plugins with a minimal, broadcast-grade DSP block:
 ```python
-output = np.tanh(audio * drive)
+# Asymmetric oversampled tanh saturation (NAB pre-emphasis + 2nd & 3rd harmonics):
+y = (np.tanh(x * drive + bias) - np.tanh(bias)) * ceiling
 ```
-The hyperbolic tangent function acts like a rubber trampoline: it smoothly rounds off the waveform peaks, mimicking magnetic tape hysteresis with zero CPU overhead.
+By adding a subtle bias offset and polyphase oversampling, it generates warm 2nd and 3rd harmonics while smoothly rounding off waveform peaks without aliasing foldover.
 
 **What is your favorite minimal DSP trick that replaced a bloated plugin in your workflow?**
 
