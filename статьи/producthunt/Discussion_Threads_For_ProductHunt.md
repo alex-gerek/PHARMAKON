@@ -68,15 +68,15 @@ Hey makers!
 
 We feed terabytes of audio to 5-gigabyte neural networks for stem separation, yet when you solo the vocal track, you can still hear the acoustic guitar strumming right through the singer's words.
 
-The fundamental issue is that acoustic guitars and human vocals share the exact same 300 Hz - 3500 Hz formant spectrum. To a neural network, they look like overlapping pixel clusters.
+The fundamental issue is that acoustic guitars and human vocals share the exact same 300 Hz - 3800 Hz formant spectrum.
 
-Before downloading another 5 GB of PyTorch weights, we went back to 1940s wave physics:
-1. Norbert Wiener soft masking for transient vs harmonic separation.
-2. Stereo center-purity phase coherence (vocals sit in the phantom center, guitars have lateral stereo dispersion).
+Before firing up a multi-gigabyte GPU model for quick previews or local edge devices, we returned to classical spectral geometry:
+1. Nobutaka Ono / Derryck Fitzgerald HPSS (2D median spectrogram filtering for percussive vs harmonic separation).
+2. STFT-domain Inter-Channel Panning Masks and Soft Wiener energy weighting (isolating phantom-center vocals while smoothly preserving stereo room reverberation).
 
-A 20-line NumPy function separates them in 3 seconds on an ordinary laptop without GPU compute.
+A pure SciPy implementation runs in 3.2 seconds on an ordinary laptop CPU without GPU compute or acoustic hallucinations.
 
-**Do you think the AI audio industry relies too much on brute-force datasets instead of acoustic domain knowledge?**
+**For your production workflow: where do you draw the line between fast deterministic DSP and heavy deep-learning models?**
 
 ---
 

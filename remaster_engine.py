@@ -1384,32 +1384,35 @@ def split_audio_to_stems(input_path, output_stems_dir=None):
     _, drums_R = signal.istft(Zxx_R * mask_p_R, fs=sr, nperseg=nperseg, noverlap=noverlap)
     drums_stem = np.column_stack([drums_L[:orig_len], drums_R[:orig_len]])
 
-    # Reconstruct Harmonics (Vocals + Other)
-    _, harm_L_sig = signal.istft(Zxx_L * mask_h_L, fs=sr, nperseg=nperseg, noverlap=noverlap)
-    _, harm_R_sig = signal.istft(Zxx_R * mask_h_R, fs=sr, nperseg=nperseg, noverlap=noverlap)
+    # 4. STFT-Domain Harmonic Separation (Ono HPSS + Spectral Wiener Panning Coherence)
+    Z_harm_L = Zxx_L * mask_h_L
+    Z_harm_R = Zxx_R * mask_h_R
+    Z_mid = 0.5 * (Z_harm_L + Z_harm_R)
+    Z_side = 0.5 * (Z_harm_L - Z_harm_R)
+
+    mag_mid = np.abs(Z_mid)
+    mag_side = np.abs(Z_side)
+
+    # Inter-Channel Panning Mask & Soft Wiener Masking (per time-frequency bin)
+    stereo_ratio = mag_side / (mag_mid + mag_side + 1e-7)
+    panning_mask = np.clip(1.0 - 1.8 * stereo_ratio, 0.0, 1.0)
+    wiener_gain = (mag_mid ** 2) / (mag_mid ** 2 + mag_side ** 2 + 1e-7)
+    vocal_mask = panning_mask * np.sqrt(wiener_gain)
+
+    # Vocal formant band weighting (250 Hz - 4200 Hz)
+    freq_bins = f[:, None]
+    formant_weight = np.exp(-0.5 * ((np.log2(np.maximum(20.0, freq_bins) / 1400.0)) / 1.6) ** 2)
+    vocal_mask_weighted = vocal_mask * (0.30 + 0.70 * formant_weight)
+
+    # Reconstruct Vocals
+    Z_voc = Z_mid * vocal_mask_weighted
+    _, voc_L = signal.istft(Z_voc, fs=sr, nperseg=nperseg, noverlap=noverlap)
+    vocals_stem = np.column_stack([voc_L[:orig_len], voc_L[:orig_len]])
+
+    # Reconstruct Harmonics (Other)
+    _, harm_L_sig = signal.istft(Z_harm_L, fs=sr, nperseg=nperseg, noverlap=noverlap)
+    _, harm_R_sig = signal.istft(Z_harm_R, fs=sr, nperseg=nperseg, noverlap=noverlap)
     harm_sig = np.column_stack([harm_L_sig[:orig_len], harm_R_sig[:orig_len]])
-
-    # 4. Separate Vocals from Other (Formant bandpass + Center-Purity stereo coherence)
-    mid = 0.5 * (harm_sig[:, 0] + harm_sig[:, 1])
-    side = 0.5 * (harm_sig[:, 0] - harm_sig[:, 1])
-
-    # Core vocal formant filter (300 Hz - 3800 Hz)
-    b_voc_lo, a_voc_lo = signal.butter(2, 300.0 / nyq, btype='high')
-    b_voc_hi, a_voc_hi = signal.butter(2, min(3800.0, nyq - 50.0) / nyq, btype='low')
-    mid_voc = signal.filtfilt(b_voc_hi, a_voc_hi, signal.filtfilt(b_voc_lo, a_voc_lo, mid))
-
-    # Center-Purity weighting: penalize any signal that has side/stereo spread (reverbs, panned guitars)
-    side_mag = np.abs(side)
-    mid_mag = np.abs(mid)
-    purity = np.clip(1.0 - 2.2 * (side_mag / (mid_mag + side_mag + 1e-6)), 0.0, 1.0)
-    # Smooth purity envelope
-    b_pur, a_pur = signal.butter(1, 40.0 / nyq, btype='low')
-    purity_smooth = signal.filtfilt(b_pur, a_pur, purity)
-
-    clean_mid_voc = mid_voc * np.clip(purity_smooth, 0.0, 1.0)
-    vocals_stem = np.column_stack([clean_mid_voc, clean_mid_voc])
-
-    # Other contains all remaining harmonics, lead guitars, pads and stereo air
     other_stem = harm_sig - vocals_stem * 0.85
 
     # Pad or trim to orig_len
