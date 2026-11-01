@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spectral Geometry vs Gigabyte Weights: Fast Deterministic DSP for Vocal Isolation // PHARMAKON</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --card-bg: #161920;
+    --text: #e2e8f0;
+    --text-muted: #94a3b8;
+    --accent: #f59e0b;
+    --accent-glow: rgba(245, 158, 11, 0.2);
+    --border: #262c38;
+    --green: #10b981;
+    --cyan: #06b6d4;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.7;
+    padding: 40px 20px;
+  }
+  .container {
+    max-width: 880px;
+    margin: 0 auto;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 48px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+  }
+  .print-btn {
+    float: right;
+    background: #1e293b;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .print-btn:hover {
+    background: var(--accent);
+    color: #000;
+  }
+  .meta-tag {
+    display: inline-block;
+    background: rgba(245, 158, 11, 0.12);
+    color: var(--accent);
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 16px;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+  }
+  h1 {
+    font-size: 32px;
+    color: #ffffff;
+    line-height: 1.3;
+    margin-bottom: 12px;
+    font-weight: 800;
+  }
+  .subtitle {
+    font-size: 16px;
+    color: var(--text-muted);
+    margin-bottom: 28px;
+    padding-bottom: 24px;
+    border-bottom: 1px solid var(--border);
+  }
+  .author-box {
+    background: #11141a;
+    border-left: 4px solid var(--accent);
+    padding: 16px 20px;
+    border-radius: 0 8px 8px 0;
+    margin-bottom: 32px;
+    font-size: 14px;
+  }
+  h2 {
+    font-size: 22px;
+    color: #ffffff;
+    margin: 36px 0 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+  h3 {
+    font-size: 18px;
+    color: var(--accent);
+    margin: 24px 0 12px;
+  }
+  p {
+    margin-bottom: 18px;
+    color: #cbd5e1;
+    font-size: 16px;
+  }
+  ul, ol {
+    margin-left: 24px;
+    margin-bottom: 20px;
+    color: #cbd5e1;
+  }
+  li { margin-bottom: 8px; }
+  strong { color: #ffffff; }
+  
+  .img-card {
+    background: #090b0e;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px;
+    margin: 28px 0;
+    text-align: center;
+  }
+  .img-card img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 8px;
+  }
+  .img-caption {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-top: 10px;
+  }
+  
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 28px 0;
+    background: #11141a;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  th {
+    background: #1a202c;
+    color: var(--accent);
+    text-align: left;
+    padding: 14px 18px;
+    font-size: 14px;
+    font-weight: 700;
+  }
+  td {
+    padding: 14px 18px;
+    border-top: 1px solid var(--border);
+    font-size: 14px;
+  }
+  tr:nth-child(even) { background: rgba(255, 255, 255, 0.02); }
+  .pure-badge {
+    color: var(--green);
+    font-weight: 700;
+  }
+  
+  .callout {
+    background: rgba(16, 185, 129, 0.08);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    border-radius: 10px;
+    padding: 20px;
+    margin: 28px 0;
+  }
+  .callout-title {
+    color: var(--green);
+    font-weight: 700;
+    margin-bottom: 8px;
+    font-size: 16px;
+  }
+  
+  .quote-box {
+    font-style: italic;
+    background: rgba(245, 158, 11, 0.05);
+    border-left: 3px solid var(--accent);
+    padding: 14px 18px;
+    margin: 20px 0;
+    color: #e2e8f0;
+  }
+
+  @media print {
+    body { background: #ffffff !important; color: #000000 !important; padding: 0; }
+    .container { max-width: 100%; border: none; box-shadow: none; padding: 0; }
+    .print-btn { display: none; }
+    h1, h2, h3, strong { color: #000000 !important; }
+    p, li, td { color: #222222 !important; }
+    .author-box, .callout, .quote-box, table { border: 1px solid #ccc !important; background: #fafafa !important; }
+    th { background: #eeeeee !important; color: #000000 !important; }
+    .img-card { background: #ffffff !important; border: 1px solid #eee !important; }
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <button class="print-btn" onclick="window.print()">Print / Save to PDF</button>
+  <span class="meta-tag">PHARMAKON // TECHNICAL MONOGRAPH 02</span>
+  
+  <h1>Spectral Geometry vs Gigabyte Weights: Fast Deterministic DSP for Vocal Isolation</h1>
+  <div class="subtitle">A Studio Engineering Manifesto on Mathematical Separation Without Deep Neural Bloat</div>
+
+  <div class="author-box">
+    <strong>Author:</strong> Lex Gerek (Sound Architect / Audio Engineer)<br>
+    <strong>Studio:</strong> Lazuli Pictures × PHARMAKON Studio Console<br>
+    <strong>Theoretical Foundation:</strong> Time-Frequency Distribution Geometry and Wiener Optimal Estimation (IEEE / AES)
+  </div>
+
+  <h2>1. Problem: Instrument Bleed & Deep Learning Overhead</h2>
+  <p>
+    Modern stem demixing has predominantly migrated to massive deep learning models (HTDemucs, MDX23, BS-Roformer). While they achieve impressive results in offline studio environments, their real-world production footprint introduces heavy friction:
+  </p>
+  <ul>
+    <li>Downloading between 2 and 6 Gigabytes of PyTorch checkpoint weights.</li>
+    <li>Prohibitive GPU requirements (demanding dedicated CUDA or Apple Silicon architectures).</li>
+    <li>Pervasive "musical noise" (diffusion phase warble, smudged transients, and blurred drum attacks).</li>
+  </ul>
+  <p>
+    The primary headache for producers working with generative audio (Suno v3.5/v4, Udio 1.5) is <strong>acoustic bleed</strong>: rhythm and lead guitars aggressively leak into the vocal stem because distorted electric guitar overtones share the exact same critical frequency zone as human vocal formants: <strong>300 – 3800 Hz</strong>.
+  </p>
+  <p>
+    Does clean vocal and rhythm extraction truly demand a multi-gigabyte server cluster? <strong>No.</strong> By leveraging classical time-frequency geometric distribution and inter-channel statistical coherence, stem demixing executes via pure deterministic mathematics in <strong>~3 seconds on a standard laptop CPU</strong>.
+  </p>
+
+  <div class="img-card">
+    <img src="img/01_pipeline_4stems_en.png" alt="4-Stem DSP Crossover Pipeline">
+    <div class="img-caption">Fig 1. Deterministic 4-Stem DSP separation architecture in PHARMAKON 2.0</div>
+  </div>
+
+  <h2>2. Two-Stage Mathematical Pipeline</h2>
+  <p>
+    In PHARMAKON 2.0, stem separation operates as a zero-phase pipeline across the Short-Time Fourier Transform (STFT) complex plane:
+  </p>
+
+  <h3>Stage 1. Infrasonic & Sub-Bass Isolation (< 120 Hz)</h3>
+  <p>
+    Prior to any time-frequency STFT decomposition, the stereo signal passes through a steep 4th-order Butterworth crossover. All acoustic energy below 120 Hz is consolidated into a pure True-Mono stream: <code>M = 0.5 * (L + R)</code>. This guarantees 100% mono punch and eliminates subwoofer phase cancellation on club sound systems.
+  </p>
+
+  <h3>Stage 2. Harmonic-Percussive Source Separation (Ono 2D Median Filter)</h3>
+  <p>
+    The mid-high spectrum is decomposed into spectrogram magnitudes. A 2D directional median filter is applied:
+  </p>
+  <ul>
+    <li><strong>Time Median Filter (500 ms)</strong>: Suppresses transient spikes and isolates continuous horizontal spectral lines — vocal formants, brass, and guitar sustains.</li>
+    <li><strong>Frequency Median Filter</strong>: Suppresses sustained tones and isolates broadband vertical spikes — kick transient punch, snare snaps, and cymbal attacks.</li>
+  </ul>
+
+  <div class="img-card">
+    <img src="img/02_hpss_wiener_spectrogram_en.png" alt="HPSS and Wiener Mask Spectrograms">
+    <div class="img-caption">Fig 2. Spectral analysis: Input Mix (A), Harmonics (B), Percussive Transients (C), and Wiener Vocal Dome Mask (D)</div>
+  </div>
+
+  <h3>Stage 3. Wiener Mask & Phantom Center Vocal Dome (300 – 3800 Hz)</h3>
+  <p>
+    In professional mixing, lead vocals are placed dead-center in the stereo panorama. We calculate the inter-channel coherence index to isolate the phantom center, then apply a smooth Wiener formant dome covering 300 Hz to 3800 Hz. Hard-panned instruments and off-axis frequencies are cleanly attenuated.
+  </p>
+
+  <h3>Stage 4. The Residual Stem (Other)</h3>
+  <p>
+    The residual harmonic layer is computed via <strong>strict phase-null subtraction</strong>:
+  </p>
+  <div class="quote-box">
+    Other = Full_Mix - (Bass + Drums + Vocals)
+  </div>
+  <p>
+    Summing all 4 stems reconstructs the master file with exact floating-point precision to 0.0 dB without phase distortion!
+  </p>
+
+  <h2>3. Performance Benchmark: Pure DSP vs Deep Learning</h2>
+  
+  <table>
+    <thead>
+      <tr>
+        <th>Metric</th>
+        <th>PHARMAKON 2.0 Pure DSP</th>
+        <th>Deep Neural Models (Demucs / UVR5)</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Processing Speed</strong></td>
+        <td><span class="pure-badge">~3 Seconds (Full 3-4 min song)</span></td>
+        <td>45 – 120 Seconds (High Latency)</td>
+      </tr>
+      <tr>
+        <td><strong>Download Footprint</strong></td>
+        <td><span class="pure-badge">0 MB (Embedded DSP algorithm)</span></td>
+        <td>2 – 6 GB PyTorch Model Checkpoints</td>
+      </tr>
+      <tr>
+        <td><strong>Hardware Requirement</strong></td>
+        <td><span class="pure-badge">Standard Laptop CPU</span></td>
+        <td>High-End CUDA / Apple Silicon GPU</td>
+      </tr>
+      <tr>
+        <td><strong>Transient Preservation</strong></td>
+        <td><span class="pure-badge">Crisp, punchy drum attacks</span></td>
+        <td>Blunted transients & smeared attacks</td>
+      </tr>
+      <tr>
+        <td><strong>Artificial Artifacts</strong></td>
+        <td><span class="pure-badge">Zero Neural Hallucinations (Deterministic)</span></td>
+        <td>Diffusion warble & underwater chirping</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout">
+    <div class="callout-title">Experience the Algorithm:</div>
+    <p>
+      <strong>Free Standalone Console (PHARMAKON 2.0):</strong><br>
+      For rapid stem demixing and offline mastering with zero Python installation:<br>
+      👉 <strong><a href="https://github.com/alex-gerek/PHARMAKON/releases/download/v2.0/PHARMAKON_v2.0_Windows_Portable.zip" style="color: #10b981; font-weight: bold;">Download PHARMAKON 2.0 Portable (.exe)</a></strong> (139 MB)
+    </p>
+    <p style="margin-top: 12px; margin-bottom: 0;">
+      <strong>Professional Real-Time DAW Plugin (PHARMAKON PRO):</strong><br>
+      For zero-latency sample-accurate DAW integration inside Cockos REAPER, Ableton Live, Logic Pro, and FL Studio, discover the commercial C++20 edition <strong>PHARMAKON PRO</strong> featuring dual 60 FPS CRT oscilloscopes (Launching Tuesday).
+    </p>
+  </div>
+
+</div>
+
+</body>
+</html>

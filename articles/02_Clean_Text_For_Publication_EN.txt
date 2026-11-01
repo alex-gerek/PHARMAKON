@@ -1,0 +1,46 @@
+SPECTRAL GEOMETRY VS GIGABYTE WEIGHTS: FAST DETERMINISTIC DSP FOR VOCAL ISOLATION
+Author: Lex Gerek (Sound Architect / Audio Engineer)
+Studio: Lazuli Pictures × PHARMAKON Studio Console
+
+1. THE PROBLEM: INSTRUMENT BLEED & NEURAL BLOAT
+Modern stem demixing has predominantly migrated to heavy deep learning architectures (HTDemucs, MDX23, BS-Roformer). While they produce impressive results in offline studio environments, they introduce severe production friction:
+- Downloading 2 to 6 Gigabytes of PyTorch weights.
+- Prohibitive GPU requirements (CUDA or Apple Silicon).
+- Pervasive phase artifacts (diffusion warble, smudged drum transients).
+
+The main headache for producers working with generative audio (Suno v3.5/v4, Udio 1.5) is acoustic bleed: rhythm and lead guitars aggressively leak into the vocal stem because distorted electric guitar overtones share the exact same frequency zone as human vocal formants: 300 - 3800 Hz.
+
+Does clean stem separation truly demand a multi-gigabyte server cluster?
+No. By leveraging classical time-frequency geometric distribution and inter-channel statistical coherence, stem demixing executes via pure deterministic mathematics in ~3 seconds on a standard laptop CPU.
+
+2. THE 4-STEM DSP PIPELINE
+In PHARMAKON 2.0, stem separation operates as a zero-phase pipeline across the STFT complex plane:
+
+Stage 1. Infrasonic & Sub-Bass Isolation (< 120 Hz):
+Steep 4th-order Butterworth crossover. All acoustic energy below 120 Hz is consolidated into a pure True-Mono stream: M = 0.5 * (L + R), guaranteeing 100% mono punch and zero subwoofer phase cancellation.
+
+Stage 2. Harmonic-Percussive Source Separation (Ono 2D Median Filter):
+Decomposes spectrogram magnitudes into:
+- Continuous horizontal harmonic formants (vocal sustains, guitars, chords).
+- Broadband vertical transient spikes (snare attack, kick punch, cymbal hits).
+
+Stage 3. Wiener Mask & Phantom Center Vocal Dome (300 - 3800 Hz):
+Isolates the phantom stereo center and applies a smooth Wiener formant dome covering 300 to 3800 Hz. Off-axis guitars and stereo width instruments are cleanly filtered out.
+
+Stage 4. The Residual Stem (Other):
+Strict phase-null subtraction:
+Other = Full_Mix - (Bass + Drums + Vocals)
+Summing all 4 stems reconstructs the master file with exact floating-point precision to 0.0 dB without phase distortion.
+
+3. BENCHMARK: PURE DSP VS DEEP NEURAL MODELS
+- Processing Speed: ~3 Seconds (PHARMAKON) vs 45-120 Seconds (Demucs).
+- Download Footprint: 0 MB (Embedded DSP) vs 2-6 GB PyTorch weights.
+- Hardware: Standard Laptop CPU vs High-End CUDA GPU.
+- Transients: Crisp, punchy drum attacks vs Blunted, smeared attacks.
+- Artifacts: Zero Neural Hallucinations (Deterministic) vs Diffusion warble and chirping.
+
+4. EXPERIENCE THE ALGORITHM
+- Free Standalone Console (PHARMAKON 2.0): Download portable zero-install package (139 MB):
+https://github.com/alex-gerek/PHARMAKON/releases/download/v2.0/PHARMAKON_v2.0_Windows_Portable.zip
+
+- Professional Real-Time DAW Plugin (PHARMAKON PRO): VST3 / AU / CLAP for Ableton, REAPER, Logic, and FL Studio with 60 FPS CRT scopes (Launching Tuesday).
