@@ -19,6 +19,7 @@ dist/
 
 # Proprietary & Confidential Docs
 internal_docs/
+articles_ru/
 *confidential*
 *.lic
 *.secret
