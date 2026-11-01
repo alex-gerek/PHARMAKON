@@ -105,7 +105,7 @@ In TDF-II, registers $s_1$ and $s_2$ store accumulated integral states. This top
 
 ### Sub-Bass Phase Alignment (SubMatrixModule)
 Stereo sub-bass below 110 Hz in club environments results in acoustic cancellation on mono subwoofer arrays. In PHARMAKON PRO, frequency splitting is achieved via cascaded 2nd-order Butterworth biquads ($Q = 0.70710678$), forming a 4th-order Linkwitz-Riley crossover (LR4, 24 dB/octave):
-$$H_{LP}(s) + H_{HP}(s) \equiv 1$$
+$$|H_{LP}(j\omega) + H_{HP}(j\omega)| \equiv 1 \quad (\le 0.00019	ext{ dB ripple})$$
 
 At $f_c = 110\text{ Hz}$, both lowpass and highpass outputs exhibit a strict $-6\text{ dB}$ attenuation and zero relative phase disparity ($360^\circ$). When summed, they reconstruct a magnitude-flat response with $0.00019\text{ dB}$ precision. Sub frequencies are collapsed to True-Mono ($M = 0.5(L+R)$) while preserving mid/high stereo width untouched.
 
