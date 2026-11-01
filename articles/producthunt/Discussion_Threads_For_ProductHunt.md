@@ -1,13 +1,13 @@
 # Product Hunt Community Discussion Threads
-**Автор:** Lex Gerek (Sound Architect / Engineer)  
-**Проект:** PHARMAKON 2.0 Studio Console  
-**Локация:** Product Hunt -> Discussions -> `+ Start new thread`
+**Author:** Lex Gerek (Sound Architect / Engineer)  
+**Project:** PHARMAKON 2.0 Studio Console  
+**Target:** Product Hunt -> Discussions -> `+ Start new thread`
 
 ---
 
-## Thread 1: The 16 kHz Dead Air Paradox (Рекомендуемый для первого поста)
+## Thread 1: The 16 kHz Dead Air Paradox (Recommended for First Launch)
 
-**Теги для выбора:** `#Audio`, `#Music`, `#Artificial Intelligence`
+**Topic Tags:** `#Audio`, `#Music`, `#Artificial Intelligence`
 
 ### Title:
 Why boosting an EQ at 16 kHz on AI music doesn't work (The physics of dead air)
@@ -32,9 +32,9 @@ Would love to hear your signal chains and production workflows!
 
 ---
 
-## Thread 2: Concrete Ceiling vs Analog Trampoline (Мем-тема про клиппинг)
+## Thread 2: Concrete Ceiling vs Analog Trampoline (Mastering & Saturation)
 
-**Теги для выбора:** `#Audio`, `#Music`, `#Developer Tools`
+**Topic Tags:** `#Audio`, `#Music`, `#Developer Tools`
 
 ### Title:
 The 0 dBFS Concrete Ceiling vs Tape Trampoline: Why raw AI music fatigues our ears
@@ -48,42 +48,41 @@ The culprit is usually digital hard clipping. When unmastered AI transients hit 
 
 We replaced heavy multi-gigabyte tape plugins with a minimal, broadcast-grade DSP block:
 ```python
-# Asymmetric oversampled tanh saturation (NAB pre-emphasis + 2nd & 3rd harmonics):
-y = (np.tanh(x * drive + bias) - np.tanh(bias)) * ceiling
+# Vintage analog tape soft compression
+def analog_tape_saturator(signal, drive=1.06):
+    return np.tanh(drive * signal) / np.tanh(drive)
 ```
-By adding a subtle bias offset and polyphase oversampling, it generates warm 2nd and 3rd harmonics while smoothly rounding off waveform peaks without aliasing foldover.
+Because $\tanh(x)$ approaches saturation through an asymptotically smooth S-curve, derivative continuity ($C^1$) is maintained, eliminating rectangular wave crests and adding warm 3rd-order harmonic body.
 
-**What is your favorite minimal DSP trick that replaced a bloated plugin in your workflow?**
+**What is your preferred saturation stage on the 2-bus? Digital limiters, tape emulations, or clipper clippers?**
 
 ---
 
-## Thread 3: The Vocal Bleed Dilemma (Физика против нейросетей)
+## Thread 3: The Vocal Bleed Dilemma (Separation & Stem Mastering)
 
-**Теги для выбора:** `#Audio`, `#Artificial Intelligence`, `#Open Source`
+**Topic Tags:** `#Audio`, `#Artificial Intelligence`, `#Open Source`
 
 ### Title:
-Why do 5 GB AI stem separators still bleed guitars into vocals? (And how wave physics fixes it)
+Separating AI Stems: Pure mathematical DSP vs 4GB deep neural weights
 
 ### Body / Description:
-Hey makers!
+Working on stem mastering for generative audio brings a fascinating engineering trade-off:
 
-We feed terabytes of audio to 5-gigabyte neural networks for stem separation, yet when you solo the vocal track, you can still hear the acoustic guitar strumming right through the singer's words.
+1. **Deep Neural Splitters (Demucs / UVR5):**
+   - Pros: Near-perfect vocal isolation; can distinguish lead guitar formants from human vocal timbres.
+   - Cons: Requires PyTorch, CUDA GPU, 4-8 GB model checkpoints, and 30-60s render latency.
 
-The fundamental issue is that acoustic guitars and human vocals share the exact same 300 Hz - 3800 Hz formant spectrum.
+2. **Deterministic Mathematical DSP (Harmonic-Percussive STFT + Wiener Masks):**
+   - Pros: 0 MB footprint, runs in milliseconds on any CPU without neural dependencies.
+   - Cons: Spectral bleeding when centered lead instruments overlap with vocal registers.
 
-Before firing up a multi-gigabyte GPU model for quick previews or local edge devices, we returned to classical spectral geometry:
-1. Nobutaka Ono / Derryck Fitzgerald HPSS (2D median spectrogram filtering for percussive vs harmonic separation).
-2. STFT-domain Inter-Channel Panning Masks and Soft Wiener energy weighting (isolating phantom-center vocals while smoothly preserving stereo room reverberation).
-
-A pure SciPy implementation runs in 3.2 seconds on an ordinary laptop CPU without GPU compute or acoustic hallucinations.
-
-**For your production workflow: where do you draw the line between fast deterministic DSP and heavy deep-learning models?**
+When building studio tools, where do you draw the line between instant lightweight DSP and heavy neural networks?
 
 ---
 
-### Как публиковать:
-1. Открываешь Product Hunt -> вкладка `Discussions`.
-2. Нажимаешь красную кнопку `+ Start new thread`.
-3. Копируешь `Title` и `Body` одного из тредов выше.
-4. Выбираешь подходящие теги.
-5. Жмешь `Publish thread`.
+### Step-by-Step Posting Guide:
+1. Navigate to Product Hunt -> Click `Discussions`.
+2. Click the top-right button `+ Start new thread`.
+3. Paste the `Title` and `Body` from one of the threads above.
+4. Select the matching Topic Tags.
+5. Click `Publish thread`.

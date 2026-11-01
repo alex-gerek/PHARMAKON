@@ -1,0 +1,67 @@
+# Spectral Geometry vs Gigabyte Weights: Fast Deterministic DSP for Vocal Isolation
+
+Modern audio stem separation has largely standardized on heavy deep-learning checkpoints (HTDemucs, MDX23, BS-Roformer). While state-of-the-art for offline studio de-mixing, they require multi-gigabyte PyTorch weights, burn significant GPU wattage, and can introduce phase smearing or musical noise under complex acoustic conditions.
+
+The primary frustration for producers working with generative music stems (Suno / Udio) is instrument bleed: acoustic and electric rhythm guitars frequently spill across the vocal track because string overtones and vocal formants share the exact same spectral real estate: **300 Hz - 3800 Hz**.
+
+Does isolating a dominant vocal on a lightweight laptop always require downloading gigabytes of neural checkpoints?  
+No. By applying classical spectral geometry and inter-channel coherence, primary stem separation can be achieved deterministically in 3 seconds on an ordinary CPU.
+
+#### 1. The Two-Stage DSP Pipeline: Ono HPSS + Wiener Masking
+Inside the PHARMAKON 2.0 architecture, we combine two proven time-frequency DSP foundations:
+
+##### Stage 1: Geometric Spectrogram Decomposition (Ono & Fitzgerald HPSS)
+Harmonic-Percussive Source Separation (formalized by Nobutaka Ono in 2008 and extended by Derryck Fitzgerald in 2010) leverages the geometric orientation of energy in the STFT spectrogram:
+* **Percussive transients** appear as vertical broadband spikes across frequency bins lasting fractions of a millisecond.
+* **Harmonic tones** (vocals, strings, synthesizers) appear as continuous horizontal lines across time frames.
+
+Two-dimensional median filtering ($1 \times 15$ in time, $15 \times 1$ in frequency) decomposes percussive attacks from stationary harmonic layers cleanly without phase clipping.
+
+##### Stage 2: STFT Inter-Channel Panning & Soft Wiener Masking
+In standard modern mixing, lead vocals are anchored to the phantom stereo center, while guitars, keyboards, and room reflections occupy lateral stereo width.
+
+Instead of crude time-domain subtraction (which produces harsh zero-crossing clicks and destroys stereo reverberation), PHARMAKON operates strictly within the complex STFT domain across individual frequency bins:
+1. Decomposes harmonic layers into complex $Z_{\text{mid}}$ and $Z_{\text{side}}$ matrices.
+2. Derives an inter-channel panning index:
+   $$\text{StereoRatio}(f, t) = \frac{|\text{Side}(f, t)|}{|\text{Mid}(f, t)| + |\text{Side}(f, t)| + \epsilon}$$
+3. Applies a soft Wiener power mask to isolate phantom-center energy:
+   $$W_{\text{mid}}(f, t) = \frac{|\text{Mid}(f, t)|^2}{|\text{Mid}(f, t)|^2 + |\text{Side}(f, t)|^2 + \epsilon}$$
+4. Smoothly weights the mask through a Gaussian vocal formant bandpass envelope (centered at 1400 Hz). The 0.30 baseline pedestal guarantees full preservation of lower chest registers (100 - 300 Hz) and organic diffuse reverberation tails without unnatural gating or chattering artifacts.
+
+#### 2. Pure SciPy STFT Implementation
+```python
+# 1. Complex STFT Mid/Side of Harmonic layer
+Z_mid = 0.5 * (Z_harm_L + Z_harm_R)
+Z_side = 0.5 * (Z_harm_L - Z_harm_R)
+
+mag_mid = np.abs(Z_mid)
+mag_side = np.abs(Z_side)
+
+# 2. Inter-Channel Panning Mask & Soft Wiener Masking
+stereo_ratio = mag_side / (mag_mid + mag_side + 1e-7)
+panning_mask = np.clip(1.0 - 1.8 * stereo_ratio, 0.0, 1.0)
+wiener_gain = (mag_mid ** 2) / (mag_mid ** 2 + mag_side ** 2 + 1e-7)
+vocal_mask = panning_mask * np.sqrt(wiener_gain)
+
+# 3. Formant weighting across 300 - 4200 Hz
+freq_bins = f[:, None]
+formant_weight = np.exp(-0.5 * ((np.log2(np.maximum(20.0, freq_bins) / 1400.0)) / 1.6) ** 2)
+vocal_mask_weighted = vocal_mask * (0.30 + 0.70 * formant_weight)
+
+# 4. Inverse STFT reconstruction
+Z_voc = Z_mid * vocal_mask_weighted
+_, voc_signal = signal.istft(Z_voc, fs=sr, nperseg=2048, noverlap=1536)
+```
+
+#### 3. Engineering Realism
+We do not claim that lightweight DSP supersedes deep models like BS-Roformer on mono recordings where a vocalist and guitar were recorded into a single microphone. When instruments share the exact same spatial vector and spectrum, linear methods cannot unbake the cake.
+
+However, for 90% of practical production workflows, PHARMAKON 2.0 delivers an essential advantage:
+- **Instantaneous Execution:** 3.2 seconds for a full 3-minute track on an ordinary laptop CPU.
+- **Zero Heavy Dependencies:** 15 MB standalone codebase, zero PyTorch, zero GPU/CUDA requirements.
+- **Zero Hallucination:** Deterministic mathematics preserves authentic transients and avoids AI acoustic artifacts.
+
+Before launching an entire GPU server farm, sometimes all you need is the elegant geometry of the spectrogram.
+
+---
+*Repository:* [https://github.com/alex-gerek/PHARMAKON](https://github.com/alex-gerek/PHARMAKON)

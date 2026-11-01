@@ -21,10 +21,6 @@
 </p>
 
 <p align="center">
-  <b>🌐 Language: English &nbsp;|&nbsp; 🇷🇺 <a href="README_RU.md">Читать руководство на русском (README_RU.md)</a></b>
-</p>
-
-<p align="center">
   <img src="https://img.shields.io/badge/Version-2.0%20PRO-emerald.svg?style=flat-square&color=10b981" alt="Version 2.0 PRO">
   <img src="https://img.shields.io/badge/DSP-Dynamic%20Ducker%20%2B%20Exciter-blue.svg?style=flat-square" alt="DSP Core">
   <img src="https://img.shields.io/badge/Oscilloscope-60%20FPS%20CRT%20%2B%20Phase%20Scope-brightgreen.svg?style=flat-square" alt="CRT Scope">
@@ -214,11 +210,11 @@ Open your browser at: 👉 **`http://127.0.0.1:7860`**
 
 ## 10. Engineering Monographs & White Papers
 Mathematical proofs, transfer functions, and AES/IEEE calibrations are documented in [`articles/`](articles/):
-* [01. Why Equalizers Cannot Cure AI Audio](articles/01_Почему_эквалайзер_не_лечит_ИИ_музыку.md)
-* [02. Terabytes of Neural Weights vs Wiener Classical Physics](articles/02_Терабайты_нейросетей_против_физики_Винера.md)
-* [03. Magnetic Tape Physics: Why Tanh Flutters the Ear](articles/03_Физика_магнитной_ленты_почему_tanh_ласкает_уши.md)
-* [04. Death in the Club: Kick and Bass Phase Cancellation](articles/04_Смерть_в_клубе_фазовая_война_бочки_и_баса.md)
-* [05. Inter-Sample Peaks and 4X True-Peak Polyphase Oversampling](articles/05_Межсэмпловые_пики_True_Peak_и_4X_оверсэмплинг.md)
+* [01. Why Equalizers Cannot Cure AI Audio: The Physics of Dead Air Above 16 kHz](articles/01_why_equalizers_cannot_cure_ai_audio.md)
+* [02. Spectral Geometry vs Gigabyte Weights: Fast Deterministic DSP for Vocal Isolation](articles/02_neural_weights_vs_wiener_physics.md)
+* [03. The Physics of Analog Tape Saturation: Soft Clipping and Asymmetric Tanh Compression](articles/03_magnetic_tape_physics_and_tanh_saturation.md)
+* [04. Death in the Club: The Low-End Phase War Between Kick and Sub-Bass (Sub-Sync)](articles/04_death_in_the_club_sub_phase_cancellation.md)
+* [05. Inter-Sample Peaks (True-Peak): Why Streaming Distorts and How 4X Polyphase Oversampling Solves It](articles/05_intersample_peaks_and_4x_oversampling.md)
 
 ---
 
