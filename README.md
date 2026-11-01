@@ -2,7 +2,7 @@
   <img src="gui/static/studio_icon.png" width="130" height="130" alt="PHARMAKON Logo">
 </p>
 
-# PHARMAKON 2.0 PRO
+# PHARMAKON 2.0
 ## Studio-Grade Audio Antidote, AI De-Harshing & True-Peak Mastering Console
 ### Created by Lex Gerek // Abbey Road 1974 × Blade Runner 2049
 
@@ -21,7 +21,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-2.0%20PRO-emerald.svg?style=flat-square&color=10b981" alt="Version 2.0 PRO">
+  <img src="https://img.shields.io/badge/Version-2.0-emerald.svg?style=flat-square&color=10b981" alt="Version 2.0">
   <img src="https://img.shields.io/badge/DSP-Dynamic%20Ducker%20%2B%20Exciter-blue.svg?style=flat-square" alt="DSP Core">
   <img src="https://img.shields.io/badge/Oscilloscope-60%20FPS%20CRT%20%2B%20Phase%20Scope-brightgreen.svg?style=flat-square" alt="CRT Scope">
   <img src="https://img.shields.io/badge/True--Peak%20Limiter-4x%20Oversampling-f59e0b.svg?style=flat-square" alt="True Peak">
@@ -55,7 +55,7 @@ Generative audio models (**Suno v3/v3.5/v4**, **Udio 1.5**, Stable Audio) have r
 5. **Inter-Sample Peak (ISP) True-Peak Clipping:**  
    AI services normalize audio directly to 0 dBFS. During digital-to-analog conversion (DAC) and lossy streaming transcoding (Spotify, Apple Music, YouTube), severe inter-sample overshoots (+1.5 dBFS or higher) destroy fidelity.
 
-**PHARMAKON 2.0 PRO is a dedicated analog-digital resuscitation console.**  
+**PHARMAKON 2.0 is a dedicated analog-digital resuscitation console.**  
 Fusing **Abbey Road 1974** analog tape warmth with **Blade Runner 2049** telemetry, it surgically extracts digital venom, resynthesizes lost acoustic silk, and bonds the master using pure mathematical DSP.
 
 ---
@@ -215,10 +215,19 @@ Mathematical proofs, transfer functions, and AES/IEEE calibrations are documente
 * [03. The Physics of Analog Tape Saturation: Soft Clipping and Asymmetric Tanh Compression](articles/03_magnetic_tape_physics_and_tanh_saturation.md)
 * [04. Death in the Club: The Low-End Phase War Between Kick and Sub-Bass (Sub-Sync)](articles/04_death_in_the_club_sub_phase_cancellation.md)
 * [05. Inter-Sample Peaks (True-Peak): Why Streaming Distorts and How 4X Polyphase Oversampling Solves It](articles/05_intersample_peaks_and_4x_oversampling.md)
+* [06. From Python to C++20: Architecting the Real-Time DSP Engine of PHARMAKON PRO](articles/06_from_python_to_cxx20_architecting_pharmakon_pro.md)
 
 ---
 
-## 11. Author & License
+## 11. Real-Time DAW Plugin: PHARMAKON PRO
+Looking for zero-latency, sample-accurate DAW integration?
+
+**PHARMAKON PRO** is the commercial real-time C++20 DAW plugin (VST3, AU, CLAP, Standalone) built on JUCE 8 with dual 60 FPS vector CRT displays, 45-degree Lissajous phase goniometer, and AVX2-accelerated DSP for Ableton Live, Cockos REAPER, FL Studio, Logic Pro, and Cubase.
+* Architecture white paper: [Article 06: From Python to C++20](articles/06_from_python_to_cxx20_architecting_pharmakon_pro.md)
+
+---
+
+## 12. Author & License
 Conceived and engineered by **Lex Gerek**  
 * YouTube / Portfolio: [Lex Gerek](https://www.youtube.com/@alex-gerek)  
 * GitHub: [@alex-gerek](https://github.com/alex-gerek)  
