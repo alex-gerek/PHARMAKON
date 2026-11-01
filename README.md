@@ -11,8 +11,8 @@
     <img src="https://img.shields.io/badge/Download%20Windows%20Portable%20(.exe)-0078D4?style=for-the-badge&logo=windows&logoColor=white" alt="Download Windows Portable">
   </a>
   &nbsp;
-  <a href="https://youtu.be/GyJ8nCmqhMc" target="_blank">
-    <img src="https://img.shields.io/badge/Watch%20Studio%20Walkthrough-FF0000?style=for-the-badge&logo=youtube&logoColor=white" alt="Watch Studio Walkthrough">
+  <a href="https://x.com/LexGerek/status/2116217723654955252?a=MI6yI7pf75A6ecEz4HM&s=20" target="_blank">
+    <img src="https://img.shields.io/badge/Watch%20Walkthrough%20on%20X-000000?style=for-the-badge&logo=x&logoColor=white" alt="Watch Studio Walkthrough">
   </a>
   &nbsp;
   <a href="https://github.com/alex-gerek/PHARMAKON/archive/refs/heads/master.zip">
@@ -28,7 +28,7 @@
   <img src="https://img.shields.io/badge/Monitoring-A%20%2F%20B%20%2F%20Delta-purple.svg?style=flat-square" alt="Monitoring">
   <img src="https://img.shields.io/badge/Loudness-ITU--R%20BS.1770--4%20LUFS-cyan.svg?style=flat-square" alt="LUFS">
   <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-0078d7?style=flat-square" alt="Platform">
-  <img src="https://img.shields.io/badge/Author-Lex%20Gerek-black.svg?style=flat-square&logo=youtube" alt="Lex Gerek">
+  <img src="https://img.shields.io/badge/Author-Lex%20Gerek-black.svg?style=flat-square&logo=x" alt="Lex Gerek">
   <img src="https://img.shields.io/badge/License-MIT-orange.svg?style=flat-square" alt="License">
 </p>
 
@@ -37,7 +37,7 @@
 ## 1. Why PHARMAKON: The Anatomy of "AI Poison"
 
 > 📺 **Official Studio Walkthrough (A/B & Delta Tests):**  
-> [**Watch on YouTube: Treating Generative Audio: Pure Mathematical DSP | PHARMAKON 2.0**](https://youtu.be/GyJ8nCmqhMc)
+> [**Watch Video on X: Treating Generative Audio: Pure Mathematical DSP | PHARMAKON 2.0**](https://x.com/LexGerek/status/2116217723654955252?a=MI6yI7pf75A6ecEz4HM&s=20)
 
 > **Pharmakon** *(Ancient Greek: φάρμακον)* — an ancient philosophical paradox denoting simultaneously **poison**, **remedy**, and **antidote**.
 
@@ -229,7 +229,8 @@ Looking for zero-latency, sample-accurate DAW integration?
 
 ## 12. Author & License
 Conceived and engineered by **Lex Gerek**  
-* YouTube / Portfolio: [Lex Gerek](https://www.youtube.com/@alex-gerek)  
+* X / Twitter: [@LexGerek](https://x.com/LexGerek)
+
 * GitHub: [@alex-gerek](https://github.com/alex-gerek)  
 
 Released under the **MIT License**. Free for personal, commercial, and studio use.
