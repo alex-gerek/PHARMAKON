@@ -7,12 +7,16 @@
 ### Created by Lex Gerek // Abbey Road 1974 × Blade Runner 2049
 
 <p align="center">
+  <a href="https://github.com/alex-gerek/PHARMAKON/releases/download/v2.0/PHARMAKON_v2.0_Windows_Portable.zip">
+    <img src="https://img.shields.io/badge/⚡%20Скачать%20Portable%20(.exe)%20%7C%20Windows%20Zero--Install-0078D4?style=for-the-badge&logo=windows&logoColor=white" alt="Download Windows Portable">
+  </a>
+  &nbsp;
   <a href="https://youtu.be/GyJ8nCmqhMc" target="_blank">
     <img src="https://img.shields.io/badge/▶%20Смотреть%20видео--обзор%20консоли%20%7C%20Watch%20Studio%20Walkthrough-FF0000?style=for-the-badge&logo=youtube&logoColor=white" alt="Watch Studio Walkthrough">
   </a>
   &nbsp;
   <a href="https://github.com/alex-gerek/PHARMAKON/archive/refs/heads/master.zip">
-    <img src="https://img.shields.io/badge/📥%20Скачать%20ZIP%20%7C%20Download%20ZIP-238636?style=for-the-badge&logo=github&logoColor=white" alt="Download ZIP">
+    <img src="https://img.shields.io/badge/📥%20Исходный%20код%20ZIP%20%7C%20Source%20Code-238636?style=for-the-badge&logo=github&logoColor=white" alt="Download Source ZIP">
   </a>
 </p>
 
@@ -164,19 +168,33 @@
 
 ## 9. 🚀 Быстрый запуск
 
-### 1. Клонирование репозитория
+### Вариант 1: Автономный запуск (Zero-Install Portable для Windows)
+> **Не требует установки Python, pip или компиляторов.**
+
+1. Скачайте автономный архив **[PHARMAKON_v2.0_Windows_Portable.zip](https://github.com/alex-gerek/PHARMAKON/releases/download/v2.0/PHARMAKON_v2.0_Windows_Portable.zip)** (139 МБ).
+2. Распакуйте папку `PHARMAKON` в любое место на диске.
+3. Запустите **`Pharmakon.exe`** (или `Start_Pharmakon.bat`).
+4. Консоль мгновенно откроется в виде студийного приложения на `http://127.0.0.1:7860`.
+
+---
+
+### Вариант 2: Для разработчиков и запуск из исходников (Python 3.9+)
+
+<details>
+<summary><b>Развернуть инструкцию по установке через Python / Git</b></summary>
+
+#### 1. Клонирование репозитория
 ```bash
 git clone https://github.com/alex-gerek/PHARMAKON.git
 cd PHARMAKON
 ```
 
-### 2. Установка зависимостей
-Требуется Python 3.9+:
+#### 2. Установка зависимостей
 ```bash
 pip install -r requirements.txt
 ```
 
-### 3. Запуск студийной консоли
+#### 3. Запуск студийной консоли
 Дважды кликните по:
 ```text
 Pharmakon_GUI.bat
@@ -184,6 +202,8 @@ Pharmakon_GUI.bat
 *(Или запустите в терминале: `python gui/server.py`)*
 
 Консоль откроется по адресу: 👉 **`http://127.0.0.1:7860`**
+
+</details>
 
 ### Горячие клавиши (Hotkeys):
 * `Space` — Воспроизведение / Пауза

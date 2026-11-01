@@ -7,10 +7,17 @@ import subprocess
 import urllib.parse
 from pathlib import Path
 
-# Add parent directory to path so remaster_engine can be imported
-SCRIPT_DIR = Path(__file__).resolve().parent
-PROJECT_DIR = SCRIPT_DIR.parent
-sys.path.insert(0, str(PROJECT_DIR))
+# Setup paths for standard and frozen environments
+if getattr(sys, 'frozen', False):
+    BASE_DIR = Path(getattr(sys, '_MEIPASS', Path(sys.executable).resolve().parent))
+    PROJECT_DIR = Path(sys.executable).resolve().parent
+    SCRIPT_DIR = BASE_DIR / "gui" if (BASE_DIR / "gui").exists() else BASE_DIR
+    sys.path.insert(0, str(PROJECT_DIR))
+    sys.path.insert(0, str(BASE_DIR))
+else:
+    SCRIPT_DIR = Path(__file__).resolve().parent
+    PROJECT_DIR = SCRIPT_DIR.parent
+    sys.path.insert(0, str(PROJECT_DIR))
 
 import remaster_engine
 from fastapi import FastAPI, HTTPException, Request, Response
@@ -533,8 +540,25 @@ async def reveal_in_explorer(request: Request):
 
 # Mount static files for the UI
 STATIC_DIR = SCRIPT_DIR / "static"
+if getattr(sys, 'frozen', False):
+    if not STATIC_DIR.exists():
+        if (BASE_DIR / "gui" / "static").exists():
+            STATIC_DIR = BASE_DIR / "gui" / "static"
+        elif (PROJECT_DIR / "gui" / "static").exists():
+            STATIC_DIR = PROJECT_DIR / "gui" / "static"
+        elif (BASE_DIR / "static").exists():
+            STATIC_DIR = BASE_DIR / "static"
 STATIC_DIR.mkdir(exist_ok=True)
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+@app.post("/api/shutdown")
+def shutdown():
+    import threading, time
+    def delayed_exit():
+        time.sleep(0.5)
+        os._exit(0)
+    threading.Thread(target=delayed_exit, daemon=True).start()
+    return {"status": "shutting_down"}
 
 @app.get("/")
 def get_index():
@@ -551,4 +575,4 @@ def get_index():
     return HTMLResponse("<h1>PHARMAKON Studio Console</h1><p>UI initializing...</p>")
 
 if __name__ == "__main__":
-    uvicorn.run("server:app", host="127.0.0.1", port=7860, reload=False)
+    uvicorn.run(app, host="127.0.0.1", port=7860, reload=False)

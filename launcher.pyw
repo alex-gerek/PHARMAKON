@@ -3,10 +3,23 @@ import sys
 import time
 import urllib.request
 import subprocess
+import threading
+import webbrowser
+from pathlib import Path
 
-PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
-SERVER_SCRIPT = os.path.join(PROJECT_DIR, "gui", "server.py")
-ICON_PATH = os.path.join(PROJECT_DIR, "pharmakon_hd_256.ico")
+# Setup paths for standard and frozen environments
+if getattr(sys, 'frozen', False):
+    BASE_DIR = Path(getattr(sys, '_MEIPASS', Path(sys.executable).resolve().parent))
+    PROJECT_DIR = Path(sys.executable).resolve().parent
+    sys.path.insert(0, str(PROJECT_DIR))
+    sys.path.insert(0, str(BASE_DIR))
+else:
+    PROJECT_DIR = Path(__file__).resolve().parent
+    BASE_DIR = PROJECT_DIR
+    sys.path.insert(0, str(PROJECT_DIR))
+
+SERVER_SCRIPT = str(PROJECT_DIR / "gui" / "server.py")
+ICON_PATH = str(PROJECT_DIR / "pharmakon_hd_256.ico")
 URL = "http://127.0.0.1:7860"
 
 def is_server_running():
@@ -16,24 +29,13 @@ def is_server_running():
     except Exception:
         return False
 
-def start_server():
-    if is_server_running():
-        return
-    py_exe = sys.executable
-    if py_exe.endswith("pythonw.exe"):
-        py_exe = py_exe.replace("pythonw.exe", "python.exe")
-    # Launch server as detached background process
-    if sys.platform == "win32":
-        creation_flags = subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS
-        subprocess.Popen([py_exe, SERVER_SCRIPT], cwd=PROJECT_DIR, creationflags=creation_flags)
-    else:
-        subprocess.Popen([py_exe, SERVER_SCRIPT], cwd=PROJECT_DIR)
-
-    # Wait up to 5 seconds for server to be responsive
-    for _ in range(25):
-        time.sleep(0.2)
-        if is_server_running():
-            break
+def stop_server():
+    try:
+        req = urllib.request.Request(f"{URL}/api/shutdown", method="POST")
+        with urllib.request.urlopen(req, timeout=2) as res:
+            return res.getcode() == 200
+    except Exception:
+        return False
 
 def open_ui():
     chrome_paths = [
@@ -49,19 +51,84 @@ def open_ui():
     # Prioritize Chrome App Mode
     for cp in chrome_paths:
         if os.path.exists(cp):
-            subprocess.Popen([cp, f"--app={URL}", "--window-size=1360,920"])
-            return
+            return subprocess.Popen([cp, f"--app={URL}", "--window-size=1360,920"])
 
     # Fallback to Edge App Mode
     for ep in edge_paths:
         if os.path.exists(ep):
-            subprocess.Popen([ep, f"--app={URL}", "--window-size=1360,920"])
-            return
+            return subprocess.Popen([ep, f"--app={URL}", "--window-size=1360,920"])
 
     # Fallback to default browser
-    import webbrowser
     webbrowser.open(URL)
+    return None
+
+def start_server_dev():
+    if is_server_running():
+        return
+    py_exe = sys.executable
+    if py_exe.endswith("pythonw.exe"):
+        py_exe = py_exe.replace("pythonw.exe", "python.exe")
+    if sys.platform == "win32":
+        creation_flags = subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS
+        subprocess.Popen([py_exe, SERVER_SCRIPT], cwd=str(PROJECT_DIR), creationflags=creation_flags)
+    else:
+        subprocess.Popen([py_exe, SERVER_SCRIPT], cwd=str(PROJECT_DIR))
+
+    for _ in range(30):
+        time.sleep(0.2)
+        if is_server_running():
+            break
+
+def main():
+    if "--stop" in sys.argv:
+        if stop_server():
+            print("PHARMAKON Studio Server stopped.")
+        else:
+            print("PHARMAKON Server is not currently running.")
+        return
+
+    # If already running, just open UI
+    if is_server_running():
+        open_ui()
+        return
+
+    if getattr(sys, 'frozen', False):
+        import uvicorn
+        from gui.server import app
+
+        if "--server-only" in sys.argv:
+            uvicorn.run(app, host="127.0.0.1", port=7860, log_level="info")
+            return
+
+        # Start server in thread
+        server_thread = threading.Thread(
+            target=lambda: uvicorn.run(app, host="127.0.0.1", port=7860, log_level="warning"),
+            daemon=True
+        )
+        server_thread.start()
+
+        # Wait for server ready
+        for _ in range(50):
+            time.sleep(0.1)
+            if is_server_running():
+                break
+
+        # Open UI
+        ui_proc = open_ui()
+
+        if ui_proc:
+            ui_proc.wait()
+        else:
+            try:
+                while True:
+                    time.sleep(1)
+            except (KeyboardInterrupt, SystemExit):
+                pass
+    else:
+        start_server_dev()
+        open_ui()
 
 if __name__ == "__main__":
-    start_server()
-    open_ui()
+    import multiprocessing
+    multiprocessing.freeze_support()
+    main()
