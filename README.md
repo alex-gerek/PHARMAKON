@@ -168,15 +168,46 @@ If your production demands surgically isolated acapellas free of centered guitar
 
 ---
 
-## 9. 🚀 Quick Start
+## 9. 🚀 Installation & Quick Start
 
-### Option 1: Standalone Portable (Zero-Install for Windows)
-> **Recommended for musicians & producers. No Python, pip, or command-line required.**
+### Option 1: Zero-Install Windows Package (Recommended for Producers & Creators)
+> **No Python, no command-line, no compilers, no external libraries required.**
 
-1. Download **[PHARMAKON_v2.0_Windows_Portable.zip](https://github.com/alex-gerek/PHARMAKON/releases/download/v2.0/PHARMAKON_v2.0_Windows_Portable.zip)** (139 MB).
-2. Extract the `PHARMAKON` folder anywhere on your computer.
-3. Double-click **`Pharmakon.exe`** (or `Start_Pharmakon.bat`).
-4. The studio console will instantly launch in dedicated studio window mode.
+1. **Download & Extract:**  
+   Download **[PHARMAKON_v2.0_Windows_Portable.zip](https://github.com/alex-gerek/PHARMAKON/releases/download/v2.0/PHARMAKON_v2.0_Windows_Portable.zip)** (142 MB).  
+   > *Important:* Right-click the downloaded `.zip` file and select **"Extract All..."** into a folder of your choice (e.g. `Downloads`, `Desktop`, or `C:\PHARMAKON`). Running directly from inside an unextracted zip runs in a temporary cache.
+
+2. **Choose your installation method:**
+
+   * **Method A: Graphical Setup Wizard (`Install_PHARMAKON.bat`)**  
+     Double-click **`Install_PHARMAKON.bat`**.  
+     - A dark-themed graphical installer opens.
+     - **Destination Folder:** Select where to install (default: `%LOCALAPPDATA%\Programs\PHARMAKON 2.0`, or browse to any custom folder on `C:`, `D:`, etc.).
+     - **Desktop Shortcut:** Automatically creates a high-resolution Desktop shortcut with the custom studio gold icon.
+     - **Start Menu:** Adds PHARMAKON 2.0 to your Windows Start Menu.
+     - Click **INSTALL PHARMAKON** - setup completes in under 3 seconds with zero admin prompts.
+
+   * **Method B: Instant Desktop Shortcut (`Create_Desktop_Shortcut.bat`)**  
+     If you prefer keeping the extracted folder right where it is (or on an external SSD/USB drive):  
+     - Double-click **`Create_Desktop_Shortcut.bat`**.  
+     - Instantly generates the `PHARMAKON 2.0` shortcut on your Windows Desktop pointing directly to this directory.
+
+   * **Method C: Direct Standalone Launch**  
+     - Double-click **`Start_Pharmakon.bat`** (or `Pharmakon.exe`).  
+     - To cleanly stop the background engine when finished, double-click **`Stop_Pharmakon.bat`**.
+
+---
+
+### Step-by-Step Studio Workflow:
+1. **Launch Console:** Launch via the Desktop shortcut or `Start_Pharmakon.bat`. Your browser or desktop window will open to `http://127.0.0.1:7860`.
+2. **Load Audio:** Drag and drop any Suno, Udio, or vocal track (WAV, MP3, FLAC, OGG) onto the drop zone, or click **Browse**.
+3. **Select Processing Mode:**
+   - **Commence Re-Mastering:** Runs full-mix de-harshing, dynamic resonance notch, tape saturation, stereo widening, and 4x True-Peak limiting.
+   - **Split & Stem Master:** Separates the track into 4 stems (Vocals, Drums, Bass, Other), locks sub-bass mono phase, and masters each stem with custom dynamics.
+4. **Inspect & Compare:**
+   - Press `A` to listen to the raw track, `B` for the mastered result, or `D` (Delta) to audition solely the extracted digital artifacts and harshness.
+   - Switch visualizers with keys `1` to `6` (Dual CRT, RTA Spectrum, Lissajous Phase Scope).
+5. **Export Master:** Click **Download Master (.WAV)** to save your pristine 24-bit studio master, and export the official **Mastering Certificate** as an interactive HTML report or high-resolution PNG card.
 
 ---
 
