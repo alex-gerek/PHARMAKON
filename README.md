@@ -34,6 +34,16 @@
 
 ---
 
+## 📚 Engineering Guides & Knowledge Base
+
+Deep architectural and operational documentation for producers, audio engineers, and AI creators:
+- [📖 **The Definitive Guide to Stem Mastering AI Music** (STEM_MASTERING_GUIDE.md)](STEM_MASTERING_GUIDE.md)  
+  *4-stem Wiener decomposition, sub-bass Linkwitz-Riley LR4 mono-locking, resolving kick-bass phase clashes, and streaming loudness targets.*
+- [🔬 **Neural Audio Detox: AI Audio Restoration Workflow** (AI_AUDIO_RESTORATION_WORKFLOW.md)](AI_AUDIO_RESTORATION_WORKFLOW.md)  
+  *Root cause analysis of Suno & Udio metallic whistle, ballistic resonance ducking @ 5.2 kHz, asymmetric Studer A800 tape saturation, and reading the Spectral Diagnosis Certificate.*
+
+---
+
 ## 1. Why PHARMAKON: The Anatomy of "AI Poison"
 
 > 📺 **Official Studio Walkthrough (A/B & Delta Tests):**  
