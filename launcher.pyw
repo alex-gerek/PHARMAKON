@@ -69,13 +69,20 @@ def start_server_dev():
     if py_exe.endswith("pythonw.exe"):
         py_exe = py_exe.replace("pythonw.exe", "python.exe")
     if sys.platform == "win32":
-        creation_flags = subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS
-        subprocess.Popen([py_exe, SERVER_SCRIPT], cwd=str(PROJECT_DIR), creationflags=creation_flags)
+        creation_flags = subprocess.CREATE_NO_WINDOW
+        subprocess.Popen(
+            [py_exe, SERVER_SCRIPT],
+            cwd=str(PROJECT_DIR),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            creationflags=creation_flags
+        )
     else:
         subprocess.Popen([py_exe, SERVER_SCRIPT], cwd=str(PROJECT_DIR))
 
-    for _ in range(30):
-        time.sleep(0.2)
+    for _ in range(50):
+        time.sleep(0.1)
         if is_server_running():
             break
 
