@@ -1,0 +1,47 @@
+{
+  "test_01_chirp_delay": {
+    "mean_lag_ms": 16.74,
+    "max_lag_ms": 19.9,
+    "rtf": 5.0,
+    "passed": true,
+    "criteria": "Mean causal tracking lag <= 20 ms"
+  },
+  "test_02_suppression_depth": {
+    "attenuation_db": -9.91,
+    "steady_f0_hz": 5200.98,
+    "passed": true,
+    "criteria": "Attenuation between -6.0 and -12.0 dB, f0 error < 5 Hz"
+  },
+  "test_03_click_thd": {
+    "added_hf_distortion_db": 0.0,
+    "passed": true,
+    "criteria": "Added HF distortion <= 0.1 dB (zero zipper noise)"
+  },
+  "test_04_transparency_gaps": {
+    "gap_residual_gain_db": -0.16,
+    "passed": true,
+    "criteria": "Gain returns to >= -0.5 dB in silence gaps"
+  },
+  "test_05_decoy_trap": {
+    "max_tracked_f0_hz": 6381.16,
+    "decoy_rejected": true,
+    "passed": true,
+    "criteria": "Captures moving anomaly up to > 6200 Hz (rejects static 4000 Hz trap)"
+  },
+  "test_06_step_legato": {
+    "capture_time_ms": 22.67,
+    "passed": true,
+    "criteria": "Capture time to new target < 40 ms"
+  },
+  "test_07_null_clean": {
+    "max_gain_dip_db": -0.43,
+    "null_diff_rms_dbfs": -81.42,
+    "passed": true,
+    "criteria": "Gain stays at 0.0 dB (min >= -0.5 dB), Null RMS < -55 dBFS"
+  },
+  "summary": {
+    "total_tests": 7,
+    "total_passed": 7,
+    "all_passed": true
+  }
+}

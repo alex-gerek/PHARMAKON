@@ -1,0 +1,66 @@
+{
+  "test_01_chirp_delay": {
+    "file": "test_01_chirp_delay.wav",
+    "duration_sec": 5.0,
+    "f_start_hz": 3500.0,
+    "f_end_hz": 7500.0,
+    "chirp_window_sec": [
+      0.5,
+      4.5
+    ],
+    "pass_criterion": "Tracker f0_current lag <= 12 ms relative to f_true(t)"
+  },
+  "test_02_suppression_depth": {
+    "file": "test_02_suppression_depth.wav",
+    "duration_sec": 4.0,
+    "target_f0_hz": 5200.0,
+    "target_level_dbfs": -12.0,
+    "pass_criterion": "Gain attenuation stable at -6 dB to -10 dB in steady state"
+  },
+  "test_03_click_thd": {
+    "file": "test_03_click_thd.wav",
+    "duration_sec": 4.0,
+    "modulation_rate_hz": 5.0,
+    "pass_criterion": "Zero high-frequency zipper noise spikes > 10 kHz in residual"
+  },
+  "test_04_transparency_gaps": {
+    "file": "test_04_transparency_gaps.wav",
+    "duration_sec": 6.0,
+    "burst_intervals_sec": [
+      [
+        1.0,
+        2.0
+      ],
+      [
+        3.5,
+        4.5
+      ]
+    ],
+    "pass_criterion": "Filter gain returns to 0.0 dB within 150 ms of burst termination"
+  },
+  "test_05_decoy_trap": {
+    "file": "test_05_decoy_trap.wav",
+    "duration_sec": 5.0,
+    "decoy_hz": 4000.0,
+    "anomaly_range_hz": [
+      5200.0,
+      6800.0
+    ],
+    "pass_criterion": "Prominence logic locks moving anomaly or handles both nodes without sticking"
+  },
+  "test_06_step_legato": {
+    "file": "test_06_step_legato.wav",
+    "duration_sec": 4.0,
+    "step_time_sec": 1.5,
+    "step_f0_jump": [
+      3500.0,
+      7500.0
+    ],
+    "pass_criterion": "Capture time < 25 ms, no transient click artifact during capture"
+  },
+  "test_07_null_clean": {
+    "file": "test_07_null_clean.wav",
+    "duration_sec": 4.0,
+    "pass_criterion": "Zero false triggers: Gain stays 0.0 dB throughout; Null residual < -60 dBFS"
+  }
+}
