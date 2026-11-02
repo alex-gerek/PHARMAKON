@@ -1770,8 +1770,11 @@ function updateTelemetry(m) {
   if (!m) return;
   const tpProc = m.true_peak_proc_db !== undefined ? m.true_peak_proc_db : m.peak_proc_db;
   const tpOrig = m.true_peak_orig_db !== undefined ? m.true_peak_orig_db : m.peak_orig_db;
-  document.getElementById('m_peak').innerHTML = `${tpProc} <span class="unit">dBFS</span>`;
-  document.getElementById('m_peak_delta').innerText = `Oversampled True-Peak (from ${tpOrig} dBFS)`;
+
+  const peakEl = document.getElementById('m_peak');
+  if (peakEl) peakEl.innerHTML = `${tpProc} <span class="unit">dBFS</span>`;
+  const peakDelta = document.getElementById('m_peak_delta');
+  if (peakDelta) peakDelta.innerText = `Oversampled True-Peak (from ${tpOrig} dBFS)`;
 
   if (m.lufs_proc !== undefined) {
     const lufsCard = document.getElementById('m_lufs');
@@ -1786,8 +1789,10 @@ function updateTelemetry(m) {
 
   const rmsDiff = (m.rms_proc_db - m.rms_orig_db).toFixed(2);
   const sign = rmsDiff >= 0 ? '+' : '';
-  document.getElementById('m_rms').innerHTML = `${m.rms_proc_db} <span class="unit">dBFS</span>`;
-  document.getElementById('m_rms_delta').innerText = `${sign}${rmsDiff} dB Warm Density Boost`;
+  const rmsEl = document.getElementById('m_rms');
+  if (rmsEl) rmsEl.innerHTML = `${m.rms_proc_db} <span class="unit">dBFS</span>`;
+  const rmsDelta = document.getElementById('m_rms_delta');
+  if (rmsDelta) rmsDelta.innerText = `${sign}${rmsDiff} dB Warm Density Boost`;
 
   // Dynamic Crest Factor
   const crestEl = document.getElementById('m_crest');
@@ -1807,8 +1812,10 @@ function updateTelemetry(m) {
 
   const subEl = document.getElementById('m_sub');
   if (subEl) subEl.innerHTML = `-${m.sub_reduction_db} <span class="unit">dB</span>`;
-  document.getElementById('m_harsh').innerHTML = `-${m.harsh_reduction_db} <span class="unit">dB</span>`;
-  document.getElementById('m_width').innerHTML = `+${m.stereo_expansion_db} <span class="unit">dB</span>`;
+  const harshMain = document.getElementById('m_harsh');
+  if (harshMain) harshMain.innerHTML = `-${m.harsh_reduction_db} <span class="unit">dB</span>`;
+  const widthMain = document.getElementById('m_width');
+  if (widthMain) widthMain.innerHTML = `+${m.stereo_expansion_db} <span class="unit">dB</span>`;
 
   // 4-Band Master Profile update
   const eSub = document.getElementById('e_sub');
@@ -1823,8 +1830,8 @@ function updateTelemetry(m) {
   // Update in-card diagnosis items
   const harshEl = document.getElementById('txtHarsh');
   if (harshEl) harshEl.innerText = `-${m.harsh_reduction_db} dB`;
-  const rmsEl = document.getElementById('txtRms');
-  if (rmsEl) rmsEl.innerText = `${sign}${rmsDiff} dB`;
+  const txtRms = document.getElementById('txtRms');
+  if (txtRms) txtRms.innerText = `${sign}${rmsDiff} dB`;
 
   const resEl = document.getElementById('txtResonance');
   const harshDesc = document.getElementById('m_harsh_desc');

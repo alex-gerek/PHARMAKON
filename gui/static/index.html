@@ -520,6 +520,11 @@
             <div class="t-delta" id="m_lufs_delta">ITU-R BS.1770 / EBU R128</div>
           </div>
           <div class="telemetry-card highlight-card">
+            <div class="t-label">ANALOG WARMTH (RMS)</div>
+            <div class="t-value" id="m_rms">-12.92 <span class="unit">dBFS</span></div>
+            <div class="t-delta" id="m_rms_delta">+1.35 dB Density Boost</div>
+          </div>
+          <div class="telemetry-card highlight-card">
             <div class="t-label">DYNAMIC CREST FACTOR</div>
             <div class="t-value" id="m_crest">10.8 <span class="unit">dB</span></div>
             <div class="t-delta" id="m_crest_delta">Healthy Punch Preserved</div>
@@ -528,6 +533,11 @@
             <div class="t-label">SUB-BASS PHASE CORRELATION</div>
             <div class="t-value" id="m_phase_corr" style="color:#fde047;">+0.99 <span class="unit">Corr</span></div>
             <div class="t-delta" id="m_phase_corr_delta">100% Mono Anchor &lt; 120Hz</div>
+          </div>
+          <div class="telemetry-card">
+            <div class="t-label">SUB RUMBLE REMOVED</div>
+            <div class="t-value" id="m_sub">-5.20 <span class="unit">dB</span></div>
+            <div class="t-delta">Below 32 Hz Cleaned</div>
           </div>
           <div class="telemetry-card highlight-card">
             <div class="t-label">DYNAMIC DE-HARSH ATTENUATION</div>
@@ -540,7 +550,6 @@
             <div class="t-delta">Side Expansion (Mid-Side)</div>
           </div>
         </div>
-
         <!-- 4-BAND MASTER ENERGY PROFILE -->
         <div class="energy-balance-bar" id="energyBalanceBar" style="display:flex; justify-content:space-between; align-items:center; background:#070a12; border:1px solid #1a2234; border-radius:6px; padding:10px 18px; margin-top:12px; font-family:'JetBrains Mono', monospace; font-size:11px;">
           <div style="color:#64748b; font-weight:bold; letter-spacing:1px;">4-BAND MASTER PROFILE:</div>
