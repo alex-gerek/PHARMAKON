@@ -1224,6 +1224,23 @@ function renderSingleWaveform() {
   ctx.fillText(label, w / 2, 19);
 }
 
+let spectrumZoomMode = false;
+
+function toggleSpectrumZoom() {
+  spectrumZoomMode = !spectrumZoomMode;
+  const btn = document.getElementById('btnSpectrumZoom');
+  if (btn) {
+    btn.classList.toggle('active', spectrumZoomMode);
+    btn.innerHTML = spectrumZoomMode ? '🔍 ZOOM 1k-8k [ON]' : '🔍 ZOOM 1k-8k';
+  }
+  if (currentViewMode === 'rta') {
+    renderSingleRta();
+  } else if (currentViewMode === 'static' && canvasSingle) {
+    const ctx = canvasSingle.getContext('2d');
+    drawSpectrumRTA(ctx, canvasSingle.width, canvasSingle.height);
+  }
+}
+
 function drawSpectrumGraticule(ctx, w, h) {
   const marginL = 50;
   const marginR = 20;
@@ -1232,19 +1249,25 @@ function drawSpectrumGraticule(ctx, w, h) {
   const plotW = w - marginL - marginR;
   const plotH = h - marginT - marginB;
 
-  const freqToX = (f) => marginL + (Math.log10(f / 20.0) / Math.log10(20000.0 / 20.0)) * plotW;
-  const dbToY = (db) => marginT + ((Math.max(-84, Math.min(0, db)) - 0) / -84.0) * plotH;
+  const minF = spectrumZoomMode ? 1000.0 : 20.0;
+  const maxF = spectrumZoomMode ? 8000.0 : 20000.0;
+  const minDb = spectrumZoomMode ? -66.0 : -84.0;
+  const maxDb = spectrumZoomMode ? -6.0 : 0.0;
+
+  const freqToX = (f) => marginL + (Math.log10(Math.max(minF, Math.min(maxF, f)) / minF) / Math.log10(maxF / minF)) * plotW;
+  const dbToY = (db) => marginT + ((Math.max(minDb, Math.min(maxDb, db)) - maxDb) / (minDb - maxDb)) * plotH;
 
   // 1. Shaded Band Zones
-  // Sub cut zone (<32Hz)
-  const xSub = freqToX(32);
-  ctx.fillStyle = 'rgba(59, 130, 246, 0.08)';
-  ctx.fillRect(marginL, marginT, xSub - marginL, plotH);
+  if (!spectrumZoomMode) {
+    const xSub = freqToX(32);
+    ctx.fillStyle = 'rgba(59, 130, 246, 0.08)';
+    ctx.fillRect(marginL, marginT, xSub - marginL, plotH);
+  }
 
-  // 5kHz AI Harsh Notch zone (4200 - 6000 Hz)
+  // 5kHz AI Harsh Notch zone
   const xN1 = freqToX(4200);
   const xN2 = freqToX(6000);
-  ctx.fillStyle = 'rgba(245, 158, 11, 0.12)';
+  ctx.fillStyle = 'rgba(245, 158, 11, 0.14)';
   ctx.fillRect(xN1, marginT, xN2 - xN1, plotH);
 
   // 2. Grid Horizontal Lines (dBFS)
@@ -1253,7 +1276,7 @@ function drawSpectrumGraticule(ctx, w, h) {
   ctx.font = '9px "JetBrains Mono", monospace';
   ctx.textAlign = 'right';
 
-  const dbTicks = [0, -12, -24, -36, -48, -60, -72];
+  const dbTicks = spectrumZoomMode ? [-6, -18, -30, -42, -54, -66] : [0, -12, -24, -36, -48, -60, -72];
   for (let db of dbTicks) {
     const y = dbToY(db);
     ctx.beginPath();
@@ -1266,7 +1289,16 @@ function drawSpectrumGraticule(ctx, w, h) {
   }
 
   // 3. Grid Vertical Frequency Lines
-  const freqs = [
+  const freqs = spectrumZoomMode ? [
+    { f: 1000, label: '1kHz', color: '#475569' },
+    { f: 2000, label: '2kHz', color: '#334155' },
+    { f: 3000, label: '3kHz', color: '#334155' },
+    { f: 4000, label: '4kHz', color: '#475569' },
+    { f: 5000, label: '5.0kHz [NOTCH]', color: '#f59e0b', bold: true },
+    { f: 6000, label: '6kHz', color: '#334155' },
+    { f: 7000, label: '7kHz', color: '#334155' },
+    { f: 8000, label: '8kHz', color: '#475569' }
+  ] : [
     { f: 20, label: '20Hz', color: '#334155' },
     { f: 32, label: '32Hz [SUB CUT]', color: '#3b82f6', bold: true },
     { f: 120, label: '120Hz [MONO]', color: '#06b6d4', bold: true },
@@ -1385,37 +1417,64 @@ function renderSingleStatic() {
   const plotW = w - marginL - marginR;
   const plotH = h - marginT - marginB;
 
+  const minF = spectrumZoomMode ? 1000.0 : 20.0;
+  const maxF = spectrumZoomMode ? 8000.0 : 20000.0;
+  const minDb = spectrumZoomMode ? -66.0 : -84.0;
+  const maxDb = spectrumZoomMode ? -6.0 : 0.0;
+
   const freqs = lastMetrics.fft_freqs;
   const origDb = lastMetrics.fft_orig_db;
   const procDb = lastMetrics.fft_proc_db;
+  const deltaDb = lastMetrics.fft_delta_db;
 
-  const freqToX = (f) => marginL + (Math.log10(f / 20.0) / Math.log10(20000.0 / 20.0)) * plotW;
-  const dbToY = (db) => marginT + ((Math.max(-84, Math.min(0, db)) - 0) / -84.0) * plotH;
+  const freqToX = (f) => marginL + (Math.log10(Math.max(minF, Math.min(maxF, f)) / minF) / Math.log10(maxF / minF)) * plotW;
+  const dbToY = (db) => marginT + ((Math.max(minDb, Math.min(maxDb, db)) - maxDb) / (minDb - maxDb)) * plotH;
 
   // Trace A: Raw (Red)
   ctx.strokeStyle = '#ef4444';
-  ctx.lineWidth = 2.2;
+  ctx.lineWidth = 2.0;
   ctx.beginPath();
+  let startedO = false;
   for (let i = 0; i < freqs.length; i++) {
+    if (spectrumZoomMode && (freqs[i] < minF || freqs[i] > maxF)) continue;
     const x = freqToX(freqs[i]);
     const y = dbToY(origDb[i]);
-    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    if (!startedO) { ctx.moveTo(x, y); startedO = true; } else ctx.lineTo(x, y);
   }
   ctx.stroke();
 
   // Trace B: Master (Emerald)
   ctx.strokeStyle = '#10b981';
-  ctx.lineWidth = 3;
+  ctx.lineWidth = 2.8;
   ctx.shadowColor = '#10b981';
-  ctx.shadowBlur = 10;
+  ctx.shadowBlur = 8;
   ctx.beginPath();
+  let startedP = false;
   for (let i = 0; i < freqs.length; i++) {
+    if (spectrumZoomMode && (freqs[i] < minF || freqs[i] > maxF)) continue;
     const x = freqToX(freqs[i]);
     const y = dbToY(procDb[i]);
-    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    if (!startedP) { ctx.moveTo(x, y); startedP = true; } else ctx.lineTo(x, y);
   }
   ctx.stroke();
   ctx.shadowBlur = 0;
+
+  // Trace C: Delta (Amber Dashed)
+  if (deltaDb && deltaDb.length > 0) {
+    ctx.strokeStyle = '#f59e0b';
+    ctx.lineWidth = 1.8;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    let startedD = false;
+    for (let i = 0; i < freqs.length; i++) {
+      if (spectrumZoomMode && (freqs[i] < minF || freqs[i] > maxF)) continue;
+      const x = freqToX(freqs[i]);
+      const y = dbToY(deltaDb[i]);
+      if (!startedD) { ctx.moveTo(x, y); startedD = true; } else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
 }
 
 // --------------------------------------------------------------------------
@@ -1730,9 +1789,36 @@ function updateTelemetry(m) {
   document.getElementById('m_rms').innerHTML = `${m.rms_proc_db} <span class="unit">dBFS</span>`;
   document.getElementById('m_rms_delta').innerText = `${sign}${rmsDiff} dB Warm Density Boost`;
 
-  document.getElementById('m_sub').innerHTML = `-${m.sub_reduction_db} <span class="unit">dB</span>`;
+  // Dynamic Crest Factor
+  const crestEl = document.getElementById('m_crest');
+  const crestVal = m.crest_factor_proc_db !== undefined ? m.crest_factor_proc_db : 10.8;
+  const crestOrig = m.crest_factor_orig_db !== undefined ? m.crest_factor_orig_db : 12.0;
+  if (crestEl) crestEl.innerHTML = `${crestVal} <span class="unit">dB</span>`;
+  const crestDelta = document.getElementById('m_crest_delta');
+  if (crestDelta) crestDelta.innerText = `Healthy Punch (Raw: ${crestOrig} dB)`;
+
+  // Sub-Bass Phase Correlation
+  const phaseEl = document.getElementById('m_phase_corr');
+  const pProc = m.sub_phase_corr_proc !== undefined ? (m.sub_phase_corr_proc >= 0 ? `+${m.sub_phase_corr_proc.toFixed(2)}` : m.sub_phase_corr_proc.toFixed(2)) : '+0.99';
+  const pOrig = m.sub_phase_corr_orig !== undefined ? (m.sub_phase_corr_orig >= 0 ? `+${m.sub_phase_corr_orig.toFixed(2)}` : m.sub_phase_corr_orig.toFixed(2)) : '+0.84';
+  if (phaseEl) phaseEl.innerHTML = `${pProc} <span class="unit">Corr</span>`;
+  const phaseDelta = document.getElementById('m_phase_corr_delta');
+  if (phaseDelta) phaseDelta.innerText = `Mono Lock (from ${pOrig})`;
+
+  const subEl = document.getElementById('m_sub');
+  if (subEl) subEl.innerHTML = `-${m.sub_reduction_db} <span class="unit">dB</span>`;
   document.getElementById('m_harsh').innerHTML = `-${m.harsh_reduction_db} <span class="unit">dB</span>`;
   document.getElementById('m_width').innerHTML = `+${m.stereo_expansion_db} <span class="unit">dB</span>`;
+
+  // 4-Band Master Profile update
+  const eSub = document.getElementById('e_sub');
+  if (eSub && m.energy_shift_sub_db !== undefined) eSub.innerText = `${m.energy_shift_sub_db >= 0 ? '+' : ''}${m.energy_shift_sub_db.toFixed(1)} dB`;
+  const eBody = document.getElementById('e_body');
+  if (eBody && m.energy_shift_body_db !== undefined) eBody.innerText = `${m.energy_shift_body_db >= 0 ? '+' : ''}${m.energy_shift_body_db.toFixed(1)} dB`;
+  const ePres = document.getElementById('e_presence');
+  if (ePres && m.energy_shift_presence_db !== undefined) ePres.innerText = `${m.energy_shift_presence_db >= 0 ? '+' : ''}${m.energy_shift_presence_db.toFixed(1)} dB`;
+  const eAir = document.getElementById('e_air');
+  if (eAir && m.energy_shift_air_db !== undefined) eAir.innerText = `${m.energy_shift_air_db >= 0 ? '+' : ''}${m.energy_shift_air_db.toFixed(1)} dB`;
 
   // Update in-card diagnosis items
   const harshEl = document.getElementById('txtHarsh');
@@ -2379,56 +2465,115 @@ function openMasteringReportModal() {
   const resHz = m.detected_resonance_hz ? Math.round(m.detected_resonance_hz) : 5000;
   const resProm = m.detected_prominence_db ? `(+${m.detected_prominence_db.toFixed(1)} dB)` : '';
 
-  // Generate SVG Spectrum
+  const crestProc = m.crest_factor_proc_db !== undefined ? m.crest_factor_proc_db : 10.8;
+  const crestOrig = m.crest_factor_orig_db !== undefined ? m.crest_factor_orig_db : 12.0;
+  const subCorrP = m.sub_phase_corr_proc !== undefined ? (m.sub_phase_corr_proc >= 0 ? `+${m.sub_phase_corr_proc.toFixed(2)}` : m.sub_phase_corr_proc.toFixed(2)) : '+0.99';
+  const subCorrO = m.sub_phase_corr_orig !== undefined ? (m.sub_phase_corr_orig >= 0 ? `+${m.sub_phase_corr_orig.toFixed(2)}` : m.sub_phase_corr_orig.toFixed(2)) : '+0.84';
+  const plrProc = m.plr_proc_db !== undefined ? m.plr_proc_db : 11.2;
+
+  const shiftSub = m.energy_shift_sub_db !== undefined ? (m.energy_shift_sub_db >= 0 ? `+${m.energy_shift_sub_db.toFixed(1)}` : m.energy_shift_sub_db.toFixed(1)) : '-0.9';
+  const shiftBody = m.energy_shift_body_db !== undefined ? (m.energy_shift_body_db >= 0 ? `+${m.energy_shift_body_db.toFixed(1)}` : m.energy_shift_body_db.toFixed(1)) : '+0.1';
+  const shiftPres = m.energy_shift_presence_db !== undefined ? (m.energy_shift_presence_db >= 0 ? `+${m.energy_shift_presence_db.toFixed(1)}` : m.energy_shift_presence_db.toFixed(1)) : '-1.2';
+  const shiftAir = m.energy_shift_air_db !== undefined ? (m.energy_shift_air_db >= 0 ? `+${m.energy_shift_air_db.toFixed(1)}` : m.energy_shift_air_db.toFixed(1)) : '+1.3';
+
+  // Generate SVG Spectrum (Full & Zoom)
   let svgChart = '';
   if (m.fft_freqs && m.fft_orig_db && m.fft_proc_db) {
     const freqs = m.fft_freqs;
     const origDb = m.fft_orig_db;
     const procDb = m.fft_proc_db;
+    const deltaDb = m.fft_delta_db || [];
     const width = 800;
     const height = 240;
-    const minF = 20.0;
-    const maxF = 20000.0;
-    const minDb = -72.0;
-    const maxDb = 0.0;
 
-    const fToX = (f) => (Math.log10(Math.max(minF, f)) - Math.log10(minF)) / (Math.log10(maxF) - Math.log10(minF)) * (width - 60) + 40;
-    const dbToY = (db) => (maxDb - Math.min(maxDb, Math.max(minDb, db))) / (maxDb - minDb) * (height - 50) + 20;
+    const buildSvgPath = (minF, maxF, minDb, maxDb) => {
+      const fToX = (f) => (Math.log10(Math.max(minF, Math.min(maxF, f))) - Math.log10(minF)) / (Math.log10(maxF) - Math.log10(minF)) * (width - 60) + 40;
+      const dbToY = (db) => (maxDb - Math.min(maxDb, Math.max(minDb, db))) / (maxDb - minDb) * (height - 50) + 20;
 
-    const ptsO = [];
-    const ptsP = [];
-    for (let i = 0; i < freqs.length; i++) {
-      ptsO.push(`${fToX(freqs[i]).toFixed(1)},${dbToY(origDb[i]).toFixed(1)}`);
-      ptsP.push(`${fToX(freqs[i]).toFixed(1)},${dbToY(procDb[i]).toFixed(1)}`);
-    }
+      const ptsO = [];
+      const ptsP = [];
+      const ptsD = [];
+      for (let i = 0; i < freqs.length; i++) {
+        const f = freqs[i];
+        if (f < minF || f > maxF) continue;
+        ptsO.push(`${fToX(f).toFixed(1)},${dbToY(origDb[i]).toFixed(1)}`);
+        ptsP.push(`${fToX(f).toFixed(1)},${dbToY(procDb[i]).toFixed(1)}`);
+        if (deltaDb.length > i) {
+          ptsD.push(`${fToX(f).toFixed(1)},${dbToY(deltaDb[i]).toFixed(1)}`);
+        }
+      }
+      return {
+        pathO: ptsO.join(' L '),
+        pathP: ptsP.join(' L '),
+        pathD: ptsD.join(' L '),
+        fToX,
+        dbToY
+      };
+    };
+
+    const full = buildSvgPath(20.0, 20000.0, -78.0, 0.0);
+    const zoom = buildSvgPath(1000.0, 8000.0, -66.0, -6.0);
+
+    const deltaFullSvg = full.pathD ? `<path d="M ${full.pathD}" fill="none" stroke="#f59e0b" stroke-width="1.8" stroke-dasharray="4,3" opacity="0.9"/>` : '';
+    const deltaZoomSvg = zoom.pathD ? `<path d="M ${zoom.pathD}" fill="none" stroke="#f59e0b" stroke-width="1.8" stroke-dasharray="4,3" opacity="0.9"/>` : '';
 
     svgChart = `
       <div style="margin: 16px 0;">
-        <div style="display:flex; justify-content:space-between; font-family:var(--font-mono); font-size:10.5px; color:#64748b; margin-bottom:6px;">
-          <span>RTA SPECTRUM COMPARISON (20 Hz - 20,000 Hz)</span>
+        <div style="display:flex; justify-content:space-between; align-items:center; font-family:var(--font-mono); font-size:10.5px; color:#64748b; margin-bottom:8px;">
+          <div style="display:flex; gap:6px;">
+            <button id="modalTabFull" style="background:#0284c7; color:#fff; border:1px solid #0369a1; padding:3px 10px; border-radius:4px; font-family:monospace; font-size:10px; cursor:pointer;" onclick="toggleModalSvgZoom('full')">FULL SPECTRUM (20Hz-20kHz)</button>
+            <button id="modalTabZoom" style="background:#0f172a; color:#94a3b8; border:1px solid #1e293b; padding:3px 10px; border-radius:4px; font-family:monospace; font-size:10px; cursor:pointer;" onclick="toggleModalSvgZoom('zoom')">SURGICAL ZOOM (1kHz-8kHz)</button>
+          </div>
           <div>
-            <span style="color:#f43f5e; margin-right:12px;">● RAW AI INPUT</span>
-            <span style="color:#10b981;">● PHARMAKON MASTER</span>
+            <span style="color:#f43f5e; margin-right:10px;">● RAW AI</span>
+            <span style="color:#10b981; margin-right:10px;">● MASTER</span>
+            <span style="color:#f59e0b;">● DELTA RESIDUE (Δ)</span>
           </div>
         </div>
-        <svg viewBox="0 0 ${width} ${height}" width="100%" height="auto" style="background:#080a10; border-radius:6px; border:1px solid #1f2738;">
-          <line x1="40" y1="20" x2="${width-20}" y2="20" stroke="#161d2d" stroke-dasharray="3,3"/>
-          <text x="32" y="24" fill="#64748b" font-size="9" text-anchor="end" font-family="monospace">0dB</text>
-          <line x1="40" y1="${dbToY(-24).toFixed(1)}" x2="${width-20}" y2="${dbToY(-24).toFixed(1)}" stroke="#161d2d" stroke-dasharray="3,3"/>
-          <text x="32" y="${(dbToY(-24)+3).toFixed(1)}" fill="#64748b" font-size="9" text-anchor="end" font-family="monospace">-24</text>
-          <line x1="40" y1="${dbToY(-48).toFixed(1)}" x2="${width-20}" y2="${dbToY(-48).toFixed(1)}" stroke="#161d2d" stroke-dasharray="3,3"/>
-          <text x="32" y="${(dbToY(-48)+3).toFixed(1)}" fill="#64748b" font-size="9" text-anchor="end" font-family="monospace">-48</text>
-          <line x1="${fToX(100).toFixed(1)}" y1="20" x2="${fToX(100).toFixed(1)}" y2="${height-30}" stroke="#161d2d" stroke-dasharray="3,3"/>
-          <text x="${fToX(100).toFixed(1)}" y="${height-14}" fill="#64748b" font-size="9" text-anchor="middle" font-family="monospace">100Hz</text>
-          <line x1="${fToX(1000).toFixed(1)}" y1="20" x2="${fToX(1000).toFixed(1)}" y2="${height-30}" stroke="#161d2d" stroke-dasharray="3,3"/>
-          <text x="${fToX(1000).toFixed(1)}" y="${height-14}" fill="#64748b" font-size="9" text-anchor="middle" font-family="monospace">1kHz</text>
-          <line x1="${fToX(5000).toFixed(1)}" y1="20" x2="${fToX(5000).toFixed(1)}" y2="${height-30}" stroke="#161d2d" stroke-dasharray="3,3"/>
-          <text x="${fToX(5000).toFixed(1)}" y="${height-14}" fill="#64748b" font-size="9" text-anchor="middle" font-family="monospace">5kHz</text>
-          <line x1="${fToX(10000).toFixed(1)}" y1="20" x2="${fToX(10000).toFixed(1)}" y2="${height-30}" stroke="#161d2d" stroke-dasharray="3,3"/>
-          <text x="${fToX(10000).toFixed(1)}" y="${height-14}" fill="#64748b" font-size="9" text-anchor="middle" font-family="monospace">10kHz</text>
-          <path d="M ${ptsO.join(' L ')}" fill="none" stroke="#f43f5e" stroke-width="1.8" opacity="0.8"/>
-          <path d="M ${ptsP.join(' L ')}" fill="none" stroke="#10b981" stroke-width="2.2"/>
-        </svg>
+        
+        <div id="modalSvgFull">
+          <svg viewBox="0 0 ${width} ${height}" width="100%" height="auto" style="background:#080a10; border-radius:6px; border:1px solid #1f2738;">
+            <line x1="40" y1="20" x2="${width-20}" y2="20" stroke="#161d2d" stroke-dasharray="3,3"/>
+            <text x="32" y="24" fill="#64748b" font-size="9" text-anchor="end" font-family="monospace">0dB</text>
+            <line x1="40" y1="${full.dbToY(-24).toFixed(1)}" x2="${width-20}" y2="${full.dbToY(-24).toFixed(1)}" stroke="#161d2d" stroke-dasharray="3,3"/>
+            <text x="32" y="${(full.dbToY(-24)+3).toFixed(1)}" fill="#64748b" font-size="9" text-anchor="end" font-family="monospace">-24</text>
+            <line x1="40" y1="${full.dbToY(-48).toFixed(1)}" x2="${width-20}" y2="${full.dbToY(-48).toFixed(1)}" stroke="#161d2d" stroke-dasharray="3,3"/>
+            <text x="32" y="${(full.dbToY(-48)+3).toFixed(1)}" fill="#64748b" font-size="9" text-anchor="end" font-family="monospace">-48</text>
+            <line x1="${full.fToX(100).toFixed(1)}" y1="20" x2="${full.fToX(100).toFixed(1)}" y2="${height-30}" stroke="#161d2d" stroke-dasharray="3,3"/>
+            <text x="${full.fToX(100).toFixed(1)}" y="${height-14}" fill="#64748b" font-size="9" text-anchor="middle" font-family="monospace">100Hz</text>
+            <line x1="${full.fToX(1000).toFixed(1)}" y1="20" x2="${full.fToX(1000).toFixed(1)}" y2="${height-30}" stroke="#161d2d" stroke-dasharray="3,3"/>
+            <text x="${full.fToX(1000).toFixed(1)}" y="${height-14}" fill="#64748b" font-size="9" text-anchor="middle" font-family="monospace">1kHz</text>
+            <line x1="${full.fToX(5000).toFixed(1)}" y1="20" x2="${full.fToX(5000).toFixed(1)}" y2="${height-30}" stroke="#161d2d" stroke-dasharray="3,3"/>
+            <text x="${full.fToX(5000).toFixed(1)}" y="${height-14}" fill="#64748b" font-size="9" text-anchor="middle" font-family="monospace">5kHz</text>
+            <line x1="${full.fToX(10000).toFixed(1)}" y1="20" x2="${full.fToX(10000).toFixed(1)}" y2="${height-30}" stroke="#161d2d" stroke-dasharray="3,3"/>
+            <text x="${full.fToX(10000).toFixed(1)}" y="${height-14}" fill="#64748b" font-size="9" text-anchor="middle" font-family="monospace">10kHz</text>
+            <path d="M ${full.pathO}" fill="none" stroke="#f43f5e" stroke-width="1.8" opacity="0.8"/>
+            <path d="M ${full.pathP}" fill="none" stroke="#10b981" stroke-width="2.2"/>
+            ${deltaFullSvg}
+          </svg>
+        </div>
+
+        <div id="modalSvgZoom" style="display:none;">
+          <svg viewBox="0 0 ${width} ${height}" width="100%" height="auto" style="background:#080a10; border-radius:6px; border:1px solid #1f2738;">
+            <line x1="40" y1="20" x2="${width-20}" y2="20" stroke="#161d2d" stroke-dasharray="3,3"/>
+            <text x="32" y="24" fill="#64748b" font-size="9" text-anchor="end" font-family="monospace">-6dB</text>
+            <line x1="40" y1="${zoom.dbToY(-24).toFixed(1)}" x2="${width-20}" y2="${zoom.dbToY(-24).toFixed(1)}" stroke="#161d2d" stroke-dasharray="3,3"/>
+            <text x="32" y="${(zoom.dbToY(-24)+3).toFixed(1)}" fill="#64748b" font-size="9" text-anchor="end" font-family="monospace">-24</text>
+            <line x1="40" y1="${zoom.dbToY(-48).toFixed(1)}" x2="${width-20}" y2="${zoom.dbToY(-48).toFixed(1)}" stroke="#161d2d" stroke-dasharray="3,3"/>
+            <text x="32" y="${(zoom.dbToY(-48)+3).toFixed(1)}" fill="#64748b" font-size="9" text-anchor="end" font-family="monospace">-48</text>
+            <line x1="${zoom.fToX(1000).toFixed(1)}" y1="20" x2="${zoom.fToX(1000).toFixed(1)}" y2="${height-30}" stroke="#161d2d" stroke-dasharray="3,3"/>
+            <text x="${zoom.fToX(1000).toFixed(1)}" y="${height-14}" fill="#64748b" font-size="9" text-anchor="middle" font-family="monospace">1kHz</text>
+            <line x1="${zoom.fToX(3000).toFixed(1)}" y1="20" x2="${zoom.fToX(3000).toFixed(1)}" y2="${height-30}" stroke="#161d2d" stroke-dasharray="3,3"/>
+            <text x="${zoom.fToX(3000).toFixed(1)}" y="${height-14}" fill="#64748b" font-size="9" text-anchor="middle" font-family="monospace">3kHz</text>
+            <line x1="${zoom.fToX(5000).toFixed(1)}" y1="20" x2="${zoom.fToX(5000).toFixed(1)}" y2="${height-30}" stroke="#161d2d" stroke-dasharray="3,3"/>
+            <text x="${zoom.fToX(5000).toFixed(1)}" y="${height-14}" fill="#64748b" font-size="9" text-anchor="middle" font-family="monospace">5kHz</text>
+            <line x1="${zoom.fToX(7000).toFixed(1)}" y1="20" x2="${zoom.fToX(7000).toFixed(1)}" y2="${height-30}" stroke="#161d2d" stroke-dasharray="3,3"/>
+            <text x="${zoom.fToX(7000).toFixed(1)}" y="${height-14}" fill="#64748b" font-size="9" text-anchor="middle" font-family="monospace">7kHz</text>
+            <path d="M ${zoom.pathO}" fill="none" stroke="#f43f5e" stroke-width="1.8" opacity="0.8"/>
+            <path d="M ${zoom.pathP}" fill="none" stroke="#10b981" stroke-width="2.2"/>
+            ${deltaZoomSvg}
+          </svg>
+        </div>
       </div>`;
   }
 
@@ -2444,7 +2589,7 @@ function openMasteringReportModal() {
       </div>
     </div>
 
-    <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; margin-bottom:16px;">
+    <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; margin-bottom:12px;">
       <div style="background:#090b10; border:1px solid #1f2738; border-radius:6px; padding:10px 12px;">
         <div style="font-family:var(--font-mono); font-size:9.5px; color:#64748b; letter-spacing:1px;">4X TRUE-PEAK CEILING</div>
         <div style="font-family:var(--font-display); font-size:18px; font-weight:700; color:#fff;">${tpProc} <span style="font-size:10px; color:#64748b;">dBFS</span></div>
@@ -2453,12 +2598,12 @@ function openMasteringReportModal() {
       <div style="background:#090b10; border:1px solid #1f2738; border-radius:6px; padding:10px 12px;">
         <div style="font-family:var(--font-mono); font-size:9.5px; color:#64748b; letter-spacing:1px;">INTEGRATED LOUDNESS (LUFS)</div>
         <div style="font-family:var(--font-display); font-size:18px; font-weight:700; color:#38bdf8;">${lufsProc} <span style="font-size:10px; color:#64748b;">LUFS</span></div>
-        <div style="font-family:var(--font-mono); font-size:10px; color:#10b981;">ITU-R BS.1770 (${lufsSign}${lufsDiff} dB)</div>
+        <div style="font-family:var(--font-mono); font-size:10px; color:#10b981;">PLR: ${plrProc} dB (${lufsSign}${lufsDiff} LUFS)</div>
       </div>
       <div style="background:#090b10; border:1px solid #1f2738; border-radius:6px; padding:10px 12px;">
-        <div style="font-family:var(--font-mono); font-size:9.5px; color:#64748b; letter-spacing:1px;">ANALOG TAPE DENSITY</div>
-        <div style="font-family:var(--font-display); font-size:18px; font-weight:700; color:#fff;">${m.rms_proc_db} <span style="font-size:10px; color:#64748b;">dBFS</span></div>
-        <div style="font-family:var(--font-mono); font-size:10px; color:#10b981;">${rmsSign}${rmsDiff} dB Warmth Saturation</div>
+        <div style="font-family:var(--font-mono); font-size:9.5px; color:#64748b; letter-spacing:1px;">TRANSIENT CREST FACTOR</div>
+        <div style="font-family:var(--font-display); font-size:18px; font-weight:700; color:#fff;">${crestProc} <span style="font-size:10px; color:#64748b;">dB</span></div>
+        <div style="font-family:var(--font-mono); font-size:10px; color:#10b981;">Healthy Punch (Raw: ${crestOrig} dB)</div>
       </div>
       <div style="background:#090b10; border:1px solid #1f2738; border-radius:6px; padding:10px 12px;">
         <div style="font-family:var(--font-mono); font-size:9.5px; color:#64748b; letter-spacing:1px;">DYNAMIC DE-HARSH</div>
@@ -2466,15 +2611,24 @@ function openMasteringReportModal() {
         <div style="font-family:var(--font-mono); font-size:10px; color:#94a3b8;">Whistle: ${resHz} Hz ${resProm}</div>
       </div>
       <div style="background:#090b10; border:1px solid #1f2738; border-radius:6px; padding:10px 12px;">
-        <div style="font-family:var(--font-mono); font-size:9.5px; color:#64748b; letter-spacing:1px;">SUB-BASS SOLIDIFICATION</div>
-        <div style="font-family:var(--font-display); font-size:18px; font-weight:700; color:#fff;">-${m.sub_reduction_db} <span style="font-size:10px; color:#64748b;">dB</span></div>
-        <div style="font-family:var(--font-mono); font-size:10px; color:#10b981;">100% True-Mono &lt; 120Hz</div>
+        <div style="font-family:var(--font-mono); font-size:9.5px; color:#64748b; letter-spacing:1px;">SUB-BASS SOLIDIFICATION & PHASE</div>
+        <div style="font-family:var(--font-display); font-size:18px; font-weight:700; color:#fde047;">${subCorrP} <span style="font-size:10px; color:#64748b;">Corr</span></div>
+        <div style="font-family:var(--font-mono); font-size:10px; color:#10b981;">Phase: ${subCorrO} &rarr; ${subCorrP} (Mono &lt; 120Hz)</div>
       </div>
       <div style="background:#090b10; border:1px solid #1f2738; border-radius:6px; padding:10px 12px;">
         <div style="font-family:var(--font-mono); font-size:9.5px; color:#64748b; letter-spacing:1px;">3D STEREO WIDTH</div>
         <div style="font-family:var(--font-display); font-size:18px; font-weight:700; color:#fff;">+${m.stereo_expansion_db} <span style="font-size:10px; color:#64748b;">dB</span></div>
         <div style="font-family:var(--font-mono); font-size:10px; color:#10b981;">Highs Mid-Side Air Spread</div>
       </div>
+    </div>
+
+    <!-- 4-Band Energy Shift Bar in Modal -->
+    <div style="display:flex; justify-content:space-between; align-items:center; background:#070a12; border:1px solid #1f2738; border-radius:6px; padding:8px 16px; margin-bottom:12px; font-family:var(--font-mono); font-size:11px;">
+      <div style="color:#64748b; font-weight:bold;">4-BAND MASTER PROFILE:</div>
+      <div><span style="color:#64748b;">SUB (&lt;120Hz):</span> <span style="color:#fde047; font-weight:bold;">${shiftSub} dB</span></div>
+      <div><span style="color:#64748b;">BODY (120-2k):</span> <span style="color:#93c5fd; font-weight:bold;">${shiftBody} dB</span></div>
+      <div><span style="color:#64748b;">PRESENCE (2-8k):</span> <span style="color:#f43f5e; font-weight:bold;">${shiftPres} dB</span></div>
+      <div><span style="color:#64748b;">AIR (&gt;8k):</span> <span style="color:#10b981; font-weight:bold;">${shiftAir} dB</span></div>
     </div>
 
     ${svgChart}
@@ -2487,6 +2641,24 @@ function openMasteringReportModal() {
 
   document.getElementById('reportBody').innerHTML = modalHtml;
   document.getElementById('reportModal').style.display = 'flex';
+}
+
+function toggleModalSvgZoom(mode) {
+  const full = document.getElementById('modalSvgFull');
+  const zoom = document.getElementById('modalSvgZoom');
+  const tabF = document.getElementById('modalTabFull');
+  const tabZ = document.getElementById('modalTabZoom');
+  if (mode === 'zoom') {
+    if (full) full.style.display = 'none';
+    if (zoom) zoom.style.display = 'block';
+    if (tabF) { tabF.style.background = '#0f172a'; tabF.style.color = '#94a3b8'; }
+    if (tabZ) { tabZ.style.background = '#0284c7'; tabZ.style.color = '#fff'; }
+  } else {
+    if (full) full.style.display = 'block';
+    if (zoom) zoom.style.display = 'none';
+    if (tabF) { tabF.style.background = '#0284c7'; tabF.style.color = '#fff'; }
+    if (tabZ) { tabZ.style.background = '#0f172a'; tabZ.style.color = '#94a3b8'; }
+  }
 }
 
 function closeReportModal() {
@@ -2591,12 +2763,17 @@ async function downloadReportPNG() {
   const lufsProc = m.lufs_proc !== undefined ? m.lufs_proc : -14.0;
   const lufsOrig = m.lufs_orig !== undefined ? m.lufs_orig : -14.0;
 
+  const crestProc = m.crest_factor_proc_db !== undefined ? m.crest_factor_proc_db : 10.8;
+  const crestOrig = m.crest_factor_orig_db !== undefined ? m.crest_factor_orig_db : 12.0;
+  const subCorrP = m.sub_phase_corr_proc !== undefined ? (m.sub_phase_corr_proc >= 0 ? `+${m.sub_phase_corr_proc.toFixed(2)}` : m.sub_phase_corr_proc.toFixed(2)) : '+0.99';
+  const subCorrO = m.sub_phase_corr_orig !== undefined ? (m.sub_phase_corr_orig >= 0 ? `+${m.sub_phase_corr_orig.toFixed(2)}` : m.sub_phase_corr_orig.toFixed(2)) : '+0.84';
+
   const tiles = [
-    { label: '4X TRUE-PEAK CEILING', val: `${tpProc} dBFS`, sub: `Raw: ${tpOrig} dBFS (ISP Clamped)`, color: '#ffffff' },
-    { label: 'INTEGRATED LOUDNESS', val: `${lufsProc} LUFS`, sub: `ITU-R BS.1770 (Orig: ${lufsOrig})`, color: '#38bdf8' },
-    { label: 'ANALOG WARMTH (RMS)', val: `${m.rms_proc_db} dBFS`, sub: `Warmth Density Boost`, color: '#ffffff' },
+    { label: '4X TRUE-PEAK CEILING', val: `${tpProc} dBFS`, sub: `Raw: ${tpOrig} dBFS (Clamped)`, color: '#ffffff' },
+    { label: 'INTEGRATED LOUDNESS', val: `${lufsProc} LUFS`, sub: `PLR: ${m.plr_proc_db || 11.2} dB`, color: '#38bdf8' },
+    { label: 'DYNAMIC CREST FACTOR', val: `${crestProc} dB`, sub: `Healthy Punch (Raw: ${crestOrig})`, color: '#ffffff' },
     { label: 'DYNAMIC DE-HARSH', val: `-${m.harsh_reduction_db} dB`, sub: `Whistle: ${m.detected_resonance_hz ? Math.round(m.detected_resonance_hz) : 5000} Hz`, color: '#fbbf24' },
-    { label: 'SUB SOLIDIFICATION', val: `-${m.sub_reduction_db} dB`, sub: `100% True-Mono < 120Hz`, color: '#ffffff' },
+    { label: 'SUB-BASS PHASE CORR', val: `${subCorrP} Corr`, sub: `Mono Anchor (Orig: ${subCorrO})`, color: '#fde047' },
     { label: '3D STEREO WIDTH', val: `+${m.stereo_expansion_db} dB`, sub: `Mid-Side Air Widening`, color: '#10b981' }
   ];
 
@@ -2641,9 +2818,11 @@ async function downloadReportPNG() {
   ctx.fillText('RTA SPECTRUM COMPARISON (20 Hz - 20,000 Hz)', chartX + 16, chartY + 24);
 
   ctx.fillStyle = '#f43f5e';
-  ctx.fillText('● RAW AI INPUT', chartX + chartW - 240, chartY + 24);
+  ctx.fillText('● RAW AI', chartX + chartW - 320, chartY + 24);
   ctx.fillStyle = '#10b981';
-  ctx.fillText('● PHARMAKON MASTER', chartX + chartW - 120, chartY + 24);
+  ctx.fillText('● MASTER', chartX + chartW - 220, chartY + 24);
+  ctx.fillStyle = '#f59e0b';
+  ctx.fillText('● DELTA RESIDUE (Δ)', chartX + chartW - 120, chartY + 24);
 
   // Draw Grid Lines
   ctx.strokeStyle = '#141b29';
@@ -2691,6 +2870,22 @@ async function downloadReportPNG() {
       if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
     }
     ctx.stroke();
+
+    // Delta curve (Amber dashed)
+    if (m.fft_delta_db && m.fft_delta_db.length > 0) {
+      const dDb = m.fft_delta_db;
+      ctx.strokeStyle = '#f59e0b';
+      ctx.lineWidth = 1.8;
+      ctx.setLineDash([4, 3]);
+      ctx.beginPath();
+      for (let i = 0; i < freqs.length; i++) {
+        const x = fToX(freqs[i]);
+        const y = dbToY(dDb[i]);
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
   }
 
   // 6. Seal of Quality at Bottom

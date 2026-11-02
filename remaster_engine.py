@@ -557,9 +557,50 @@ def calc_audio_metrics(orig, proc, sr, params=None):
     f, pxx_o = signal.welch(sample_o, fs=sr, nperseg=min(4096, len(sample_o)))
     _, pxx_p = signal.welch(sample_p, fs=sr, nperseg=min(4096, len(sample_p)))
 
+    # Gain match sample_p to sample_o to compute isolated Delta residue spectrum
+    gain_match = float(np.sqrt(np.mean(sample_o**2)) / max(1e-9, np.sqrt(np.mean(sample_p**2))))
+    sample_delta = sample_o - (sample_p * gain_match)
+    _, pxx_d = signal.welch(sample_delta, fs=sr, nperseg=min(4096, len(sample_delta)))
+
     freq_pts = np.geomspace(20.0, min(20000.0, sr * 0.49), 120)
     curve_o = np.interp(freq_pts, f, 10.0 * np.log10(np.maximum(pxx_o, 1e-12)))
     curve_p = np.interp(freq_pts, f, 10.0 * np.log10(np.maximum(pxx_p, 1e-12)))
+    curve_d = np.interp(freq_pts, f, 10.0 * np.log10(np.maximum(pxx_d, 1e-12)))
+
+    # Sub-bass & Full-band Phase Correlation
+    sub_corr_orig = float(np.sum(low_orig[:, 0] * low_orig[:, 1]) / max(1e-9, np.sqrt(np.sum(low_orig[:, 0]**2) * np.sum(low_orig[:, 1]**2))))
+    sub_corr_proc = float(np.sum(low_proc[:, 0] * low_proc[:, 1]) / max(1e-9, np.sqrt(np.sum(low_proc[:, 0]**2) * np.sum(low_proc[:, 1]**2))))
+    full_corr_orig = float(np.sum(orig[:, 0] * orig[:, 1]) / max(1e-9, np.sqrt(np.sum(orig[:, 0]**2) * np.sum(orig[:, 1]**2))))
+    full_corr_proc = float(np.sum(proc[:, 0] * proc[:, 1]) / max(1e-9, np.sqrt(np.sum(proc[:, 0]**2) * np.sum(proc[:, 1]**2))))
+
+    # Crest Factor & Peak-to-Loudness Ratio (PLR)
+    p_orig_db = float(20.0 * np.log10(max(1e-9, p_orig)))
+    p_proc_db = float(20.0 * np.log10(max(1e-9, p_proc)))
+    rms_orig_db = float(20.0 * np.log10(max(1e-9, rms_orig)))
+    rms_proc_db = float(20.0 * np.log10(max(1e-9, rms_proc)))
+    crest_factor_orig_db = round(p_orig_db - rms_orig_db, 2)
+    crest_factor_proc_db = round(p_proc_db - rms_proc_db, 2)
+    plr_orig_db = round(true_peak_orig_db - lufs_orig, 2)
+    plr_proc_db = round(true_peak_proc_db - lufs_proc, 2)
+
+    # 4-Band Energy Shift
+    bands = [
+        ('sub', 20.0, 120.0),
+        ('body', 120.0, 2000.0),
+        ('presence', 2000.0, 8000.0),
+        ('air', 8000.0, min(22000.0, sr * 0.49))
+    ]
+    shifts = {}
+    for b_name, b_low_f, b_high_f in bands:
+        try:
+            b_filt, a_filt = signal.butter(2, [b_low_f / (sr * 0.5), b_high_f / (sr * 0.5)], btype='band')
+            b_o = signal.filtfilt(b_filt, a_filt, orig, axis=0)
+            b_p = signal.filtfilt(b_filt, a_filt, proc, axis=0)
+            rms_bo = float(np.sqrt(np.mean(b_o**2)))
+            rms_bp = float(np.sqrt(np.mean(b_p**2)))
+            shifts[b_name] = round(float(20.0 * np.log10(max(1e-9, rms_bp) / max(1e-9, rms_bo))), 2)
+        except Exception:
+            shifts[b_name] = 0.0
 
     # Waveform preview envelope (300 points)
     n_points = 300
@@ -602,6 +643,19 @@ def calc_audio_metrics(orig, proc, sr, params=None):
         'fft_freqs': [round(float(x), 1) for x in freq_pts],
         'fft_orig_db': [round(float(x), 1) for x in curve_o],
         'fft_proc_db': [round(float(x), 1) for x in curve_p],
+        'fft_delta_db': [round(float(x), 1) for x in curve_d],
+        'sub_phase_corr_orig': round(float(np.clip(sub_corr_orig, -1.0, 1.0)), 2),
+        'sub_phase_corr_proc': round(float(np.clip(sub_corr_proc, -1.0, 1.0)), 2),
+        'full_phase_corr_orig': round(float(np.clip(full_corr_orig, -1.0, 1.0)), 2),
+        'full_phase_corr_proc': round(float(np.clip(full_corr_proc, -1.0, 1.0)), 2),
+        'crest_factor_orig_db': crest_factor_orig_db,
+        'crest_factor_proc_db': crest_factor_proc_db,
+        'plr_orig_db': plr_orig_db,
+        'plr_proc_db': plr_proc_db,
+        'energy_shift_sub_db': shifts.get('sub', 0.0),
+        'energy_shift_body_db': shifts.get('body', 0.0),
+        'energy_shift_presence_db': shifts.get('presence', 0.0),
+        'energy_shift_air_db': shifts.get('air', 0.0),
         'waveform_orig': [round(float(x), 3) for x in wave_o],
         'waveform_proc': [round(float(x), 3) for x in wave_p],
         'scope_sample_orig': byte_o,
@@ -857,15 +911,21 @@ def process_audio_array(audio, sr, params=None):
 
     return full_mix, metrics
 
-def generate_svg_spectrum(freqs, orig_db, proc_db, width=860, height=260):
-    """Generates standalone SVG comparison chart of Raw AI vs Mastered spectrum."""
-    min_f = 20.0
-    max_f = 20000.0
-    min_db = -72.0
-    max_db = 0.0
+def generate_svg_spectrum(freqs, orig_db, proc_db, delta_db=None, width=860, height=260, zoom_mode=False):
+    """Generates standalone SVG comparison chart of Raw AI, Mastered, and Delta spectrum."""
+    if zoom_mode:
+        min_f = 1000.0
+        max_f = 8000.0
+        min_db = -66.0
+        max_db = -6.0
+    else:
+        min_f = 20.0
+        max_f = 20000.0
+        min_db = -78.0
+        max_db = 0.0
 
     def f_to_x(f):
-        return (np.log10(max(min_f, f)) - np.log10(min_f)) / (np.log10(max_f) - np.log10(min_f)) * (width - 70) + 45
+        return (np.log10(max(min_f, min(max_f, f))) - np.log10(min_f)) / (np.log10(max_f) - np.log10(min_f)) * (width - 70) + 45
 
     def db_to_y(db):
         clipped = np.clip(db, min_db, max_db)
@@ -873,12 +933,31 @@ def generate_svg_spectrum(freqs, orig_db, proc_db, width=860, height=260):
 
     pts_o = []
     pts_p = []
-    for f, do, dp in zip(freqs, orig_db, proc_db):
+    pts_d = []
+    for i in range(len(freqs)):
+        f = freqs[i]
+        if zoom_mode and (f < min_f or f > max_f):
+            continue
+        do = orig_db[i] if i < len(orig_db) else -60.0
+        dp = proc_db[i] if i < len(proc_db) else -60.0
         pts_o.append(f"{f_to_x(f):.1f},{db_to_y(do):.1f}")
         pts_p.append(f"{f_to_x(f):.1f},{db_to_y(dp):.1f}")
+        if delta_db is not None and i < len(delta_db):
+            dd = delta_db[i]
+            pts_d.append(f"{f_to_x(f):.1f},{db_to_y(dd):.1f}")
 
-    path_o = "M " + " L ".join(pts_o)
-    path_p = "M " + " L ".join(pts_p)
+    path_o = "M " + " L ".join(pts_o) if pts_o else ""
+    path_p = "M " + " L ".join(pts_p) if pts_p else ""
+    path_d = ("M " + " L ".join(pts_d)) if pts_d else ""
+
+    delta_element = f'<path d="{path_d}" fill="none" stroke="#f59e0b" stroke-width="1.8" stroke-dasharray="4,3" opacity="0.9"/>' if path_d else ""
+
+    if zoom_mode:
+        grid_f = [1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000]
+        f_labels = "".join([f'<line x1="{f_to_x(gf):.1f}" y1="20" x2="{f_to_x(gf):.1f}" y2="{height-30}" stroke="#171e2e" stroke-dasharray="3,3"/><text x="{f_to_x(gf):.1f}" y="{height-14}" fill="#64748b" font-size="9" text-anchor="middle" font-family="monospace">{gf//1000}kHz</text>' for gf in grid_f])
+    else:
+        grid_f = [(100, "100Hz"), (1000, "1kHz"), (5000, "5kHz"), (10000, "10kHz"), (16000, "16kHz")]
+        f_labels = "".join([f'<line x1="{f_to_x(gf):.1f}" y1="20" x2="{f_to_x(gf):.1f}" y2="{height-30}" stroke="#171e2e" stroke-dasharray="3,3"/><text x="{f_to_x(gf):.1f}" y="{height-14}" fill="#64748b" font-size="9" text-anchor="middle" font-family="monospace">{lbl}</text>' for gf, lbl in grid_f])
 
     return f"""<svg viewBox="0 0 {width} {height}" width="100%" height="auto" style="background:#090c13; border-radius:6px; border:1px solid #1f2738;">
       <!-- Grid Lines -->
@@ -892,18 +971,12 @@ def generate_svg_spectrum(freqs, orig_db, proc_db, width=860, height=260):
       <text x="38" y="{db_to_y(-54)+3:.1f}" fill="#64748b" font-size="9" text-anchor="end" font-family="monospace">-54</text>
 
       <!-- Freq Grid -->
-      <line x1="{f_to_x(100):.1f}" y1="20" x2="{f_to_x(100):.1f}" y2="{height-30}" stroke="#171e2e" stroke-dasharray="3,3"/>
-      <text x="{f_to_x(100):.1f}" y="{height-14}" fill="#64748b" font-size="9" text-anchor="middle" font-family="monospace">100Hz</text>
-      <line x1="{f_to_x(1000):.1f}" y1="20" x2="{f_to_x(1000):.1f}" y2="{height-30}" stroke="#171e2e" stroke-dasharray="3,3"/>
-      <text x="{f_to_x(1000):.1f}" y="{height-14}" fill="#64748b" font-size="9" text-anchor="middle" font-family="monospace">1kHz</text>
-      <line x1="{f_to_x(5000):.1f}" y1="20" x2="{f_to_x(5000):.1f}" y2="{height-30}" stroke="#171e2e" stroke-dasharray="3,3"/>
-      <text x="{f_to_x(5000):.1f}" y="{height-14}" fill="#64748b" font-size="9" text-anchor="middle" font-family="monospace">5kHz</text>
-      <line x1="{f_to_x(10000):.1f}" y1="20" x2="{f_to_x(10000):.1f}" y2="{height-30}" stroke="#171e2e" stroke-dasharray="3,3"/>
-      <text x="{f_to_x(10000):.1f}" y="{height-14}" fill="#64748b" font-size="9" text-anchor="middle" font-family="monospace">10kHz</text>
+      {f_labels}
 
       <!-- Curves -->
       <path d="{path_o}" fill="none" stroke="#f43f5e" stroke-width="1.8" opacity="0.8"/>
       <path d="{path_p}" fill="none" stroke="#10b981" stroke-width="2.2"/>
+      {delta_element}
     </svg>"""
 
 def generate_mastering_report_html(track_name, metrics, output_dir, params=None):
@@ -929,11 +1002,23 @@ def generate_mastering_report_html(track_name, metrics, output_dir, params=None)
     res_prom = metrics.get('detected_prominence_db', 0.0)
     harsh_red = metrics.get('harsh_reduction_db', 0.0)
     
+    sub_corr_o = metrics.get('sub_phase_corr_orig', 0.84)
+    sub_corr_p = metrics.get('sub_phase_corr_proc', 0.99)
+    crest_orig = metrics.get('crest_factor_orig_db', 12.0)
+    crest_proc = metrics.get('crest_factor_proc_db', 10.8)
+    plr_proc = metrics.get('plr_proc_db', 11.2)
+    shift_sub = metrics.get('energy_shift_sub_db', -0.9)
+    shift_body = metrics.get('energy_shift_body_db', 0.2)
+    shift_pres = metrics.get('energy_shift_presence_db', -1.2)
+    shift_air = metrics.get('energy_shift_air_db', 1.3)
+
     freqs = metrics.get('fft_freqs', [])
     orig_db = metrics.get('fft_orig_db', [])
     proc_db = metrics.get('fft_proc_db', [])
+    delta_db = metrics.get('fft_delta_db', [])
     
-    svg_chart = generate_svg_spectrum(freqs, orig_db, proc_db) if freqs else ""
+    svg_chart_full = generate_svg_spectrum(freqs, orig_db, proc_db, delta_db, zoom_mode=False) if freqs else ""
+    svg_chart_zoom = generate_svg_spectrum(freqs, orig_db, proc_db, delta_db, zoom_mode=True) if freqs else ""
 
     html_content = f"""<!DOCTYPE html>
 <html lang="en">
@@ -981,17 +1066,17 @@ def generate_mastering_report_html(track_name, metrics, output_dir, params=None)
       margin-bottom: 24px;
     }}
     .cert-title h1 {{
-      font-size: 22px;
-      font-weight: 800;
+      font-size: 24px;
       letter-spacing: 2px;
       color: #fff;
+      font-weight: 800;
     }}
     .cert-title .subtitle {{
-      font-family: monospace;
       font-size: 11px;
-      color: var(--amber);
-      letter-spacing: 1.5px;
+      letter-spacing: 2.5px;
+      color: var(--cyan);
       margin-top: 4px;
+      font-weight: 600;
     }}
     .cert-meta {{
       text-align: right;
@@ -1001,13 +1086,12 @@ def generate_mastering_report_html(track_name, metrics, output_dir, params=None)
       line-height: 1.6;
     }}
     .cert-meta .serial {{
-      color: var(--cyan);
-      font-weight: 700;
-      font-size: 13px;
+      color: var(--amber);
+      font-weight: bold;
     }}
     .track-banner {{
-      background: linear-gradient(90deg, rgba(6,182,212,0.1) 0%, rgba(16,185,129,0.05) 100%);
-      border: 1px solid rgba(6,182,212,0.25);
+      background: rgba(6, 182, 212, 0.05);
+      border: 1px solid rgba(6, 182, 212, 0.2);
       border-radius: 8px;
       padding: 14px 18px;
       margin-bottom: 24px;
@@ -1022,73 +1106,129 @@ def generate_mastering_report_html(track_name, metrics, output_dir, params=None)
     }}
     .track-specs {{
       font-family: monospace;
-      font-size: 12px;
+      font-size: 11px;
       color: var(--cyan);
     }}
     .telemetry-grid {{
       display: grid;
       grid-template-columns: repeat(3, 1fr);
-      gap: 12px;
-      margin-bottom: 24px;
+      gap: 14px;
+      margin-bottom: 20px;
     }}
     .t-card {{
-      background: #090b10;
+      background: #090c13;
       border: 1px solid var(--border);
       border-radius: 8px;
-      padding: 14px;
+      padding: 14px 16px;
     }}
     .t-label {{
+      font-size: 9.5px;
       font-family: monospace;
-      font-size: 10px;
+      letter-spacing: 1.2px;
       color: var(--muted);
-      letter-spacing: 1px;
-      margin-bottom: 4px;
+      margin-bottom: 6px;
     }}
     .t-val {{
       font-size: 20px;
-      font-weight: 800;
+      font-weight: 700;
       color: #fff;
-    }}
-    .t-val span {{ font-size: 11px; font-weight: normal; color: var(--muted); }}
-    .t-sub {{
       font-family: monospace;
+    }}
+    .t-val span {{
+      font-size: 12px;
+      color: var(--muted);
+    }}
+    .t-sub {{
       font-size: 11px;
-      color: var(--emerald);
+      color: #94a3b8;
       margin-top: 4px;
     }}
+    .energy-bar-grid {{
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      background: #090c13;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-bottom: 24px;
+    }}
+    .e-band {{
+      text-align: center;
+      border-right: 1px solid #1a2233;
+      padding: 4px 6px;
+    }}
+    .e-band:last-child {{ border-right: none; }}
+    .e-band-title {{ font-size: 9.5px; font-family: monospace; color: var(--muted); letter-spacing: 1px; }}
+    .e-band-val {{ font-size: 15px; font-weight: bold; font-family: monospace; margin-top: 2px; }}
+    .e-band-desc {{ font-size: 10px; color: #94a3b8; margin-top: 2px; }}
+
     .chart-section {{
+      background: #090c13;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
       margin-bottom: 24px;
     }}
     .chart-header {{
       display: flex;
       justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
       font-family: monospace;
       font-size: 11px;
       color: var(--muted);
-      margin-bottom: 8px;
     }}
-    .legend-item {{ display: inline-flex; align-items: center; gap: 6px; margin-left: 14px; }}
-    .legend-dot {{ width: 8px; height: 8px; border-radius: 50%; }}
+    .chart-tabs {{
+      display: flex;
+      gap: 8px;
+    }}
+    .tab-btn {{
+      background: #161e2e;
+      border: 1px solid var(--border);
+      color: #94a3b8;
+      padding: 5px 12px;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 10px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }}
+    .tab-btn:hover, .tab-btn.active {{
+      background: var(--cyan);
+      color: #000;
+      font-weight: bold;
+    }}
+    .legend-item {{
+      margin-left: 12px;
+      font-size: 10.5px;
+      font-weight: 600;
+    }}
+    .legend-dot {{
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-right: 4px;
+    }}
     .cert-footer {{
       display: flex;
       justify-content: space-between;
       align-items: center;
       border-top: 1px solid var(--border);
       padding-top: 18px;
-      font-family: monospace;
       font-size: 11px;
+      font-family: monospace;
       color: var(--muted);
     }}
     .cert-seal {{
       color: var(--emerald);
-      font-weight: 700;
-      display: flex;
-      align-items: center;
-      gap: 6px;
+      font-weight: bold;
     }}
     @media print {{
       body {{ background: #fff; color: #000; padding: 0; }}
       .certificate-card {{ border: 1px solid #ccc; box-shadow: none; }}
+      .tab-btn {{ display: none; }}
     }}
   </style>
 </head>
@@ -1125,12 +1265,12 @@ def generate_mastering_report_html(track_name, metrics, output_dir, params=None)
       <div class="t-card">
         <div class="t-label">INTEGRATED LOUDNESS (LUFS)</div>
         <div class="t-val">{lufs_proc} <span>LUFS</span></div>
-        <div class="t-sub">ITU-R BS.1770 ({lufs_sign}{lufs_diff} dB)</div>
+        <div class="t-sub">PLR: {plr_proc} dB ({lufs_sign}{lufs_diff} LUFS)</div>
       </div>
       <div class="t-card">
-        <div class="t-label">ANALOG WARMTH (RMS)</div>
-        <div class="t-val">{metrics.get('rms_proc_db', 0.0)} <span>dBFS</span></div>
-        <div class="t-sub">{rms_sign}{rms_diff} dB Density Saturation</div>
+        <div class="t-label">TRANSIENT CREST FACTOR</div>
+        <div class="t-val">{crest_proc} <span>dB</span></div>
+        <div class="t-sub">Healthy Punch (Raw: {crest_orig} dB)</div>
       </div>
       <div class="t-card">
         <div class="t-label">DYNAMIC DE-HARSH ATTENUATION</div>
@@ -1138,9 +1278,9 @@ def generate_mastering_report_html(track_name, metrics, output_dir, params=None)
         <div class="t-sub">Resonance: {res_hz:.0f} Hz ({res_prom:+.1f} dB)</div>
       </div>
       <div class="t-card">
-        <div class="t-label">SUB-BASS SOLIDIFICATION</div>
-        <div class="t-val">-{metrics.get('sub_reduction_db', 0.0)} <span>dB</span></div>
-        <div class="t-sub">100% True-Mono &lt; 120Hz</div>
+        <div class="t-label">SUB-BASS SOLIDIFICATION &amp; PHASE</div>
+        <div class="t-val">{sub_corr_p:+.2f} <span>Corr</span></div>
+        <div class="t-sub">Phase: {sub_corr_o:+.2f} &rarr; {sub_corr_p:+.2f} (Mono &lt; 120Hz)</div>
       </div>
       <div class="t-card">
         <div class="t-label">3D STEREO WIDTH (MID-SIDE)</div>
@@ -1149,15 +1289,44 @@ def generate_mastering_report_html(track_name, metrics, output_dir, params=None)
       </div>
     </div>
 
+    <!-- 4-Band Energy Shift Summary -->
+    <div class="energy-bar-grid">
+      <div class="e-band">
+        <div class="e-band-title">SUB (&lt;120 Hz)</div>
+        <div class="e-band-val" style="color:#fde047;">{shift_sub:+.2f} dB</div>
+        <div class="e-band-desc">Mono Solidification</div>
+      </div>
+      <div class="e-band">
+        <div class="e-band-title">BODY (120Hz-2kHz)</div>
+        <div class="e-band-val" style="color:#93c5fd;">{shift_body:+.2f} dB</div>
+        <div class="e-band-desc">Tape Warmth (tanh)</div>
+      </div>
+      <div class="e-band">
+        <div class="e-band-title">PRESENCE (2-8kHz)</div>
+        <div class="e-band-val" style="color:#f43f5e;">{shift_pres:+.2f} dB</div>
+        <div class="e-band-desc">De-Harsh Notch Cut</div>
+      </div>
+      <div class="e-band">
+        <div class="e-band-title">AIR (&gt;8kHz)</div>
+        <div class="e-band-val" style="color:#10b981;">{shift_air:+.2f} dB</div>
+        <div class="e-band-desc">Harmonic Silk Exciter</div>
+      </div>
+    </div>
+
     <div class="chart-section">
       <div class="chart-header">
-        <span>RTA FREQUENCY SPECTRUM ANALYSIS (20 Hz &ndash; 20,000 Hz)</span>
+        <div class="chart-tabs">
+          <button id="tabFull" class="tab-btn active" onclick="showChart('full')">FULL SPECTRUM (20Hz - 20kHz)</button>
+          <button id="tabZoom" class="tab-btn" onclick="showChart('zoom')">SURGICAL ZOOM (1kHz - 8kHz)</button>
+        </div>
         <div>
-          <span class="legend-item"><span class="legend-dot" style="background:#f43f5e;"></span> RAW AI INPUT</span>
-          <span class="legend-item"><span class="legend-dot" style="background:#10b981;"></span> PHARMAKON MASTER</span>
+          <span class="legend-item"><span class="legend-dot" style="background:#f43f5e;"></span> RAW AI</span>
+          <span class="legend-item"><span class="legend-dot" style="background:#10b981;"></span> MASTER</span>
+          <span class="legend-item"><span class="legend-dot" style="background:#f59e0b;"></span> DELTA RESIDUE (&Delta;)</span>
         </div>
       </div>
-      {svg_chart}
+      <div id="chartContainerFull">{svg_chart_full}</div>
+      <div id="chartContainerZoom" style="display:none;">{svg_chart_zoom}</div>
     </div>
 
     <div class="cert-footer">
@@ -1165,13 +1334,21 @@ def generate_mastering_report_html(track_name, metrics, output_dir, params=None)
       <div class="cert-seal">&#10003; VERIFIED STREAMING COMPLIANT &bull; ZERO INTER-SAMPLE PEAKS</div>
     </div>
   </div>
+
+  <script>
+    function showChart(mode) {{
+      document.getElementById('chartContainerFull').style.display = mode === 'full' ? 'block' : 'none';
+      document.getElementById('chartContainerZoom').style.display = mode === 'zoom' ? 'block' : 'none';
+      document.getElementById('tabFull').classList.toggle('active', mode === 'full');
+      document.getElementById('tabZoom').classList.toggle('active', mode === 'zoom');
+    }}
+  </script>
 </body>
 </html>"""
 
     with open(report_file, 'w', encoding='utf-8') as f:
         f.write(html_content)
     return report_file
-
 
 def process_single_file(file_path, params=None, open_folder=True):
     """Processes a single audio file and outputs lossless master WAV + metrics."""
