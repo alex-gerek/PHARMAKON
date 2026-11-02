@@ -565,7 +565,10 @@ def calc_audio_metrics(orig, proc, sr, params=None):
     freq_pts = np.geomspace(20.0, min(20000.0, sr * 0.49), 120)
     curve_o = np.interp(freq_pts, f, 10.0 * np.log10(np.maximum(pxx_o, 1e-12)))
     curve_p = np.interp(freq_pts, f, 10.0 * np.log10(np.maximum(pxx_p, 1e-12)))
-    curve_d = np.interp(freq_pts, f, 10.0 * np.log10(np.maximum(pxx_d, 1e-12)))
+    curve_d_raw = np.interp(freq_pts, f, 10.0 * np.log10(np.maximum(pxx_d, 1e-12)))
+    # Calibrated visual residue curve (+22 dB boost, clamped -74 dB to -10 dB)
+    # Brings isolated removed noise/whistle/rumble profile directly onto the audible visible scale
+    curve_d = np.clip(curve_d_raw + 22.0, -74.0, -10.0)
 
     # Sub-bass & Full-band Phase Correlation
     sub_corr_orig = float(np.sum(low_orig[:, 0] * low_orig[:, 1]) / max(1e-9, np.sqrt(np.sum(low_orig[:, 0]**2) * np.sum(low_orig[:, 1]**2))))

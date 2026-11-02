@@ -1462,14 +1462,16 @@ function renderSingleStatic() {
   // Trace C: Delta (Amber Dashed)
   if (deltaDb && deltaDb.length > 0) {
     ctx.strokeStyle = '#f59e0b';
-    ctx.lineWidth = 1.8;
-    ctx.setLineDash([4, 3]);
+    ctx.lineWidth = 2.0;
+    ctx.setLineDash([5, 3]);
     ctx.beginPath();
     let startedD = false;
     for (let i = 0; i < freqs.length; i++) {
       if (spectrumZoomMode && (freqs[i] < minF || freqs[i] > maxF)) continue;
       const x = freqToX(freqs[i]);
-      const y = dbToY(deltaDb[i]);
+      const rawD = deltaDb[i];
+      const dVal = rawD < -62 ? Math.max(minDb, rawD + 22) : rawD;
+      const y = dbToY(dVal);
       if (!startedD) { ctx.moveTo(x, y); startedD = true; } else ctx.lineTo(x, y);
     }
     ctx.stroke();
@@ -2506,7 +2508,9 @@ function openMasteringReportModal() {
         ptsO.push(`${fToX(f).toFixed(1)},${dbToY(origDb[i]).toFixed(1)}`);
         ptsP.push(`${fToX(f).toFixed(1)},${dbToY(procDb[i]).toFixed(1)}`);
         if (deltaDb.length > i) {
-          ptsD.push(`${fToX(f).toFixed(1)},${dbToY(deltaDb[i]).toFixed(1)}`);
+          const rawD = deltaDb[i];
+          const dVal = rawD < -62 ? Math.max(-74, rawD + 22) : rawD;
+          ptsD.push(`${fToX(f).toFixed(1)},${dbToY(dVal).toFixed(1)}`);
         }
       }
       return {
@@ -2519,22 +2523,16 @@ function openMasteringReportModal() {
     };
 
     const full = buildSvgPath(20.0, 20000.0, -78.0, 0.0);
-    const zoom = buildSvgPath(1000.0, 8000.0, -66.0, -6.0);
-
-    const deltaFullSvg = full.pathD ? `<path d="M ${full.pathD}" fill="none" stroke="#f59e0b" stroke-width="1.8" stroke-dasharray="4,3" opacity="0.9"/>` : '';
-    const deltaZoomSvg = zoom.pathD ? `<path d="M ${zoom.pathD}" fill="none" stroke="#f59e0b" stroke-width="1.8" stroke-dasharray="4,3" opacity="0.9"/>` : '';
+    const deltaFullSvg = full.pathD ? `<path d="M ${full.pathD}" fill="none" stroke="#f59e0b" stroke-width="2.2" stroke-dasharray="5,3" opacity="0.95"/>` : '';
 
     svgChart = `
       <div style="margin: 16px 0;">
-        <div style="display:flex; justify-content:space-between; align-items:center; font-family:var(--font-mono); font-size:10.5px; color:#64748b; margin-bottom:8px;">
-          <div style="display:flex; gap:6px;">
-            <button id="modalTabFull" style="background:#0284c7; color:#fff; border:1px solid #0369a1; padding:3px 10px; border-radius:4px; font-family:monospace; font-size:10px; cursor:pointer;" onclick="toggleModalSvgZoom('full')">FULL SPECTRUM (20Hz-20kHz)</button>
-            <button id="modalTabZoom" style="background:#0f172a; color:#94a3b8; border:1px solid #1e293b; padding:3px 10px; border-radius:4px; font-family:monospace; font-size:10px; cursor:pointer;" onclick="toggleModalSvgZoom('zoom')">SURGICAL ZOOM (1kHz-8kHz)</button>
-          </div>
+        <div style="display:flex; justify-content:space-between; align-items:center; font-family:var(--font-mono); font-size:11px; color:#64748b; margin-bottom:8px;">
+          <div style="letter-spacing:1px; font-weight:600;">RTA SPECTRUM COMPARISON (20 Hz - 20,000 Hz)</div>
           <div>
-            <span style="color:#f43f5e; margin-right:10px;">● RAW AI</span>
-            <span style="color:#10b981; margin-right:10px;">● MASTER</span>
-            <span style="color:#f59e0b;">● DELTA RESIDUE (Δ)</span>
+            <span style="color:#f43f5e; margin-right:12px; font-weight:bold;">● RAW AI INPUT</span>
+            <span style="color:#10b981; margin-right:12px; font-weight:bold;">● PHARMAKON MASTER</span>
+            <span style="color:#f59e0b; font-weight:bold;">● DELTA RESIDUE (Δ)</span>
           </div>
         </div>
         
@@ -2557,28 +2555,6 @@ function openMasteringReportModal() {
             <path d="M ${full.pathO}" fill="none" stroke="#f43f5e" stroke-width="1.8" opacity="0.8"/>
             <path d="M ${full.pathP}" fill="none" stroke="#10b981" stroke-width="2.2"/>
             ${deltaFullSvg}
-          </svg>
-        </div>
-
-        <div id="modalSvgZoom" style="display:none;">
-          <svg viewBox="0 0 ${width} ${height}" width="100%" height="auto" style="background:#080a10; border-radius:6px; border:1px solid #1f2738;">
-            <line x1="40" y1="20" x2="${width-20}" y2="20" stroke="#161d2d" stroke-dasharray="3,3"/>
-            <text x="32" y="24" fill="#64748b" font-size="9" text-anchor="end" font-family="monospace">-6dB</text>
-            <line x1="40" y1="${zoom.dbToY(-24).toFixed(1)}" x2="${width-20}" y2="${zoom.dbToY(-24).toFixed(1)}" stroke="#161d2d" stroke-dasharray="3,3"/>
-            <text x="32" y="${(zoom.dbToY(-24)+3).toFixed(1)}" fill="#64748b" font-size="9" text-anchor="end" font-family="monospace">-24</text>
-            <line x1="40" y1="${zoom.dbToY(-48).toFixed(1)}" x2="${width-20}" y2="${zoom.dbToY(-48).toFixed(1)}" stroke="#161d2d" stroke-dasharray="3,3"/>
-            <text x="32" y="${(zoom.dbToY(-48)+3).toFixed(1)}" fill="#64748b" font-size="9" text-anchor="end" font-family="monospace">-48</text>
-            <line x1="${zoom.fToX(1000).toFixed(1)}" y1="20" x2="${zoom.fToX(1000).toFixed(1)}" y2="${height-30}" stroke="#161d2d" stroke-dasharray="3,3"/>
-            <text x="${zoom.fToX(1000).toFixed(1)}" y="${height-14}" fill="#64748b" font-size="9" text-anchor="middle" font-family="monospace">1kHz</text>
-            <line x1="${zoom.fToX(3000).toFixed(1)}" y1="20" x2="${zoom.fToX(3000).toFixed(1)}" y2="${height-30}" stroke="#161d2d" stroke-dasharray="3,3"/>
-            <text x="${zoom.fToX(3000).toFixed(1)}" y="${height-14}" fill="#64748b" font-size="9" text-anchor="middle" font-family="monospace">3kHz</text>
-            <line x1="${zoom.fToX(5000).toFixed(1)}" y1="20" x2="${zoom.fToX(5000).toFixed(1)}" y2="${height-30}" stroke="#161d2d" stroke-dasharray="3,3"/>
-            <text x="${zoom.fToX(5000).toFixed(1)}" y="${height-14}" fill="#64748b" font-size="9" text-anchor="middle" font-family="monospace">5kHz</text>
-            <line x1="${zoom.fToX(7000).toFixed(1)}" y1="20" x2="${zoom.fToX(7000).toFixed(1)}" y2="${height-30}" stroke="#161d2d" stroke-dasharray="3,3"/>
-            <text x="${zoom.fToX(7000).toFixed(1)}" y="${height-14}" fill="#64748b" font-size="9" text-anchor="middle" font-family="monospace">7kHz</text>
-            <path d="M ${zoom.pathO}" fill="none" stroke="#f43f5e" stroke-width="1.8" opacity="0.8"/>
-            <path d="M ${zoom.pathP}" fill="none" stroke="#10b981" stroke-width="2.2"/>
-            ${deltaZoomSvg}
           </svg>
         </div>
       </div>`;
