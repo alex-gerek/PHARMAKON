@@ -24,3 +24,8 @@ articles_ru/
 *.lic
 *.secret
 
+
+# MSVC build artifacts
+*.obj
+*.exp
+*.lib
