@@ -30,3 +30,7 @@ articles_ru/
 *.exp
 *.lib
 *.dll
+
+# Online auto-updater live overlay
+_live_patches/
+_live_patches_staging/
