@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PHARMAKON // Studio Audio Antidote & Mastering Console</title>
-  <link rel="stylesheet" href="/static/style.css?v=v8_1793350093">
+  <link rel="stylesheet" href="/static/style.css?v=v11_autosync_20261103">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;800&family=Orbitron:wght@500;700;900&family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
@@ -22,8 +22,12 @@
         <div class="brand-titles">
           <div class="flex items-center gap-3">
             <div class="jewel-lamp jewel-lamp-amber"></div>
-            <h1 class="brand-name">PHARMAKON <span class="version-tag">2.0 PRO</span></h1>
-            <span class="serial-plate">SERIAL: LG-PH-002-PRO</span>
+            <h1 class="brand-name">PHARMAKON <span class="version-tag" id="headerVersionTag">2.0</span></h1>
+            <span class="serial-plate">SERIAL: LG-PH-002</span>
+            <button id="autoSyncBadge" class="auto-sync-pill" onclick="triggerManualUpdateCheck()" title="Online Patch Sync Active — automatically checks & applies DSP/UI updates when online (100% functional offline)">
+              <span class="sync-dot"></span>
+              <span id="autoSyncText">AUTO-SYNC v2.0.2</span>
+            </button>
           </div>
           <p class="brand-subtitle">LEX GEREK SOUND ARCHITECTURE &bull; DUAL 60 FPS PHOSPHOR CATHODE SCOPES &bull; TAPE GLUE TANH</p>
         </div>
@@ -649,6 +653,6 @@
     </div>
   </div>
 
-  <script src="/static/app.js?v=v10_audiophile_fix_20261103"></script>
+  <script src="/static/app.js?v=v11_autosync_20261103"></script>
 </body>
 </html>

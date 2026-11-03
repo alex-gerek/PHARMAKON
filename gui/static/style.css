@@ -145,6 +145,53 @@ body.theme-cybernoir {
   user-select: none;
 }
 
+.auto-sync-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 1.2px;
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.09);
+  padding: 3px 9px;
+  border-radius: 3px;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-transform: uppercase;
+}
+.auto-sync-pill:hover {
+  background: rgba(16, 185, 129, 0.18);
+  border-color: #10b981;
+}
+.auto-sync-pill .sync-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 6px #10b981;
+}
+.auto-sync-pill.offline {
+  color: #94a3b8;
+  background: rgba(148, 163, 184, 0.08);
+  border-color: rgba(148, 163, 184, 0.28);
+}
+.auto-sync-pill.offline .sync-dot {
+  background: #64748b;
+  box-shadow: none;
+}
+.auto-sync-pill.update-ready {
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.14);
+  border-color: rgba(245, 158, 11, 0.6);
+}
+.auto-sync-pill.update-ready .sync-dot {
+  background: #f59e0b;
+  box-shadow: 0 0 8px #f59e0b;
+}
+
+
 /* WORKFLOW MODE TOGGLE (PHARMAKON 1 vs PHARMAKON 2) */
 .mode-selector-rack {
   display: flex;

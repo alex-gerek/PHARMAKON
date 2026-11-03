@@ -35,6 +35,7 @@ hidden_imports = [
     'numpy',
     'tkinter',
     'tkinter.filedialog',
+    'auto_updater',
 ]
 hidden_imports += collect_submodules('uvicorn')
 hidden_imports += collect_submodules('fastapi')
@@ -44,6 +45,7 @@ datas = [
     ('gui/static', 'gui/static'),
     ('demo_audio', 'demo_audio'),
     ('pharmakon_hd_256.ico', '.'),
+    ('VERSION.json', '.'),
 ]
 datas += collect_data_files('soundfile')
 

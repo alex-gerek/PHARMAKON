@@ -94,6 +94,14 @@ def main():
             print("PHARMAKON Server is not currently running.")
         return
 
+    # Smart Online Patch Sync on launch (silent fallback if offline)
+    try:
+        import auto_updater
+        auto_updater.sync_online_patches(timeout=2.0)
+        auto_updater.activate_live_patches(load_server=getattr(sys, 'frozen', False))
+    except Exception:
+        pass
+
     # If already running, just open UI
     if is_server_running():
         open_ui()

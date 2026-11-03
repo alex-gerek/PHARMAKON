@@ -19,6 +19,12 @@ else:
     PROJECT_DIR = SCRIPT_DIR.parent
     sys.path.insert(0, str(PROJECT_DIR))
 
+try:
+    import auto_updater
+    auto_updater.activate_live_patches(load_server=False)
+except Exception:
+    auto_updater = None
+
 import remaster_engine
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.staticfiles import StaticFiles
@@ -99,14 +105,37 @@ def browse_native(mode: str = "file"):
 @app.get("/api/system-info")
 def get_system_info():
     demos = [d for d in DEMO_TRACKS if os.path.exists(d["path"])]
+    ver = "2.0.2"
+    if auto_updater is not None:
+        try:
+            ver = auto_updater.get_active_version_info().get("version", ver)
+        except Exception:
+            pass
     return {
         "engine": "PHARMAKON 2.0 DSP",
+        "version": ver,
+        "auto_update": True,
         "author": "Lex Gerek",
         "default_params": remaster_engine.DEFAULT_PARAMS,
         "presets": remaster_engine.PRESETS,
         "demos": demos,
         "status": "ready"
     }
+
+@app.get("/api/update-status")
+async def get_update_status():
+    if auto_updater is None:
+        return {"state": "offline", "local_version": "2.0.2"}
+    cached = auto_updater.get_cached_status()
+    if cached.get("state") == "idle":
+        return await asyncio.to_thread(auto_updater.sync_online_patches, False, 2.5)
+    return cached
+
+@app.post("/api/check-update")
+async def check_and_sync_update():
+    if auto_updater is None:
+        return {"state": "offline", "local_version": "2.0.2"}
+    return await asyncio.to_thread(auto_updater.sync_online_patches, True, 4.0)
 
 @app.get("/api/presets")
 def get_presets():
@@ -635,6 +664,18 @@ if getattr(sys, 'frozen', False):
         elif (BASE_DIR / "static").exists():
             STATIC_DIR = BASE_DIR / "static"
 STATIC_DIR.mkdir(exist_ok=True)
+
+@app.get("/static/{asset_path:path}")
+def serve_static_overlay(asset_path: str):
+    clean_rel = asset_path.lstrip("/").replace("..", "")
+    eff_dir = auto_updater.get_effective_static_dir(STATIC_DIR) if auto_updater is not None else STATIC_DIR
+    for root_cand in (eff_dir, STATIC_DIR):
+        target_f = root_cand / clean_rel
+        if target_f.is_file():
+            headers = {"Cache-Control": "no-cache"} if clean_rel.endswith((".js", ".css", ".html")) else {}
+            return FileResponse(str(target_f), headers=headers)
+    raise HTTPException(status_code=404, detail="Static asset not found")
+
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 @app.post("/api/shutdown")
@@ -648,7 +689,10 @@ def shutdown():
 
 @app.get("/")
 def get_index():
-    index_file = STATIC_DIR / "index.html"
+    eff_dir = auto_updater.get_effective_static_dir(STATIC_DIR) if auto_updater is not None else STATIC_DIR
+    index_file = eff_dir / "index.html"
+    if not index_file.exists():
+        index_file = STATIC_DIR / "index.html"
     if index_file.exists():
         return FileResponse(
             str(index_file),

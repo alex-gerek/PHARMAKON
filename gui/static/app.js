@@ -74,6 +74,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (currentTarget) {
     runPharmakonProcess(true);
   }
+  checkOnlineUpdateStatus();
 });
 
 // --------------------------------------------------------------------------
@@ -3038,3 +3039,63 @@ async function downloadReportPNG() {
   document.body.removeChild(link);
   updateStatus(`Certificate downloaded: ${filename}`);
 }
+
+// --------------------------------------------------------------------------
+// SMART ONLINE PATCH AUTO-SYNC
+// --------------------------------------------------------------------------
+function renderAutoSyncBadge(st) {
+  const badge = document.getElementById('autoSyncBadge');
+  const txt = document.getElementById('autoSyncText');
+  if (!badge || !txt || !st) return;
+
+  const ver = st.local_version || '2.0.2';
+  badge.classList.remove('offline', 'update-ready');
+
+  if (st.state === 'updated') {
+    badge.classList.add('update-ready');
+    txt.innerText = `PATCHED v${ver}`;
+    updateStatus(`⚡ AUTO-SYNC COMPLETE: Engine updated to v${ver}. Reloading console...`);
+    setTimeout(() => window.location.reload(), 900);
+  } else if (st.state === 'update_available' && st.remote_version) {
+    badge.classList.add('update-ready');
+    txt.innerText = `⚡ UPDATE v${st.remote_version}`;
+    badge.title = `New patch v${st.remote_version} available on GitHub — click to sync now`;
+  } else if (st.state === 'offline') {
+    badge.classList.add('offline');
+    txt.innerText = `OFFLINE v${ver}`;
+    badge.title = `Offline Studio Mode (v${ver}) — auto-sync resumes when internet is connected`;
+  } else {
+    txt.innerText = `AUTO-SYNC v${ver}`;
+    badge.title = `Online Patch Sync Active — PHARMAKON v${ver} is up to date`;
+  }
+}
+
+async function checkOnlineUpdateStatus() {
+  try {
+    const res = await fetch('/api/update-status');
+    if (res.ok) {
+      const st = await res.json();
+      renderAutoSyncBadge(st);
+    }
+  } catch (_) {}
+}
+
+async function triggerManualUpdateCheck() {
+  const txt = document.getElementById('autoSyncText');
+  if (txt) txt.innerText = 'SYNCING...';
+  try {
+    const res = await fetch('/api/check-update', { method: 'POST' });
+    if (res.ok) {
+      const st = await res.json();
+      renderAutoSyncBadge(st);
+      if (st.state === 'up_to_date') {
+        updateStatus(`✓ ONLINE PATCH SYNC: PHARMAKON v${st.local_version} is already running the latest DSP core.`);
+      } else if (st.state === 'offline') {
+        updateStatus(`○ OFFLINE MODE: Running standalone v${st.local_version}. Connect to the internet to check for patches.`);
+      }
+    }
+  } catch (_) {
+    if (txt) txt.innerText = 'OFFLINE';
+  }
+}
+
