@@ -181,7 +181,7 @@ async def process_target(request: Request):
             raise HTTPException(status_code=400, detail=f"Target path not found: {target_path}")
 
         if os.path.isfile(target_path):
-            out_file, metrics = remaster_engine.process_single_file(target_path, params=params, open_folder=False)
+            out_file, metrics = await asyncio.to_thread(remaster_engine.process_single_file, target_path, params, False)
             if not out_file:
                 raise HTTPException(status_code=500, detail="Processing failed")
             out_dir = os.path.dirname(out_file)
@@ -197,7 +197,7 @@ async def process_target(request: Request):
                 "metrics": metrics
             }
         elif os.path.isdir(target_path):
-            master_path, metrics = remaster_engine.process_stems_folder(target_path, params=params, open_folder=False)
+            master_path, metrics = await asyncio.to_thread(remaster_engine.process_stems_folder, target_path, params, False)
             if not master_path:
                 raise HTTPException(status_code=500, detail="Stems processing failed")
             out_dir = os.path.dirname(master_path)

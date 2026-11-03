@@ -1500,9 +1500,12 @@ async function runSplitAndStemMaster() {
   if (btnProcess) btnProcess.disabled = true;
   if (btnSplit) btnSplit.disabled = true;
 
-  updateStatus("🧬 DEEP STEM ANTIDOTE: Extracting Drums, Bass, Vocals & Synths via HPSS...");
-
   const startTime = performance.now();
+  updateStatus("🧬 DEEP STEM ANTIDOTE [0.0s]: Extracting Drums, Bass, Vocals & Synths via HPSS...");
+  const splitTimer = setInterval(() => {
+    const sec = ((performance.now() - startTime) / 1000).toFixed(1);
+    updateStatus(`🧬 DEEP STEM ANTIDOTE [${sec}s]: Extracting 4 Stems & Mastering...`);
+  }, 250);
   const params = {
     sub_cutoff: parseFloat(document.getElementById('param_sub_cutoff').value),
     mono_crossover: parseFloat(document.getElementById('param_mono_crossover').value),
@@ -1512,7 +1515,7 @@ async function runSplitAndStemMaster() {
     dynamic_deharsh: true,
     tape_drive: parseFloat(document.getElementById('param_tape_drive').value),
     side_stereo_boost: parseFloat(document.getElementById('param_side_stereo_boost').value),
-    air_exciter: (parseFloat(document.getElementById('param_air_exciter')?.value || 12) / 100.0),
+    air_exciter: ((v => Number.isNaN(v) ? 12 : v)(parseFloat(document.getElementById('param_air_exciter')?.value)) / 100.0),
     drum_punch: parseFloat(document.getElementById('param_drum_punch').value),
     target_ceiling_db: activeCeiling,
     preset: currentPreset !== 'none' ? currentPreset : null,
@@ -1531,6 +1534,7 @@ async function runSplitAndStemMaster() {
     });
 
     const data = await res.json();
+    clearInterval(splitTimer);
     if (btnProcess) btnProcess.disabled = false;
     if (btnSplit) btnSplit.disabled = false;
 
@@ -1563,6 +1567,8 @@ async function runSplitAndStemMaster() {
     if (btnProcess) btnProcess.disabled = false;
     if (btnSplit) btnSplit.disabled = false;
     updateStatus(`System Error: ${err.message}`);
+  } finally {
+    clearInterval(splitTimer);
   }
 }
 
@@ -1580,7 +1586,12 @@ async function runPharmakonProcess(isInitial = false) {
 
   const btn = document.getElementById('btnProcess');
   btn.disabled = true;
-  updateStatus("PROCESSING: Running mathematical filters, de-harshing & tape glue...");
+  const procStartMs = performance.now();
+  updateStatus("PROCESSING [0.0s]: Running 4X polyphase filters, de-harshing & True-Peak audit...");
+  const procTimer = setInterval(() => {
+    const sec = ((performance.now() - procStartMs) / 1000).toFixed(1);
+    updateStatus(`PROCESSING [${sec}s]: Running 4X polyphase filters, de-harshing & True-Peak audit...`);
+  }, 200);
 
   const params = {
     sub_cutoff: parseFloat(document.getElementById('param_sub_cutoff').value),
@@ -1591,7 +1602,7 @@ async function runPharmakonProcess(isInitial = false) {
     dynamic_deharsh: true,
     tape_drive: parseFloat(document.getElementById('param_tape_drive').value),
     side_stereo_boost: parseFloat(document.getElementById('param_side_stereo_boost').value),
-    air_exciter: (parseFloat(document.getElementById('param_air_exciter')?.value || 12) / 100.0),
+    air_exciter: ((v => Number.isNaN(v) ? 12 : v)(parseFloat(document.getElementById('param_air_exciter')?.value)) / 100.0),
     drum_punch: parseFloat(document.getElementById('param_drum_punch').value),
     target_ceiling_db: activeCeiling,
     preset: currentPreset !== 'none' ? currentPreset : null,
@@ -1613,6 +1624,7 @@ async function runPharmakonProcess(isInitial = false) {
     });
 
     const data = await res.json();
+    clearInterval(procTimer);
     btn.disabled = false;
 
     if (!data.success) {
@@ -1654,6 +1666,8 @@ async function runPharmakonProcess(isInitial = false) {
   } catch (err) {
     btn.disabled = false;
     updateStatus(`Network/Server error: ${err.message}`);
+  } finally {
+    clearInterval(procTimer);
   }
 }
 
@@ -2000,6 +2014,7 @@ const PRESET_MAP = {
     deharsh_depth: 1.0,
     tape_drive: 1.06,
     side_stereo_boost: 1.18,
+    air_exciter: 18,
     drum_punch: 1.15,
     target_ceiling_db: -0.3
   },
@@ -2012,6 +2027,7 @@ const PRESET_MAP = {
     deharsh_depth: 0.9,
     tape_drive: 1.03,
     side_stereo_boost: 1.25,
+    air_exciter: 14,
     drum_punch: 1.05,
     target_ceiling_db: -0.3
   },
@@ -2024,6 +2040,7 @@ const PRESET_MAP = {
     deharsh_depth: 0.85,
     tape_drive: 1.10,
     side_stereo_boost: 1.30,
+    air_exciter: 8,
     drum_punch: 1.35,
     target_ceiling_db: -0.1
   },
@@ -2036,6 +2053,7 @@ const PRESET_MAP = {
     deharsh_depth: 0.6,
     tape_drive: 1.01,
     side_stereo_boost: 1.08,
+    air_exciter: 0,
     drum_punch: 1.0,
     target_ceiling_db: -1.0
   }
@@ -2049,25 +2067,23 @@ function applyPreset(presetKey) {
   if (btn) btn.classList.add('active');
 
   if (presetKey === 'none') {
+    setMode('pharmakon1');
     updateStatus("Profile: AUTO SCAN (Intelligent Welch FFT resonance detection active)");
     return;
   }
 
   const p = PRESET_MAP[presetKey];
   if (p) {
+    setMode('pharmakon2');
     for (const [k, v] of Object.entries(p)) {
       if (k === 'name') continue;
       if (k === 'target_ceiling_db') {
-        activeCeiling = v;
-        document.querySelectorAll('.ceiling-btn').forEach(cb => {
-          if (parseFloat(cb.dataset.val) === v) cb.classList.add('active');
-          else cb.classList.remove('active');
-        });
+        setCeiling(v);
       } else {
         setKnobValue(k, v);
       }
     }
-    updateStatus(`Profile Loaded: ${p.name}. Click 'COMMENCE RE-MASTERING' to apply.`);
+    updateStatus(`Profile Loaded: ${p.name}. Click 'EXECUTE PRO SURGICAL MASTER' to apply.`);
   }
 }
 
