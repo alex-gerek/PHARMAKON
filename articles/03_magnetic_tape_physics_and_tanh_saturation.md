@@ -102,6 +102,12 @@ Under this global scaling:
 * As $u \to +\infty$: $\text{Output} \to \text{ceiling} \cdot \left[ \frac{1 - \tanh(b)}{1 + \tanh(b)} \right] = +0.9137$.
 * The curvature is unaltered: $H_2$ remains precisely at $-38.05\text{ dBc}$.
 
+<p align="center">
+  <img src="img/figure1_transfer_function.png" width="92%" alt="Figure 1. Symmetric and Asymmetric Saturation Transfer Functions">
+  <br>
+  <em>Figure 1. Symmetric and Asymmetric Saturation Transfer Functions ([SVG](figures/figure1_transfer_function.svg) | [PDF](figures/figure1_transfer_function.pdf))</em>
+</p>
+
 #### D. Elimination of Signal-Dependent DC Drift
 Because positive and negative half-waves compress at different rates, asymmetric waveshaping generates a dynamic DC bias ($\text{mean}(y) = -0.01167$ for a $0\text{ dBFS}$ sine).
 
@@ -115,6 +121,12 @@ It is critical to distinguish between stages:
 * **The Waveshaping Stage** mathematically guarantees that instantaneous samples prior to decimation cannot exceed $[-\text{ceiling}, +\text{ceiling}]$.
 * **Post-Decimation & Filtering:** The polyphase FIR reconstruction filter and the recursive DC-blocker introduce transient overshoot on steep step transitions and band-limited noise (e.g. up to $1.012$ on clipped noise or higher on synthetic steps).
 * **Downstream True-Peak Protection:** Therefore, the standalone `apply_tape_warmth_v2` module acts as a non-linear color and saturation stage. Strict inter-sample true-peak compliance ($-0.3\text{ dBFS}$ / ITU-R BS.1770-5) is enforced across the complete PHARMAKON mastering pipeline by a dedicated downstream lookahead true-peak limiter.
+
+<p align="center">
+  <img src="img/figure3_waveform_saturation.png" width="92%" alt="Figure 3. Waveform Transformation Through Asymmetric Saturation">
+  <br>
+  <em>Figure 3. Waveform Transformation Through Asymmetric Saturation ([SVG](figures/figure3_waveform_saturation.svg) | [PDF](figures/figure3_waveform_saturation.pdf))</em>
+</p>
 
 ---
 
@@ -175,6 +187,12 @@ Because waveshaping harmonics are strictly amplitude-dependent, the table below 
 | **$-6.0\text{ dBFS}$** | $0.4604$ | **$-41.67\text{ dBc}$** | $-33.34\text{ dBc}$ | $+8.33\text{ dB}$ | Discrete class-A warmth |
 | **$-12.0\text{ dBFS}$** | $0.2450$ | **$-46.97\text{ dBc}$** | $-44.92\text{ dBc}$ | $+2.05\text{ dB}$ | Subtle transformer sheen |
 | **$-18.0\text{ dBFS}$** | $0.1246$ | **$-52.78\text{ dBc}$** | $-56.81\text{ dBc}$ | **$-4.02\text{ dB}$** | **$H_2$ Dominates (Octave overtone)** |
+
+<p align="center">
+  <img src="img/figure2_harmonic_profile.png" width="92%" alt="Figure 2. Level-Dependent Harmonic Distortion in Asymmetric Saturation">
+  <br>
+  <em>Figure 2. Level-Dependent Harmonic Distortion in Asymmetric Saturation ([SVG](figures/figure2_harmonic_profile.svg) | [PDF](figures/figure2_harmonic_profile.pdf))</em>
+</p>
 
 > [!NOTE]
 > **Key Finding:** At low levels ($-18\text{ dBFS}$), the even-order 2nd harmonic is $4.02\text{ dB}$ louder than the 3rd harmonic, creating warm analog coloration. As signal drive increases toward $0\text{ dBFS}$, the 3rd harmonic progressively rises to provide tape-like soft limiting.
