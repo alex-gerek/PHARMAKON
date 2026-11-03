@@ -107,53 +107,16 @@ By intentionally retaining the high-frequency saturation ceiling without applyin
 
 ---
 
-### 5. Production-Ready Pure SciPy Implementation
+### 5. Open-Source Python & C++20 Implementation
 
-Below is the complete, self-contained Python DSP module from `remaster_engine.py`:
+The complete, production-grade reference implementation of the two-sided normalized analog tape saturation engine (`analog_tape_saturation`) is open-sourced under the MIT License as part of the PHARMAKON 2.0 architecture.
 
-```python
-import numpy as np
-from scipy import signal
+In accordance with modern academic and IEEE/AES open-science standards, the full self-contained source code, automated testbench, and 24-bit verification suites are maintained in the official public repository:
 
-def analog_tape_saturation(audio, sr, drive=1.05, ceiling=0.98, bias=0.035, oversample=2):
-    """
-    Broadcast-Grade Analog Tape Saturation:
-    - NAB/IEC High-Frequency Pre-Emphasis (highs saturate & soften first, avoiding bass mud).
-    - 2X/4X Polyphase Oversampling (eliminates Taylor expansion aliasing foldover).
-    - Asymmetric tanh bias: y = tanh(x*drive + bias) - tanh(bias) generating 2nd AND 3rd harmonics.
-    - Zero DC offset guaranteed by subtracting tanh(bias).
-    - Polyphase decimation back to 1X without high-frequency ringing.
-    """
-    if drive <= 1.001:
-        return audio
-        
-    orig_len = len(audio)
-    nyq = 0.5 * sr
-    
-    # 1. NAB-Style High-Frequency Pre-Emphasis (3.5 kHz shelf)
-    f0 = min(3500.0, nyq - 50.0) / nyq
-    b_pre, a_pre = signal.butter(1, f0, btype='high')
-    audio_pre = audio + 0.20 * signal.filtfilt(b_pre, a_pre, audio, axis=0)
-    
-    # 2. Polyphase Upsampling (Anti-Aliasing Domain)
-    audio_up = signal.resample_poly(audio_pre, oversample, 1, axis=0)
-    
-    # 3. Asymmetric Hyperbolic Tangent Transfer Function
-    bias_offset = np.tanh(bias)
-    sat_up = (np.tanh(audio_up * drive + bias) - bias_offset) * ceiling
-    
-    # 4. Polyphase Decimation back to 1X
-    sat_down = signal.resample_poly(sat_up, 1, oversample, axis=0)
-    
-    # Ensure exact sample boundary alignment
-    if len(sat_down) > orig_len:
-        sat_down = sat_down[:orig_len]
-    elif len(sat_down) < orig_len:
-        pad = np.zeros((orig_len - len(sat_down), sat_down.shape[1]), dtype=sat_down.dtype)
-        sat_down = np.vstack([sat_down, pad])
-        
-    return sat_down.astype(np.float32)
-```
+* **Official Repository:** [https://github.com/alex-gerek/PHARMAKON](https://github.com/alex-gerek/PHARMAKON)
+* **Python Reference Engine:** [`remaster_engine.py`](https://github.com/alex-gerek/PHARMAKON/blob/master/remaster_engine.py) (Section `analog_tape_saturation`)
+* **Native C++20 Header:** [`TapeWarmthModule.hpp`](https://github.com/alex-gerek/PHARMAKON)
+* **License:** Permissive MIT License (Free for academic, personal, and commercial audio engineering)
 
 ---
 

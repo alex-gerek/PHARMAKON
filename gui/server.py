@@ -148,6 +148,7 @@ async def split_and_master_target(request: Request):
             "type": "split_stems",
             "original_path": target_path,
             "master_path": out_master,
+            "delta_path": metrics.get("delta_path") if metrics else None,
             "output_dir": out_dir,
             "stems_dir": stems_dir,
             "report_path": metrics.get("report_path") if metrics else None,
@@ -189,6 +190,7 @@ async def process_target(request: Request):
                 "type": "file",
                 "original_path": target_path,
                 "master_path": out_file,
+                "delta_path": metrics.get("delta_path") if metrics else None,
                 "output_dir": out_dir,
                 "report_path": metrics.get("report_path") if metrics else None,
                 "track_name": os.path.splitext(os.path.basename(target_path))[0],
@@ -205,6 +207,7 @@ async def process_target(request: Request):
                 "type": "stems",
                 "original_path": raw_path,
                 "master_path": master_path,
+                "delta_path": metrics.get("delta_path") if metrics else None,
                 "output_dir": out_dir,
                 "report_path": metrics.get("report_path") if metrics else None,
                 "track_name": os.path.basename(target_path),
@@ -498,6 +501,89 @@ async def save_master_as(request: Request):
         return {"success": False, "cancelled": True}
     except Exception as e:
         return {"success": False, "error": str(e)}
+
+def _run_save_delta_dialog(delta_path: str) -> str:
+    """Threaded native Tkinter Save As dialog helper for DELTA_POISON."""
+    import tkinter as tk
+    import tkinter.filedialog as fd
+
+    root = tk.Tk()
+    root.withdraw()
+    root.attributes('-topmost', True)
+
+    default_name = os.path.basename(delta_path)
+    init_dir = os.path.expanduser("~/Music")
+    if not os.path.exists(init_dir):
+        init_dir = os.path.expanduser("~/Desktop")
+
+    save_dest = fd.asksaveasfilename(
+        title="PHARMAKON // Save Extracted Poison Delta As...",
+        initialdir=init_dir,
+        initialfile=default_name,
+        defaultextension=".wav",
+        filetypes=[
+            ("WAV Lossless Audio (*.wav)", "*.wav"),
+            ("All Files (*.*)", "*.*")
+        ]
+    )
+    root.destroy()
+    return save_dest
+
+@app.post("/api/save-delta-as")
+async def save_delta_as(request: Request):
+    """Opens native Windows Save-As dialog to save DELTA_POISON.wav to user-chosen directory."""
+    try:
+        body = await request.json()
+        delta_path = body.get("delta_path", "").strip().strip('"').strip("'")
+        delta_path = urllib.parse.unquote(delta_path)
+        if delta_path.startswith("file:///"):
+            delta_path = delta_path[8:]
+
+        if delta_path and not os.path.isabs(delta_path):
+            candidate = PROJECT_DIR / delta_path
+            if candidate.exists():
+                delta_path = str(candidate.resolve())
+
+        # Fallback: if not provided or missing, infer from master_path
+        if not delta_path or not os.path.isfile(delta_path):
+            master_path = body.get("master_path", "").strip().strip('"').strip("'")
+            if master_path:
+                cand = os.path.join(os.path.dirname(master_path), f"{os.path.splitext(os.path.basename(master_path))[0].replace(' - STUDIO_REMASTER', '')} - DELTA_POISON.wav")
+                if os.path.isfile(cand):
+                    delta_path = cand
+
+        if not delta_path or not os.path.isfile(delta_path):
+            raise HTTPException(status_code=400, detail="Delta audio file not found")
+
+        save_dest = await asyncio.to_thread(_run_save_delta_dialog, delta_path)
+
+        if save_dest:
+            save_dest = os.path.normpath(save_dest)
+            shutil.copy2(delta_path, save_dest)
+            return {"success": True, "saved_path": save_dest, "filename": os.path.basename(save_dest)}
+        return {"success": False, "cancelled": True}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+@app.get("/api/download-delta")
+def download_delta_audio(path: str):
+    """Direct streaming download of DELTA_POISON.wav."""
+    clean_path = urllib.parse.unquote(path).strip().strip('"').strip("'")
+    if not os.path.isabs(clean_path):
+        cand = PROJECT_DIR / clean_path
+        if cand.exists():
+            clean_path = str(cand.resolve())
+
+    if not os.path.isfile(clean_path):
+        if os.path.exists(os.path.dirname(clean_path)):
+            cand = os.path.join(os.path.dirname(clean_path), f"{os.path.splitext(os.path.basename(clean_path))[0].replace(' - STUDIO_REMASTER', '')} - DELTA_POISON.wav")
+            if os.path.isfile(cand):
+                clean_path = cand
+
+    if not os.path.isfile(clean_path):
+        raise HTTPException(status_code=404, detail="Delta audio file not found")
+
+    return FileResponse(clean_path, media_type="audio/wav", filename=os.path.basename(clean_path))
 
 @app.post("/api/reveal")
 async def reveal_in_explorer(request: Request):

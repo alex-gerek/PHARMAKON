@@ -133,24 +133,54 @@ def analog_tape_saturation(audio, sr, drive=1.05, ceiling=0.98, bias=0.035, over
     - NAB/IEC High-Frequency Pre-Emphasis (highs saturate & soften first, avoiding bass mud).
     - 2X Polyphase Oversampling (eliminates Taylor expansion aliasing foldover).
     - Asymmetric tanh bias: y = tanh(x*drive + bias) - tanh(bias) to generate musical 2nd AND 3rd harmonics.
-    - Polyphase decimation back to 1X without high-frequency ringing.
+    - Two-sided normalization relative to asymptotes (1 - tanh(b)) and (1 + tanh(b)) strictly enforcing ceiling = 0.98.
+    - Single-pole DC-Blocker (10 Hz HPF) post-decimation removing AC rectification drift (~ -0.012).
+    - Dimension safety for 1D and 2D arrays.
     """
     if drive <= 1.001:
         return audio
     orig_len = len(audio)
+    is_1d = (audio.ndim == 1)
+    if is_1d:
+        audio = audio[:, np.newaxis]
+
     nyq = 0.5 * sr
     f0 = min(3500.0, nyq - 50.0) / nyq
     b_pre, a_pre = signal.butter(1, f0, btype='high')
     audio_pre = audio + 0.20 * signal.filtfilt(b_pre, a_pre, audio, axis=0)
     audio_up = signal.resample_poly(audio_pre, oversample, 1, axis=0)
-    bias_offset = np.tanh(bias)
-    sat_up = (np.tanh(audio_up * drive + bias) - bias_offset) * ceiling
+
+    # Two-sided normalization relative to positive and negative asymptotes
+    b_val = bias
+    bias_offset = np.tanh(b_val)
+    pos_asymptote = 1.0 - bias_offset
+    neg_asymptote = 1.0 + bias_offset
+
+    v = np.tanh(audio_up * drive + b_val) - bias_offset
+    norm_v = np.where(v >= 0.0, v / pos_asymptote, v / neg_asymptote)
+    sat_up = norm_v * ceiling
+
+    # Polyphase decimation back to 1X
     sat_down = signal.resample_poly(sat_up, 1, oversample, axis=0)
+
+    # Single-pole DC-Blocker (10 Hz HPF) to eliminate AC rectification DC drift
+    R_dc = 1.0 - (2.0 * np.pi * 10.0 / sr)
+    b_dc = [1.0, -1.0]
+    a_dc = [1.0, -R_dc]
+    sat_down = signal.lfilter(b_dc, a_dc, sat_down, axis=0)
+
+    # Exact boundary alignment
     if len(sat_down) > orig_len:
         sat_down = sat_down[:orig_len]
     elif len(sat_down) < orig_len:
         pad = np.zeros((orig_len - len(sat_down), sat_down.shape[1]), dtype=sat_down.dtype)
         sat_down = np.vstack([sat_down, pad])
+
+    # Absolute ceiling protection against Gibbs decimation ringing
+    sat_down = np.clip(sat_down, -ceiling, ceiling)
+
+    if is_1d:
+        sat_down = sat_down.squeeze(axis=-1)
     return sat_down.astype(np.float32)
 
 def ensure_stereo(arr):
@@ -1391,6 +1421,18 @@ def process_single_file(file_path, params=None, open_folder=True):
     out_file = os.path.join(out_dir, f"{track_title} - STUDIO_REMASTER.wav")
 
     sf.write(out_file, full_mix, sr)
+
+    # Save Extracted Poison Delta (Null Difference: original - master)
+    try:
+        audio_st = ensure_stereo(audio)
+        min_len = min(len(audio_st), len(full_mix))
+        delta_audio = audio_st[:min_len] - full_mix[:min_len]
+        out_delta = os.path.join(out_dir, f"{track_title} - DELTA_POISON.wav")
+        sf.write(out_delta, delta_audio.astype(np.float32), sr, subtype='PCM_24')
+        metrics['delta_path'] = out_delta
+        print(f"  Delta Poison: {os.path.basename(out_delta)}")
+    except Exception as d_err:
+        print(f"[WARN] Could not export delta poison: {d_err}")
     try:
         report_file = generate_mastering_report_html(track_title, metrics, out_dir, params)
         metrics['report_path'] = report_file
@@ -1539,6 +1581,19 @@ def process_stems_folder(target_folder, params=None, open_folder=True):
     sf.write(master_path, master_mix, sr)
     sf.write(raw_sum_path, raw_sum, sr)
     metrics = calc_audio_metrics(raw_sum, master_mix, sr, params)
+
+    # Save Extracted Poison Delta (Null Difference: raw sum - master)
+    try:
+        raw_st = ensure_stereo(raw_sum)
+        min_len = min(len(raw_st), len(master_mix))
+        delta_audio = raw_st[:min_len] - master_mix[:min_len]
+        delta_path = os.path.join(remaster_dir, f"{track_name} - DELTA_POISON.wav")
+        sf.write(delta_path, delta_audio.astype(np.float32), sr, subtype='PCM_24')
+        if metrics:
+            metrics['delta_path'] = delta_path
+        print(f"  Delta Poison: {os.path.basename(delta_path)}")
+    except Exception as d_err:
+        print(f"[WARN] Could not export delta poison for stems: {d_err}")
     try:
         report_file = generate_mastering_report_html(track_name, metrics, remaster_dir, params)
         metrics['report_path'] = report_file

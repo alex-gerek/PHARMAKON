@@ -272,6 +272,7 @@ function selectAudioSource(source) {
   activeSource = source;
   const btnRaw = document.getElementById('btnSourceRaw');
   const btnHealed = document.getElementById('btnSourceHealed');
+  const btnDelta = document.getElementById('btnSourceDelta');
   const topBtnRaw = document.getElementById('scopeBtnRaw');
   const topBtnHealed = document.getElementById('scopeBtnHealed');
   const topBtnDelta = document.getElementById('scopeBtnDelta');
@@ -286,6 +287,7 @@ function selectAudioSource(source) {
   if (source === 'raw') {
     if (btnRaw) btnRaw.classList.add('active');
     if (btnHealed) btnHealed.classList.remove('active');
+    if (btnDelta) btnDelta.classList.remove('active');
     if (topBtnRaw) topBtnRaw.classList.add('active');
     if (topBtnHealed) topBtnHealed.classList.remove('active');
     if (topBtnDelta) topBtnDelta.classList.remove('active');
@@ -300,6 +302,7 @@ function selectAudioSource(source) {
   } else if (source === 'delta') {
     if (btnRaw) btnRaw.classList.remove('active');
     if (btnHealed) btnHealed.classList.remove('active');
+    if (btnDelta) btnDelta.classList.add('active');
     if (topBtnRaw) topBtnRaw.classList.remove('active');
     if (topBtnHealed) topBtnHealed.classList.remove('active');
     if (topBtnDelta) topBtnDelta.classList.add('active');
@@ -2384,6 +2387,88 @@ async function downloadOrSaveMaster(e) {
   // Tier 3: Direct browser download trigger
   const dlLink = document.createElement('a');
   dlLink.href = `/api/stream?path=${encodeURIComponent(masterPath)}`;
+  dlLink.download = suggestedName;
+  document.body.appendChild(dlLink);
+  dlLink.click();
+  document.body.removeChild(dlLink);
+  updateStatus(`Downloading ${suggestedName}...`);
+}
+
+
+async function downloadOrSaveDelta(e) {
+  if (e) e.preventDefault();
+
+  let deltaPath = lastResult?.delta_path;
+  const masterPath = lastResult?.master_path;
+
+  if (!deltaPath && masterPath) {
+    const dir = masterPath.substring(0, Math.max(masterPath.lastIndexOf('/'), masterPath.lastIndexOf('\\')));
+    const base = masterPath.split(/[\\/]/).pop().replace(' - STUDIO_REMASTER.wav', '').replace('.wav', '');
+    deltaPath = `${dir}\\${base} - DELTA_POISON.wav`;
+  }
+
+  if (!deltaPath && !masterPath) {
+    updateStatus("No rendered audio yet. Select a track and click 'COMMENCE RE-MASTERING' first!");
+    return;
+  }
+
+  const trackName = (lastResult?.track_name ? lastResult.track_name : 'Track');
+  const suggestedName = `${trackName} - DELTA_POISON.wav`;
+  updateStatus("Choosing destination folder for extracted poison delta...");
+
+  // Tier 1: Modern File System Access API
+  if (window.showSaveFilePicker) {
+    try {
+      const handle = await window.showSaveFilePicker({
+        suggestedName: suggestedName,
+        types: [{
+          description: 'Lossless Poison Delta WAV (*.wav)',
+          accept: { 'audio/wav': ['.wav'] }
+        }]
+      });
+      updateStatus("Writing extracted poison delta to selected destination...");
+      const streamUrl = `/api/download-delta?path=${encodeURIComponent(deltaPath || masterPath)}`;
+      const response = await fetch(streamUrl);
+      if (!response.ok) {
+        throw new Error("Delta file not found on server");
+      }
+      const blob = await response.blob();
+      const writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      updateStatus(`Delta Poison saved successfully: ${handle.name}`);
+      return;
+    } catch (pickerErr) {
+      if (pickerErr.name === 'AbortError') {
+        updateStatus("Save cancelled.");
+        return;
+      }
+      console.warn("File System Access API error, trying native server dialog:", pickerErr);
+    }
+  }
+
+  // Tier 2: Native Windows desktop Save-As dialog via local server
+  try {
+    const res = await fetch('/api/save-delta-as', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ delta_path: deltaPath, master_path: masterPath })
+    });
+    const data = await res.json();
+    if (data.success && data.saved_path) {
+      updateStatus(`Delta Poison saved to: ${data.saved_path}`);
+      return;
+    } else if (data.cancelled) {
+      updateStatus("Save cancelled.");
+      return;
+    }
+  } catch (err) {
+    console.warn("Server save-delta-as fallback notice:", err);
+  }
+
+  // Tier 3: Direct browser streaming download trigger
+  const dlLink = document.createElement('a');
+  dlLink.href = `/api/download-delta?path=${encodeURIComponent(deltaPath || masterPath)}`;
   dlLink.download = suggestedName;
   document.body.appendChild(dlLink);
   dlLink.click();
