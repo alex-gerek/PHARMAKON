@@ -434,8 +434,10 @@ def _true_peak_limiter_block(audio, sr, target_ceiling_db=-0.3, oversample=4):
         pad = np.zeros((orig_len - len(limited_1x), limited_1x.shape[1]), dtype=limited_1x.dtype)
         limited_1x = np.vstack([limited_1x, pad])
 
-    # True-Peak Brickwall guarantee: clip any residual decimation overshoot
-    limited_1x = np.clip(limited_1x, -target_ceiling, target_ceiling)
+    # Soft-knee safety guard instead of brutal hard-clipping
+    excess = np.maximum(0.0, np.abs(limited_1x) - target_ceiling)
+    if np.any(excess > 0.0):
+        limited_1x = np.tanh(limited_1x / target_ceiling) * target_ceiling
 
     actual_tp = float(np.max(np.abs(limited_4x)))
     true_peak_db = float(20.0 * np.log10(max(1e-9, actual_tp)))
@@ -531,9 +533,9 @@ def calc_audio_metrics(orig, proc, sr, params=None):
     rms_orig = float(np.sqrt(np.mean(orig**2)))
     rms_proc = float(np.sqrt(np.mean(proc**2)))
 
-    # True-Peak (approx over 4x check)
-    orig_4x = signal.resample_poly(orig[:min(len(orig), sr * 10)], 4, 1, axis=0)
-    proc_4x = signal.resample_poly(proc[:min(len(proc), sr * 10)], 4, 1, axis=0)
+    # True-Peak (full-file 4x polyphase ITU-R BS.1770-5 check)
+    orig_4x = signal.resample_poly(orig, 4, 1, axis=0)
+    proc_4x = signal.resample_poly(proc, 4, 1, axis=0)
     true_peak_orig_db = float(20.0 * np.log10(max(1e-9, np.max(np.abs(orig_4x)))))
     true_peak_proc_db = float(20.0 * np.log10(max(1e-9, np.max(np.abs(proc_4x)))))
 
@@ -895,7 +897,7 @@ def process_audio_array(audio, sr, params=None):
     full_mix = mono_low_stereo + high_proc
 
     # 8. Analog tape saturation warmth (Oversampled Asymmetric Saturation with NAB Pre-Emphasis)
-    full_mix = analog_tape_saturation(full_mix, sr, drive=tape_drive, ceiling=tape_ceiling, bias=0.035, oversample=2)
+    full_mix = analog_tape_saturation(full_mix, sr, drive=tape_drive, ceiling=tape_ceiling, bias=0.035, oversample=4)
 
     # 9. Psychoacoustic Harmonic Air Exciter (>16 kHz silk synthesis)
     air_drive = float(params.get('air_exciter', 0.12))

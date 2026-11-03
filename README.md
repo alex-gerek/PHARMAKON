@@ -85,7 +85,8 @@ An authentic harmonic synthesizer that extracts program material from the 8–13
 When mastering stems (Drums + Bass + Vocals + Other), cross-correlation in the 30–100 Hz band calculates microsecond time-alignment, guaranteeing that kick transients and bass waveforms strike in perfect phase coherence.
 
 ### 🛡 5. 4x Polyphase True-Peak Limiter & OOM Streaming Chunking
-A 4x polyphase oversampled lookahead limiter (`scipy.signal.resample_poly`) enforces an AES/EBU compliant **-1.0 dBFS True-Peak ceiling** with zero inter-sample clipping. Streaming chunking with raised-cosine crossfading prevents memory exhaustion (OOM) on long tracks and DJ sets.
+A 4x polyphase oversampled lookahead limiter (`scipy.signal.resample_poly`) enforces zero inter-sample clipping across the master bus. Streaming chunking with raised-cosine crossfading prevents memory exhaustion (OOM) on long tracks and DJ sets.
+- Default True-Peak Ceiling: -0.3 dBFS (Compliant with ITU-R BS.1770-5 and streaming broadcast targets).
 
 ### 📊 6. ITU-R BS.1770-4 / EBU R128 Loudness Metering
 True integrated LUFS calculation featuring dual-stage K-weighting filtering and gated energy integration (-70 LKFS absolute / -10 dB relative gate).
@@ -136,7 +137,7 @@ Repair isolated defects (such as a screeched AI vocal note at 0:45) without alte
 | **🟡 SUNO v3.5/v4** | Neural vocoder detox, high-frequency air synthesis | Notch: 5200 Hz, Exciter: 18%, Sub: 34 Hz |
 | **🟣 UDIO 1.5** | Glassy harshness smoothing, 3D Mid/Side widening | Notch: 6100 Hz, Exciter: 14%, Tape: 1.06x |
 | **🔴 CLUB PUNCH** | High-energy kick/bass density, EDM transient puncher | Mono < 140 Hz, Drum Punch: +35%, -0.1 dBFS |
-| **⚪ AUDIOPHILE** | Transparent analog correction for acoustic & jazz | Subtle saturation, True-Peak: -1.0 dBFS |
+| **⚪ AUDIOPHILE** | Transparent analog correction for acoustic & jazz | Subtle saturation, True-Peak: -0.5 dBFS |
 
 ---
 
