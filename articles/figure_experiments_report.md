@@ -39,8 +39,11 @@ Measured using 64-bit double precision, 144,000-point FFT ($3.0\text{ s}$ @ $48\
 | **$-18.0\text{ dBFS}$** | **$-52.78\text{ dBc}$** | $-56.81\text{ dBc}$ | **$-4.02\text{ dB}$** | **$H_2$ Dominates (Octave overtone)** |
 
 * **Exact Harmonic Equivalence Crossover Point:**
-  * **Input Level:** **$-14.01\text{ dBFS}$**
-  * **Magnitude:** $H_2 = H_3 = -48.89\text{ dBc}$
+  * **Production Model (drive = 1.05):** **$-14.01\text{ dBFS}$** (Numerical FFT, $H_2 = H_3 = -48.89\text{ dBc}$).
+  * **Analytical Explanation of the $\approx -13.6\text{ dBFS}$ vs $-14.01\text{ dBFS}$ Delta:**
+    * In theoretical derivations where gain is normalized to unity ($\text{drive} = 1.0$, as in Section 3 of the paper), the Taylor equivalence equation $A_{\text{cross}} = \frac{6\tanh(b)}{1 \cdot [1 - 3\tanh^2(b)]} = 0.21069$ yields **$-13.53\text{ dBFS} \approx -13.6\text{ dBFS}$**.
+    * In the production engine and Table B of Section 8, the drive parameter is set to $\text{drive} = 1.05$ ($+0.424\text{ dB}$ additional gain). This shifts the crossover threshold downward by $0.42\text{ dB}$ to $-13.95\text{ dBFS}$ analytically.
+    * The rigorous 64-bit numerical FFT simulation including higher-order odd terms ($x^5, x^7$) pinpoints the exact physical crossover at **$-14.01\text{ dBFS}$**.
   * Below $-14.01\text{ dBFS}$, even harmonic $H_2$ exceeds $H_3$, creating characteristic analog low-level warmth. Above this threshold, $H_3$ rises to provide progressive peak cushion.
 
 ### Figure 3 — Waveform Transformation
