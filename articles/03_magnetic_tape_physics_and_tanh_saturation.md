@@ -125,7 +125,7 @@ It is critical to distinguish between stages:
 <p align="center">
   <img src="img/figure3_waveform_saturation.png" width="92%" alt="Figure 3. Waveform Transformation Through Asymmetric Saturation">
   <br>
-  <em>Figure 3. Waveform Transformation Through Asymmetric Saturation ([SVG](figures/figure3_waveform_saturation.svg) | [PDF](figures/figure3_waveform_saturation.pdf))</em>
+  <em>Figure 3. Waveform before and after PHARMAKON asymmetric saturation, showing soft peak compression and the difference between positive and negative half-wave amplitudes. ([SVG](figures/figure3_waveform_saturation.svg) | [PDF](figures/figure3_waveform_saturation.pdf))</em>
 </p>
 
 ---

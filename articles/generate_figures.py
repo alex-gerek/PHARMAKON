@@ -359,7 +359,7 @@ def generate_figure_3():
                 bbox=dict(boxstyle='round,pad=0.3', facecolor='#FEF2F2', edgecolor=COLOR_VERMILION, lw=0.8))
 
     # Downstream note banner
-    ax.text(0.03, 0.05, 'Note: Pre-Limiter Stage — Instantaneous waveshaper telemetry prior to downstream lookahead true-peak limiter.',
+    ax.text(0.03, 0.05, 'Note: Full saturation processing chain, before downstream true-peak limiting.',
             transform=ax.transAxes, fontsize=8.8, style='italic', color='#475569',
             bbox=dict(boxstyle='square,pad=0.4', facecolor='#F8FAFC', edgecolor='#CBD5E1', lw=0.7))
 
