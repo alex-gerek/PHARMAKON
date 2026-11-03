@@ -253,7 +253,7 @@ Open your browser at: 👉 **`http://127.0.0.1:7860`**
 Mathematical proofs, transfer functions, and AES/IEEE calibrations are documented in [`articles/`](articles/):
 * [01. Why Equalizers Cannot Cure AI Audio: The Physics of Dead Air Above 16 kHz](articles/01_why_equalizers_cannot_cure_ai_audio.md)
 * [02. Spectral Geometry vs Gigabyte Weights: Fast Deterministic DSP for Vocal Isolation](articles/02_neural_weights_vs_wiener_estimation.md)
-* [03. The Physics of Analog Tape Saturation: Soft Clipping and Asymmetric Tanh Compression](articles/03_magnetic_tape_physics_and_tanh_saturation.md)
+* [03. Beyond tanh: Engineering Asymmetric Saturation for Digital Audio](articles/03_magnetic_tape_physics_and_tanh_saturation.md) ([PDF Whitepaper](PHARMAKON_Saturation_Whitepaper.pdf))
 * [04. Death in the Club: The Low-End Phase War Between Kick and Sub-Bass (Sub-Sync)](articles/04_death_in_the_club_sub_phase_cancellation.md)
 * [05. Inter-Sample Peaks (True-Peak): Why Streaming Distorts and How 4X Polyphase Oversampling Solves It](articles/05_intersample_peaks_and_4x_oversampling.md)
 * [06. From Python to C++20: Architecting the Real-Time DSP Engine of PHARMAKON PRO](articles/06_from_python_to_cxx20_architecting_pharmakon_pro.md)
