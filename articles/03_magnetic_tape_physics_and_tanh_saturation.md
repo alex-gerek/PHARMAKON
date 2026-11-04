@@ -114,7 +114,7 @@ Because positive and negative half-waves compress at different rates, asymmetric
 Following decimation back to the base sample rate, the signal passes through a 1-pole recursive DC blocker ($\text{cutoff} = 10\text{ Hz}$):
 $$y[n] = x[n] - x[n-1] + R \cdot y[n-1], \quad R = 1.0 - \frac{2\pi \cdot 10.0}{f_s}$$
 
-For $f_s = 48000\text{ Hz}$, $R = 0.99869$. In numerical simulation, this completely clears accumulated DC drift ($\text{mean}(y) < 10^{-15}$ in steady-state) without affecting low-frequency bass punch.
+For $f_s = 48000\text{ Hz}$, $R = 0.99869$. In 64-bit floating-point static simulation, steady-state DC approaches machine precision ($< 10^{-15}$); in the 32-bit `float32` production pipeline (`apply_tape_warmth_v2`), steady-state residual DC settles to $\approx 3.7 \times 10^{-8}$ after filter convergence without affecting low-frequency bass punch.
 
 #### E. Crucial Architectural Boundary: Waveshaper Peak vs. Downstream True-Peak
 It is critical to distinguish between stages:
@@ -150,7 +150,7 @@ In analog tape machines, high-frequency pre-emphasis EQ (such as NAB or CCIR/IEC
 In our digital architecture, we implement an analog-inspired pre-emphasis stage:
 $$x_{\text{pre}} = x + 0.20 \cdot \text{HPF}_{3500}(x)$$
 
-A 1st-order Butterworth high-pass filter ($\text{cutoff} = 3500\text{ Hz}$) injects a gentle $+1.58\text{ dB}$ shelf into the extreme high end prior to oversampling and saturation. Consequently, high-energy treble and vocoder sibilants drive the non-linear stage slightly deeper into compression, rounding off harshness without VCA pumping artifacts.
+A 1st-order Butterworth high-pass filter ($\text{cutoff} = 3500\text{ Hz}$) injects a gentle $+1.58\text{ dB}$ shelf into the extreme high end prior to oversampling and saturation (intentionally retained without a complementary de-emphasis cut, contributing a subtle high-frequency air tilt alongside harmonic drive). Consequently, high-energy treble and vocoder sibilants drive the non-linear stage slightly deeper into compression, rounding off harshness without VCA pumping artifacts.
 
 ---
 
@@ -178,7 +178,7 @@ To guarantee complete reproducibility, laboratory telemetry was gathered using a
 * **Harmonic Evaluation:** Magnitudes measured relative to fundamental component ($\text{dBc}$) in steady-state operation.
 
 #### B. Level-Dependent Harmonic Profile (Static Function)
-Because waveshaping harmonics are strictly amplitude-dependent, the table below documents the measured response across five operational input levels for the static transfer function:
+Because waveshaping harmonics are strictly amplitude-dependent, the table below documents the measured response across five operational input levels for the isolated static transfer function (note: through the full `apply_tape_warmth_v2` `float32` chain including $3.5\text{ kHz}$ pre-emphasis, $4\times$ polyphase oversampling, and $10\text{ Hz}$ DC blocking at $1\text{ kHz}$, $0\text{ dBFS}$ yields $\text{peak} = 0.7741$, $H_2 = -37.99\text{ dBc}$, $H_3 = -22.62\text{ dBc}$, and $-18\text{ dBFS}$ yields $H_2 = -52.64\text{ dBc}$, $H_3 = -56.52\text{ dBc}$):
 
 | Input Level | Peak Output | 2nd Harmonic ($2 f_0$) | 3rd Harmonic ($3 f_0$) | Delta ($H_3 - H_2$) | Acoustic Profile |
 |:---|:---:|:---:|:---:|:---:|:---|

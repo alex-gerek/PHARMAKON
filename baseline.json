@@ -1,0 +1,187 @@
+{
+  "git_base_commit": "165180d452ee1b8252273b2ed3c1db05aa0ee360",
+  "working_branch": "dsp-safe-hardening",
+  "environment": {
+    "python": "3.14.3",
+    "numpy": "2.4.2",
+    "scipy": "1.18.1",
+    "soundfile": "0.14.0",
+    "libsndfile": "1.2.2",
+    "pytest": "9.2.0"
+  },
+  "remaster_engine_initial": {
+    "line_count": 1788,
+    "md5": "d5f999375f219064c7c5c0f73663c697",
+    "sha256": "642c6fc1fa22ce9e4237f988f7c16663d576b535acbebca0abfafd35e12ec84d",
+    "apply_tape_warmth_v2_lines": [
+      130,
+      186
+    ]
+  },
+  "public_signatures": {
+    "apply_tape_warmth_v2": "(audio: numpy.ndarray, sr: int = 48000, drive: float = 1.05, bias: float = 0.035, ceiling: float = 0.98, oversample: int = 4) -> numpy.ndarray",
+    "analog_tape_saturation": "(audio: numpy.ndarray, sr: int = 48000, drive: float = 1.05, bias: float = 0.035, ceiling: float = 0.98, oversample: int = 4) -> numpy.ndarray",
+    "true_peak_limiter": "(audio, sr, target_ceiling_db=-0.3, oversample=4)",
+    "align_sub_phase": "(drums, bass, sr, max_lag_ms=6.0, crossover_freq=100.0)",
+    "process_audio_array": "(audio, sr, params=None)",
+    "process_single_file": "(file_path, params=None, open_folder=True)",
+    "process_stems_folder": "(target_folder, params=None, open_folder=True)",
+    "split_audio_to_stems": "(input_path, output_stems_dir=None)",
+    "split_and_master_single_file": "(file_path, params=None, open_folder=False)",
+    "calc_audio_metrics": "(orig, proc, sr, params=None)",
+    "calc_integrated_lufs": "(audio, sr)"
+  },
+  "default_params": {
+    "sub_cutoff": 32.0,
+    "mono_crossover": 120.0,
+    "deharsh_freq": 5000.0,
+    "deharsh_q": 2.8,
+    "deharsh_depth": 1.0,
+    "dynamic_deharsh": true,
+    "tape_drive": 1.04,
+    "tape_ceiling": 0.98,
+    "side_stereo_boost": 1.2,
+    "air_exciter": 0.12,
+    "phase_align_sub": true,
+    "target_ceiling_db": -0.3,
+    "drum_punch": 1.0,
+    "mode": "pharmakon1"
+  },
+  "presets": {
+    "suno": {
+      "name": "Suno Detox (v3.5 / v4)",
+      "description": "Tames ~5.2 kHz metallic whistle, removes sibilant bite, synthesizes lost >16kHz air, tightens muddy sub.",
+      "deharsh_freq": 5200.0,
+      "deharsh_q": 3.2,
+      "deharsh_depth": 1.0,
+      "sub_cutoff": 35.0,
+      "mono_crossover": 130.0,
+      "tape_drive": 1.05,
+      "side_stereo_boost": 1.15,
+      "air_exciter": 0.18,
+      "target_ceiling_db": -0.3,
+      "drum_punch": 1.15
+    },
+    "udio": {
+      "name": "Udio Polish (1.5 / Hi-Fi)",
+      "description": "Smooths 6.1 kHz glassy sheen, widens 3D stereo imagery, injects analog tape glue and silky air.",
+      "deharsh_freq": 6100.0,
+      "deharsh_q": 2.6,
+      "deharsh_depth": 0.85,
+      "sub_cutoff": 30.0,
+      "mono_crossover": 115.0,
+      "tape_drive": 1.06,
+      "side_stereo_boost": 1.25,
+      "air_exciter": 0.14,
+      "target_ceiling_db": -0.3,
+      "drum_punch": 1.1
+    },
+    "club": {
+      "name": "Club Punch (EDM / Hip-Hop)",
+      "description": "Maximum sub density, 100% mono punch below 140Hz, transient kick puncher, streaming ready.",
+      "deharsh_freq": 4800.0,
+      "deharsh_q": 2.2,
+      "deharsh_depth": 0.7,
+      "sub_cutoff": 28.0,
+      "mono_crossover": 140.0,
+      "tape_drive": 1.08,
+      "side_stereo_boost": 1.18,
+      "air_exciter": 0.08,
+      "target_ceiling_db": -0.1,
+      "drum_punch": 1.35
+    },
+    "audiophile": {
+      "name": "Audiophile Master (Acoustic / Jazz)",
+      "description": "Ultra-transparent touch-up, preserves pristine dynamic range with pristine 4x True-Peak protection.",
+      "deharsh_freq": 5500.0,
+      "deharsh_q": 3.5,
+      "deharsh_depth": 0.5,
+      "sub_cutoff": 24.0,
+      "mono_crossover": 95.0,
+      "tape_drive": 1.01,
+      "side_stereo_boost": 1.08,
+      "air_exciter": 0.0,
+      "target_ceiling_db": -0.5,
+      "drum_punch": 1.0
+    }
+  },
+  "initial_wav_export_subtypes": {
+    "single_master_subtype": "PCM_16",
+    "single_delta_subtype": "PCM_24",
+    "stems_master_subtype": "PCM_16",
+    "stems_vocals_subtype": "PCM_16",
+    "stems_delta_subtype": "PCM_24"
+  },
+  "tape_stage_telemetry": {
+    "levels": {
+      "0.0": {
+        "peak_out": 0.774056,
+        "h2_dbc": -37.993,
+        "h3_dbc": -22.617,
+        "dc_mean_full": -0.00010680988634703681,
+        "dc_mean_steady_last_2s": 3.72827066996706e-08
+      },
+      "-3.0": {
+        "peak_out": 0.622996,
+        "h2_dbc": -39.438,
+        "h3_dbc": -27.622,
+        "dc_mean_full": -7.27709848433733e-05,
+        "dc_mean_steady_last_2s": 2.9335419426956832e-08
+      },
+      "-6.0": {
+        "peak_out": 0.474641,
+        "h2_dbc": -41.552,
+        "h3_dbc": -33.072,
+        "dc_mean_full": -4.7267836635001004e-05,
+        "dc_mean_steady_last_2s": 2.1835168340089695e-08
+      },
+      "-12.0": {
+        "peak_out": 0.252035,
+        "h2_dbc": -46.827,
+        "h3_dbc": -44.632,
+        "dc_mean_full": -1.934633473865688e-05,
+        "dc_mean_steady_last_2s": 1.2124577786210011e-08
+      },
+      "-18.0": {
+        "peak_out": 0.127983,
+        "h2_dbc": -52.635,
+        "h3_dbc": -56.518,
+        "dc_mean_full": -8.293408427562099e-06,
+        "dc_mean_steady_last_2s": 5.835046223978679e-09
+      }
+    },
+    "alias_9khz_0dbfs": {
+      "alias_21khz_dbc": -50.898,
+      "alias_3khz_dbc": -93.192
+    }
+  },
+  "dsp_output_hashes": {
+    "synth_pharmakon1_sha256": "dc123855f398093d2fea8561be483fb5151dd6f45749e5d80314e4bad98d4e92",
+    "synth_pharmakon1_metrics": {
+      "true_peak_proc_db": -3.84,
+      "lufs_proc": -9.82,
+      "rms_proc_db": -9.95,
+      "harsh_reduction_db": 16.45
+    },
+    "synth_preset_suno_sha256": "5abf74bf9c1379a63385a5f04d6ed1fe5788121cc5f2956202ff180dd4f9a402",
+    "synth_preset_suno_tp_db": -3.75,
+    "synth_preset_udio_sha256": "37a88c0e0e876f7730f0a4e6edd65426785251bf0f805570969cc51b3387bca0",
+    "synth_preset_udio_tp_db": -3.16,
+    "synth_preset_club_sha256": "91da94c4991ef42d8666593867140ba08f7d4818af70e997eef10dcd0febc3c3",
+    "synth_preset_club_tp_db": -3.06,
+    "synth_preset_audiophile_sha256": "6d5fc4669973e2882df755f6230440f9ecbe16b4c5293cd4fba8b4abacd0045e",
+    "synth_preset_audiophile_tp_db": -3.37,
+    "demo_bronze_inmemory_sha256": "cd01f6e21aa1e0ed1068d7a788ecce174fcea0acaabf22bfd23db16a02733e1a",
+    "demo_bronze_metrics": {
+      "true_peak_orig_db": -0.2,
+      "true_peak_proc_db": -2.48,
+      "lufs_orig": -11.32,
+      "lufs_proc": -11.93
+    },
+    "stems_synth_metrics": {
+      "true_peak_proc_db": -0.43,
+      "lufs_proc": -6.26,
+      "rms_proc_db": -6.32
+    }
+  }
+}

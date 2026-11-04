@@ -82,7 +82,7 @@ Unlike crude static EQ cuts that dull the entire performance, **PHARMAKON uses a
 An authentic harmonic synthesizer that extracts program material from the 8–13 kHz donor band, creates polyphonic even and odd harmonics via asymmetric non-linear saturation, high-passes above 15.5 kHz, and injects pure silky air (16–22 kHz) into the mix.
 
 ### 🎯 4. Low-End Phase Alignment (Sub Sync for Stems)
-When mastering stems (Drums + Bass + Vocals + Other), cross-correlation in the 30–100 Hz band calculates microsecond time-alignment, guaranteeing that kick transients and bass waveforms strike in perfect phase coherence.
+When mastering stems (Drums + Bass + Vocals + Other), cross-correlation in the <100 Hz band estimates low-end phase offset and polarity within a bounded lag window to reduce destructive sub-bass cancellation.
 
 ### 🛡 5. 4x Polyphase True-Peak Limiter & OOM Streaming Chunking
 A 4x polyphase oversampled lookahead limiter (`scipy.signal.resample_poly`) enforces zero inter-sample clipping across the master bus. Streaming chunking with raised-cosine crossfading prevents memory exhaustion (OOM) on long tracks and DJ sets.
@@ -101,7 +101,7 @@ Three click-free, phase-aligned auditioning modes:
 |---|:---:|---|---|
 | **[A] RAW** | `A` | Untreated Track | Original AI file with harsh digital sibilance and ISP clipping (Ruby CRT beam). |
 | **[B] MASTER** | `B` | PHARMAKON Master | Full analog-modeled master: cohesive sub-bass, warm tape glue, silky air (Emerald CRT beam). |
-| **[Δ] DELTA** | `D` | Subtraction Bay | **Audition exclusively the extracted AI poison** ($\text{Raw} - \text{Master}$ with phase inversion and $+6\text{ dB}$ boost). |
+| **[Δ] DELTA** | `D` | Subtraction Bay | **Audition the raw null difference** ($\text{Raw} - \text{Master}$; note: `DELTA_POISON.wav` is exported without loudness gain-matching so overall level/saturation/width shifts are audible alongside extracted resonances, whereas spectral delta metrics apply RMS gain-matching). |
 
 > **Pro Mastering Tip:**  
 > Switch to **`[Δ] DELTA`** during playback. If you hear only the metallic whistle, harsh clicks, and muddy rumble - with no vocal fundamentals or harmonic body leaking through - **your master calibration is acoustically transparent**!
@@ -165,7 +165,7 @@ If your production demands surgically isolated acapellas free of centered guitar
 
 1. **📄 OPEN FULL REPORT:** Opens an interactive HTML diagnostic report in your default browser with SVG spectrograms, LUFS/True-Peak metrics, and unique mastering serial number.
 2. **📸 EXPORT PNG CARD:** Generates a studio quality certificate card via native Windows "Save As..." dialog.
-3. **⬇ DOWNLOAD MASTER (.WAV):** Exports lossless 24-bit studio master WAV files with custom destination folder selection.
+3. **⬇ DOWNLOAD MASTER (.WAV):** Exports header-verified 24-bit `PCM_24` studio master WAV files with custom destination folder selection.
 
 ---
 

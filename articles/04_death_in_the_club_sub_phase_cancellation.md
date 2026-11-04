@@ -1,7 +1,7 @@
 # Death in the Club: The Low-End Phase War Between Kick and Sub-Bass (Sub-Sync)
 
 #### 1. The Analogy: Two Men Pushing a Car
-Welcome to the most treacherous domain in audio engineering: the infrasonic sub-bass spectrum (30 - 90 Hz).
+Welcome to the most treacherous domain in audio engineering: the sub-bass spectrum (30 - 90 Hz; true infrasound lies below 20 Hz).
 
 This is where 90% of tracks get silently murdered. A producer finishes an AI-assisted master in headphones: the kick thumps, the 808 rumbles, everything feels punchy. But the moment that track hits a concert sound system (Funktion-One, L-Acoustics, or d&b audiotechnik), the low end completely vanishes. The kick becomes a thin plastic click, the bass disappears, and the dancefloor loses its energy.
 
@@ -18,7 +18,7 @@ Headphone drivers are 1-2 cm membranes seated millimeters from the ear canal. Th
 In a club, arrays of 18-inch subwoofers displace immense cubic volumes of physical air. The wavelength of a 50 Hz sub tone is:
 $$\lambda = \frac{v}{f} = \frac{343\text{ m/s}}{50\text{ Hz}} \approx 6.86\text{ METERS}$$
 
-When a 7-meter pressure wave from the kick meets a 7-meter rarefaction trough from the bass, they physically cancel out in the room.
+On the mix bus and mono subwoofer feed, out-of-phase kick and bass signals cancel electrically before reaching the voice coil; inside the venue, 7-meter wavelengths further interact with room boundaries to form spatial standing-wave peaks and nulls.
 
 ##### Summation Math: +6 dB vs +3 dB
 * Summing two uncorrelated, random sources doubles power: $10 \log_{10}(2) \approx +3.01\text{ dB}$.
@@ -34,11 +34,11 @@ Nudging the entire bass stem globally by a fixed delay creates severe problems:
 
 ##### The PHARMAKON 2.0 Solution: Linkwitz-Riley LR-4 Crossover (<100 Hz)
 1. **Zero-Phase LR-4 Crossover:** We split the bass into an isolated sub-band (<100 Hz) and upper body (>100 Hz) using a 2nd-order Butterworth filter paired with `filtfilt`. Forward-backward filtering squares the response into a 4th-order slope (24 dB/oct), satisfying:
-   $$|H_{\text{low}}(f)|^2 + |H_{\text{high}}(f)|^2 \equiv 1.000$$
+   $$H_{\text{low}}(f) + H_{\text{high}}(f) \equiv 1.000 \quad \left(\text{with } H_{\text{low}}(f_c) = H_{\text{high}}(f_c) = 0.5,\text{ i.e. }-6.02\text{ dB}\right)$$
    This delivers an acoustic Linkwitz-Riley 4th-order crossover with zero phase distortion and perfectly flat magnitude response across the 100 Hz boundary.
 2. **Cross-Correlation within $\pm 6\text{ ms}$:** We evaluate cross-correlation strictly in the sub-bass overlap region.
 3. **Polarity Inversion Check ($180^\circ$):** If the negative trough exceeds the positive correlation peak, polarity is inverted.
-4. **Isolated Sub Alignment:** Phase shift is applied **strictly to the sub-band (<100 Hz)** via circular roll with edge zeroing. The upper attack (>100 Hz) remains untouched on the project grid.
+4. **Isolated Sub Alignment (Legacy Caveat):** Phase shift in `align_sub_phase` is applied strictly to the sub-band (<100 Hz) via circular roll with edge zeroing while the upper band (>100 Hz) stays fixed. Note that time-shifting or inverting only `bass_sub` breaks exact zero-phase summation near the 85–120 Hz crossover boundary when upper bass harmonics are strong; a guarded windowed Sub-Sync architecture is scheduled for separate validation.
 
 > **Mastering Headroom Tip:**  
 > When Sub-Sync eliminates anti-phase cancellation and restores +3 to +5 dB of acoustic low-end pressure, pull back the sub-bass fader by 1.5–2 dB. You preserve maximum physical chest impact while giving the true-peak limiter clean breathing headroom.

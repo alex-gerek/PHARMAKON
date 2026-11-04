@@ -138,7 +138,7 @@ def apply_tape_warmth_v2(audio: np.ndarray,
     - 3.5 kHz Pre-emphasis HF saturation tilt.
     - 4X Polyphase oversampling anti-aliasing.
     - Global-asymptote scaled asymmetric tanh waveshaping (H2 = -38.05 dBc).
-    - 10 Hz recursive One-Pole DC Blocker (clears DC drift < 10^-15).
+    - 10 Hz recursive One-Pole DC Blocker (steady-state |DC| < 1e-7 in float32).
     """
     if drive <= 1.0001 and abs(bias) < 1e-5:
         return audio.astype(np.float32)
@@ -204,6 +204,46 @@ def find_stem(files, keyword):
     return None
 
 # -----------------------------------------------------------------------------
+import logging
+
+logger = logging.getLogger("pharmakon.dsp")
+logger.addHandler(logging.NullHandler())
+
+def verify_wav_export(file_path, expected_subtype='PCM_24', expected_sr=None):
+    """Verifies exported WAV container header, non-empty frames, sample rate, and PCM subtype."""
+    if not file_path or not os.path.isfile(file_path):
+        raise FileNotFoundError(f"Exported WAV file not found: {file_path}")
+    info = sf.info(file_path)
+    if info.frames <= 0:
+        raise ValueError(f"Exported WAV has zero frames: {file_path}")
+    if expected_subtype is not None and info.subtype != expected_subtype:
+        raise ValueError(
+            f"Exported WAV subtype mismatch for {os.path.basename(file_path)}: "
+            f"got {info.subtype}, expected {expected_subtype}"
+        )
+    if expected_sr is not None and int(info.samplerate) != int(expected_sr):
+        raise ValueError(
+            f"Exported WAV samplerate mismatch for {os.path.basename(file_path)}: "
+            f"got {info.samplerate}, expected {expected_sr}"
+        )
+    logger.info(
+        "WAV export verified: file=%s subtype=%s sr=%d channels=%d frames=%d",
+        os.path.basename(file_path),
+        info.subtype,
+        int(info.samplerate),
+        int(info.channels),
+        int(info.frames),
+    )
+    return {
+        "path": file_path,
+        "format": info.format,
+        "subtype": info.subtype,
+        "samplerate": int(info.samplerate),
+        "channels": int(info.channels),
+        "frames": int(info.frames),
+        "valid": True,
+    }
+
 # 1. ITU-R BS.1770-4 / EBU R128 INTEGRATED LUFS METER
 # -----------------------------------------------------------------------------
 
@@ -410,6 +450,14 @@ def _true_peak_limiter_block(audio, sr, target_ceiling_db=-0.3, oversample=4):
     if peak_4x <= target_ceiling:
         true_peak_db = float(20.0 * np.log10(max(1e-9, peak_4x)))
         out_aud = audio.squeeze() if is_1d else audio
+        logger.debug(
+            "Limiter block bypass: frames=%d sr=%d peak_4x=%.6f <= ceiling=%.6f (%.2f dBFS)",
+            orig_len,
+            sr,
+            peak_4x,
+            target_ceiling,
+            target_ceiling_db,
+        )
         return out_aud.astype(np.float32), round(true_peak_db, 2)
 
     # 100% Stereo-Linked peak detection across channels
@@ -437,7 +485,24 @@ def _true_peak_limiter_block(audio, sr, target_ceiling_db=-0.3, oversample=4):
     # Soft-knee safety guard instead of brutal hard-clipping
     excess = np.maximum(0.0, np.abs(limited_1x) - target_ceiling)
     if np.any(excess > 0.0):
+        overshoot_samples = int(np.count_nonzero(excess > 0.0))
+        max_excess = float(np.max(excess))
+        logger.warning(
+            "Limiter post-decimation safety guard triggered: overshoot_samples=%d total_samples=%d max_excess=%.6f ceiling_db=%.2f",
+            overshoot_samples,
+            int(limited_1x.size),
+            max_excess,
+            target_ceiling_db,
+        )
         limited_1x = np.tanh(limited_1x / target_ceiling) * target_ceiling
+    else:
+        logger.debug(
+            "Limiter block processed: frames=%d sr=%d peak_4x_in=%.6f ceiling_db=%.2f guard_triggered=False",
+            orig_len,
+            sr,
+            peak_4x,
+            target_ceiling_db,
+        )
 
     actual_tp = float(np.max(np.abs(limited_4x)))
     true_peak_db = float(20.0 * np.log10(max(1e-9, actual_tp)))
@@ -485,6 +550,14 @@ def true_peak_limiter(audio, sr, target_ceiling_db=-0.3, oversample=4):
             if chunk_len > overlap:
                 out_audio[start_idx + overlap:start_idx + chunk_len] = proc_chunk[overlap:]
 
+    logger.info(
+        "Limiter chunked processing complete: total_frames=%d sr=%d step=%d fade_samples=%d max_tp_db=%.2f",
+        orig_len,
+        sr,
+        step,
+        fade_len,
+        round(max_tp_db, 2),
+    )
     return out_audio.astype(np.float32), round(max_tp_db, 2)
 
 
@@ -819,7 +892,86 @@ def align_sub_phase(drums, bass, sr, max_lag_ms=6.0, crossover_freq=100.0):
 
     # 4. Recombine phase-locked sub with pristine upper transient attack
     aligned_bass = (aligned_sub + bass_high)[:orig_len]
+    logger.info(
+        "Sub-Sync legacy alignment: sr=%d max_lag_ms=%.2f crossover_hz=%.1f best_lag_samples=%d polarity=%.1f",
+        sr,
+        max_lag_ms,
+        crossover_freq,
+        int(best_lag),
+        float(polarity),
+    )
     return aligned_bass.astype(np.float32), int(best_lag), float(polarity)
+
+# Preserve explicit reference to legacy Sub-Sync implementation (P0-1)
+align_sub_phase_legacy = align_sub_phase
+
+SUB_SYNC_MODES = ('off', 'legacy', 'windowed')
+
+EXPERIMENTAL_SUB_SYNC_DEFAULTS = {
+    'sub_sync_experimental': False,      # Experimental Sub-Sync disabled by default
+    'sub_sync_mode': 'off',              # 'off' | 'legacy' | 'windowed'
+    'sub_sync_max_lag_ms': 3.0,          # Max lag bound (ms) for experimental mode
+    'sub_sync_min_gain_db': 0.5,         # Minimum <100 Hz gain (dB) required to apply shift
+    'sub_sync_crossover_hz': 100.0,      # Sub/body crossover frequency (Hz)
+    'sub_sync_window_sec': 2.0,          # Window duration (s) for windowed Sub-Sync
+    'sub_sync_hop_sec': 1.0,             # Window hop (s) for windowed Sub-Sync
+    'sub_sync_max_xover_drop_db': 1.0,   # Max allowed loss in 85-120 Hz band (dB)
+}
+
+DEFAULT_PARAMS.update(EXPERIMENTAL_SUB_SYNC_DEFAULTS)
+
+def resolve_sub_sync_config(params=None):
+    """
+    Validates and resolves Sub-Sync configuration without enabling experimental DSP.
+    Experimental 'windowed' mode remains inactive until field validation is approved.
+    """
+    p = DEFAULT_PARAMS if params is None else params
+    exp_flag = bool(p.get('sub_sync_experimental', EXPERIMENTAL_SUB_SYNC_DEFAULTS['sub_sync_experimental']))
+    req_mode = str(p.get('sub_sync_mode', EXPERIMENTAL_SUB_SYNC_DEFAULTS['sub_sync_mode'])).strip().lower()
+    if req_mode not in SUB_SYNC_MODES:
+        raise ValueError(f"Invalid sub_sync_mode={req_mode!r}; expected one of {SUB_SYNC_MODES}")
+
+    max_lag_ms = float(p.get('sub_sync_max_lag_ms', EXPERIMENTAL_SUB_SYNC_DEFAULTS['sub_sync_max_lag_ms']))
+    min_gain_db = float(p.get('sub_sync_min_gain_db', EXPERIMENTAL_SUB_SYNC_DEFAULTS['sub_sync_min_gain_db']))
+    crossover_hz = float(p.get('sub_sync_crossover_hz', EXPERIMENTAL_SUB_SYNC_DEFAULTS['sub_sync_crossover_hz']))
+    window_sec = float(p.get('sub_sync_window_sec', EXPERIMENTAL_SUB_SYNC_DEFAULTS['sub_sync_window_sec']))
+    hop_sec = float(p.get('sub_sync_hop_sec', EXPERIMENTAL_SUB_SYNC_DEFAULTS['sub_sync_hop_sec']))
+    max_xover_drop_db = float(p.get('sub_sync_max_xover_drop_db', EXPERIMENTAL_SUB_SYNC_DEFAULTS['sub_sync_max_xover_drop_db']))
+
+    if not (0.0 < max_lag_ms <= 15.0):
+        raise ValueError(f"sub_sync_max_lag_ms out of range (0, 15]: {max_lag_ms}")
+    if min_gain_db < 0.0:
+        raise ValueError(f"sub_sync_min_gain_db must be >= 0.0: {min_gain_db}")
+    if not (40.0 <= crossover_hz <= 200.0):
+        raise ValueError(f"sub_sync_crossover_hz out of range [40, 200]: {crossover_hz}")
+    if window_sec <= 0.0 or not (0.0 < hop_sec <= window_sec):
+        raise ValueError(f"Invalid window/hop configuration: window_sec={window_sec}, hop_sec={hop_sec}")
+    if max_xover_drop_db < 0.0:
+        raise ValueError(f"sub_sync_max_xover_drop_db must be >= 0.0: {max_xover_drop_db}")
+
+    phase_align_legacy = bool(p.get('phase_align_sub', True))
+    effective_mode = 'legacy' if phase_align_legacy else 'off'
+    if exp_flag or req_mode == 'windowed':
+        logger.info(
+            "Sub-Sync experimental configuration requested (mode=%s, enabled=%s); keeping experimental DSP inactive (effective_mode=%s)",
+            req_mode,
+            exp_flag,
+            effective_mode,
+        )
+
+    return {
+        'phase_align_sub': phase_align_legacy,
+        'sub_sync_experimental': exp_flag,
+        'requested_mode': req_mode,
+        'effective_mode': effective_mode,
+        'experimental_active': False,
+        'sub_sync_max_lag_ms': max_lag_ms,
+        'sub_sync_min_gain_db': min_gain_db,
+        'sub_sync_crossover_hz': crossover_hz,
+        'sub_sync_window_sec': window_sec,
+        'sub_sync_hop_sec': hop_sec,
+        'sub_sync_max_xover_drop_db': max_xover_drop_db,
+    }
 
 def process_audio_array(audio, sr, params=None):
     """
@@ -857,6 +1009,15 @@ def process_audio_array(audio, sr, params=None):
     side_stereo_boost = float(params.get('side_stereo_boost', 1.20))
     target_ceiling_db = float(params.get('target_ceiling_db', -0.3))
     mode = params.get('mode', 'pharmakon1')
+    logger.info(
+        "DSP pipeline start: mode=%s preset=%s sr=%d frames=%d ceiling_db=%.2f tape_drive=%.3f",
+        mode,
+        params.get('preset'),
+        sr,
+        len(audio),
+        target_ceiling_db,
+        tape_drive,
+    )
 
     # 1. AUTO SPECTRAL ANTIDOTE (Intelligent resonance scanning)
     detected_freq, detected_q, detected_prom = None, None, None
@@ -948,6 +1109,13 @@ def process_audio_array(audio, sr, params=None):
         metrics['detected_resonance_hz'] = detected_freq
         metrics['detected_prominence_db'] = detected_prom
 
+    logger.info(
+        "DSP pipeline complete: mode=%s true_peak_proc_db=%.2f lufs_proc=%.2f detected_resonance_hz=%s",
+        mode,
+        metrics.get('true_peak_proc_db'),
+        metrics.get('lufs_proc'),
+        detected_freq,
+    )
     return full_mix, metrics
 
 def generate_svg_spectrum(freqs, orig_db, proc_db, delta_db=None, width=860, height=260, zoom_mode=False):
@@ -1426,7 +1594,11 @@ def process_single_file(file_path, params=None, open_folder=True):
     os.makedirs(out_dir, exist_ok=True)
     out_file = os.path.join(out_dir, f"{track_title} - STUDIO_REMASTER.wav")
 
-    sf.write(out_file, full_mix, sr)
+    export_subtype = str(params.get('export_subtype', 'PCM_24')) if isinstance(params, dict) else 'PCM_24'
+    sf.write(out_file, full_mix, sr, subtype=export_subtype)
+    metrics['export_verification'] = {
+        'master': verify_wav_export(out_file, expected_subtype=export_subtype, expected_sr=sr)
+    }
 
     # Save Extracted Poison Delta (Null Difference: original - master)
     try:
@@ -1435,6 +1607,7 @@ def process_single_file(file_path, params=None, open_folder=True):
         delta_audio = audio_st[:min_len] - full_mix[:min_len]
         out_delta = os.path.join(out_dir, f"{track_title} - DELTA_POISON.wav")
         sf.write(out_delta, delta_audio.astype(np.float32), sr, subtype='PCM_24')
+        metrics['export_verification']['delta'] = verify_wav_export(out_delta, expected_subtype='PCM_24', expected_sr=sr)
         metrics['delta_path'] = out_delta
         print(f"  Delta Poison: {os.path.basename(out_delta)}")
     except Exception as d_err:
@@ -1540,13 +1713,14 @@ def process_stems_folder(target_folder, params=None, open_folder=True):
     drums_proc = enhance_drum_transients(drums, sr, punch_factor=punch_factor)
 
     # --- SUB-SYNC PHASE ALIGNMENT (KICK & BASS) ---
+    sub_sync_cfg = resolve_sub_sync_config(params)
     if params.get('phase_align_sub', True):
         bass_proc, sub_lag, sub_pol = align_sub_phase(drums_proc, bass_proc, sr, max_lag_ms=6.0)
         pol_str = " (180 deg inverted)" if sub_pol < 0 else ""
-        print(f"      Sub-Sync: Phase aligned bass by {sub_lag} samples{pol_str} (+3..+6 dB constructive lock)")
+        print(f"      Sub-Sync: Phase aligned bass sub-band by {sub_lag} samples{pol_str}")
 
     # --- VOCALS ---
-    print(f"[3/4] VOCALS: Dynamic De-Harshing ({deharsh_f}Hz), Tape Warmth...")
+    print(f"[3/4] VOCALS: Dynamic De-Harshing ({deharsh_f}Hz), Soft Saturation...")
     vocals_clean = butter_highpass(vocals, 85, sr, order=3)
     vocals_deharsh = dynamic_deharsh(vocals_clean, sr, center_freq=deharsh_f, q=deharsh_q, depth=deharsh_depth)
     vocals_proc = np.tanh(vocals_deharsh * 1.08) * 0.96
@@ -1580,12 +1754,21 @@ def process_stems_folder(target_folder, params=None, open_folder=True):
     master_path = os.path.join(remaster_dir, f"{track_name} - STUDIO_REMASTER.wav")
     raw_sum_path = os.path.join(remaster_dir, f"{track_name} - RAW_SUM.wav")
 
-    sf.write(v_out, vocals_proc, sr)
-    sf.write(d_out, drums_proc, sr)
-    sf.write(b_out, bass_proc, sr)
-    sf.write(o_out, other_proc, sr)
-    sf.write(master_path, master_mix, sr)
-    sf.write(raw_sum_path, raw_sum, sr)
+    export_subtype = str(params.get('export_subtype', 'PCM_24')) if isinstance(params, dict) else 'PCM_24'
+    sf.write(v_out, vocals_proc, sr, subtype=export_subtype)
+    sf.write(d_out, drums_proc, sr, subtype=export_subtype)
+    sf.write(b_out, bass_proc, sr, subtype=export_subtype)
+    sf.write(o_out, other_proc, sr, subtype=export_subtype)
+    sf.write(master_path, master_mix, sr, subtype=export_subtype)
+    sf.write(raw_sum_path, raw_sum, sr, subtype=export_subtype)
+    export_verif = {
+        'vocals': verify_wav_export(v_out, expected_subtype=export_subtype, expected_sr=sr),
+        'drums': verify_wav_export(d_out, expected_subtype=export_subtype, expected_sr=sr),
+        'bass': verify_wav_export(b_out, expected_subtype=export_subtype, expected_sr=sr),
+        'other': verify_wav_export(o_out, expected_subtype=export_subtype, expected_sr=sr),
+        'master': verify_wav_export(master_path, expected_subtype=export_subtype, expected_sr=sr),
+        'raw_sum': verify_wav_export(raw_sum_path, expected_subtype=export_subtype, expected_sr=sr),
+    }
     metrics = calc_audio_metrics(raw_sum, master_mix, sr, params)
 
     # Save Extracted Poison Delta (Null Difference: raw sum - master)
@@ -1595,6 +1778,7 @@ def process_stems_folder(target_folder, params=None, open_folder=True):
         delta_audio = raw_st[:min_len] - master_mix[:min_len]
         delta_path = os.path.join(remaster_dir, f"{track_name} - DELTA_POISON.wav")
         sf.write(delta_path, delta_audio.astype(np.float32), sr, subtype='PCM_24')
+        export_verif['delta'] = verify_wav_export(delta_path, expected_subtype='PCM_24', expected_sr=sr)
         if metrics:
             metrics['delta_path'] = delta_path
         print(f"  Delta Poison: {os.path.basename(delta_path)}")
@@ -1607,6 +1791,8 @@ def process_stems_folder(target_folder, params=None, open_folder=True):
         print(f"[WARN] Could not generate stems HTML report: {rep_err}")
     if metrics:
         metrics['raw_sum_path'] = raw_sum_path
+        metrics['export_verification'] = export_verif
+        metrics['sub_sync_config'] = sub_sync_cfg
 
     print(f"\n=======================================================")
     print(f"  SUCCESS! Remaster completed!")
@@ -1625,7 +1811,7 @@ def process_stems_folder(target_folder, params=None, open_folder=True):
 # AUTONOMOUS STEM SEPARATION & DEEP STEM MASTERING
 # -----------------------------------------------------------------------------
 
-def split_audio_to_stems(input_path, output_stems_dir=None):
+def split_audio_to_stems(input_path, output_stems_dir=None, subtype='PCM_24'):
     """
     Autonomous Stem Separation:
     Decomposes single mixed stereo track into 4 distinct stems:
@@ -1735,10 +1921,16 @@ def split_audio_to_stems(input_path, output_stems_dir=None):
     vocals_path = os.path.join(output_stems_dir, "Vocals.wav")
     other_path = os.path.join(output_stems_dir, "Other.wav")
 
-    sf.write(drums_path, drums_stem.astype(np.float32), sr)
-    sf.write(bass_path, bass_stem.astype(np.float32), sr)
-    sf.write(vocals_path, vocals_stem.astype(np.float32), sr)
-    sf.write(other_path, other_stem.astype(np.float32), sr)
+    sf.write(drums_path, drums_stem.astype(np.float32), sr, subtype=subtype)
+    sf.write(bass_path, bass_stem.astype(np.float32), sr, subtype=subtype)
+    sf.write(vocals_path, vocals_stem.astype(np.float32), sr, subtype=subtype)
+    sf.write(other_path, other_stem.astype(np.float32), sr, subtype=subtype)
+    export_verif = {
+        "drums": verify_wav_export(drums_path, expected_subtype=subtype, expected_sr=sr),
+        "bass": verify_wav_export(bass_path, expected_subtype=subtype, expected_sr=sr),
+        "vocals": verify_wav_export(vocals_path, expected_subtype=subtype, expected_sr=sr),
+        "other": verify_wav_export(other_path, expected_subtype=subtype, expected_sr=sr),
+    }
 
     return output_stems_dir, {
         "drums": drums_path,
@@ -1746,7 +1938,8 @@ def split_audio_to_stems(input_path, output_stems_dir=None):
         "vocals": vocals_path,
         "other": other_path,
         "sr": sr,
-        "duration": orig_len / sr
+        "duration": orig_len / sr,
+        "export_verification": export_verif,
     }
 
 
