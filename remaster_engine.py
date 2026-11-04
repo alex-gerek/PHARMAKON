@@ -204,6 +204,33 @@ def find_stem(files, keyword):
     return None
 
 # -----------------------------------------------------------------------------
+def verify_wav_export(file_path, expected_subtype='PCM_24', expected_sr=None):
+    """Verifies exported WAV container header, non-empty frames, sample rate, and PCM subtype."""
+    if not file_path or not os.path.isfile(file_path):
+        raise FileNotFoundError(f"Exported WAV file not found: {file_path}")
+    info = sf.info(file_path)
+    if info.frames <= 0:
+        raise ValueError(f"Exported WAV has zero frames: {file_path}")
+    if expected_subtype is not None and info.subtype != expected_subtype:
+        raise ValueError(
+            f"Exported WAV subtype mismatch for {os.path.basename(file_path)}: "
+            f"got {info.subtype}, expected {expected_subtype}"
+        )
+    if expected_sr is not None and int(info.samplerate) != int(expected_sr):
+        raise ValueError(
+            f"Exported WAV samplerate mismatch for {os.path.basename(file_path)}: "
+            f"got {info.samplerate}, expected {expected_sr}"
+        )
+    return {
+        "path": file_path,
+        "format": info.format,
+        "subtype": info.subtype,
+        "samplerate": int(info.samplerate),
+        "channels": int(info.channels),
+        "frames": int(info.frames),
+        "valid": True,
+    }
+
 # 1. ITU-R BS.1770-4 / EBU R128 INTEGRATED LUFS METER
 # -----------------------------------------------------------------------------
 
@@ -1428,6 +1455,9 @@ def process_single_file(file_path, params=None, open_folder=True):
 
     export_subtype = str(params.get('export_subtype', 'PCM_24')) if isinstance(params, dict) else 'PCM_24'
     sf.write(out_file, full_mix, sr, subtype=export_subtype)
+    metrics['export_verification'] = {
+        'master': verify_wav_export(out_file, expected_subtype=export_subtype, expected_sr=sr)
+    }
 
     # Save Extracted Poison Delta (Null Difference: original - master)
     try:
@@ -1436,6 +1466,7 @@ def process_single_file(file_path, params=None, open_folder=True):
         delta_audio = audio_st[:min_len] - full_mix[:min_len]
         out_delta = os.path.join(out_dir, f"{track_title} - DELTA_POISON.wav")
         sf.write(out_delta, delta_audio.astype(np.float32), sr, subtype='PCM_24')
+        metrics['export_verification']['delta'] = verify_wav_export(out_delta, expected_subtype='PCM_24', expected_sr=sr)
         metrics['delta_path'] = out_delta
         print(f"  Delta Poison: {os.path.basename(out_delta)}")
     except Exception as d_err:
@@ -1588,6 +1619,14 @@ def process_stems_folder(target_folder, params=None, open_folder=True):
     sf.write(o_out, other_proc, sr, subtype=export_subtype)
     sf.write(master_path, master_mix, sr, subtype=export_subtype)
     sf.write(raw_sum_path, raw_sum, sr, subtype=export_subtype)
+    export_verif = {
+        'vocals': verify_wav_export(v_out, expected_subtype=export_subtype, expected_sr=sr),
+        'drums': verify_wav_export(d_out, expected_subtype=export_subtype, expected_sr=sr),
+        'bass': verify_wav_export(b_out, expected_subtype=export_subtype, expected_sr=sr),
+        'other': verify_wav_export(o_out, expected_subtype=export_subtype, expected_sr=sr),
+        'master': verify_wav_export(master_path, expected_subtype=export_subtype, expected_sr=sr),
+        'raw_sum': verify_wav_export(raw_sum_path, expected_subtype=export_subtype, expected_sr=sr),
+    }
     metrics = calc_audio_metrics(raw_sum, master_mix, sr, params)
 
     # Save Extracted Poison Delta (Null Difference: raw sum - master)
@@ -1597,6 +1636,7 @@ def process_stems_folder(target_folder, params=None, open_folder=True):
         delta_audio = raw_st[:min_len] - master_mix[:min_len]
         delta_path = os.path.join(remaster_dir, f"{track_name} - DELTA_POISON.wav")
         sf.write(delta_path, delta_audio.astype(np.float32), sr, subtype='PCM_24')
+        export_verif['delta'] = verify_wav_export(delta_path, expected_subtype='PCM_24', expected_sr=sr)
         if metrics:
             metrics['delta_path'] = delta_path
         print(f"  Delta Poison: {os.path.basename(delta_path)}")
@@ -1609,6 +1649,7 @@ def process_stems_folder(target_folder, params=None, open_folder=True):
         print(f"[WARN] Could not generate stems HTML report: {rep_err}")
     if metrics:
         metrics['raw_sum_path'] = raw_sum_path
+        metrics['export_verification'] = export_verif
 
     print(f"\n=======================================================")
     print(f"  SUCCESS! Remaster completed!")
@@ -1741,6 +1782,12 @@ def split_audio_to_stems(input_path, output_stems_dir=None, subtype='PCM_24'):
     sf.write(bass_path, bass_stem.astype(np.float32), sr, subtype=subtype)
     sf.write(vocals_path, vocals_stem.astype(np.float32), sr, subtype=subtype)
     sf.write(other_path, other_stem.astype(np.float32), sr, subtype=subtype)
+    export_verif = {
+        "drums": verify_wav_export(drums_path, expected_subtype=subtype, expected_sr=sr),
+        "bass": verify_wav_export(bass_path, expected_subtype=subtype, expected_sr=sr),
+        "vocals": verify_wav_export(vocals_path, expected_subtype=subtype, expected_sr=sr),
+        "other": verify_wav_export(other_path, expected_subtype=subtype, expected_sr=sr),
+    }
 
     return output_stems_dir, {
         "drums": drums_path,
@@ -1748,7 +1795,8 @@ def split_audio_to_stems(input_path, output_stems_dir=None, subtype='PCM_24'):
         "vocals": vocals_path,
         "other": other_path,
         "sr": sr,
-        "duration": orig_len / sr
+        "duration": orig_len / sr,
+        "export_verification": export_verif,
     }
 
 

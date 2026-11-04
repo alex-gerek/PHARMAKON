@@ -116,6 +116,37 @@ def test_split_audio_to_stems_exports_pcm24(tmp_path):
     out_dir, info = re_eng.split_audio_to_stems(str(in_wav))
     for key in ("drums", "bass", "vocals", "other"):
         assert sf.info(info[key]).subtype == "PCM_24", f"Stem {key} subtype={sf.info(info[key]).subtype}"
+        assert info["export_verification"][key]["valid"] is True
+        assert info["export_verification"][key]["subtype"] == "PCM_24"
+
+
+def test_verify_wav_export_validation_and_custom_subtype(tmp_path):
+    """Verifies verify_wav_export checks header subtype/sr/frames and supports custom export_subtype."""
+    sr = 48000
+    t = np.arange(sr, dtype=np.float64) / sr
+    src = np.column_stack([0.25 * np.sin(2 * np.pi * 220 * t)] * 2).astype(np.float32)
+
+    in_wav = tmp_path / "src_float_test.wav"
+    sf.write(in_wav, src, sr, subtype="PCM_16")
+
+    # 1. Direct mismatch detection
+    with pytest.raises(ValueError, match="subtype mismatch"):
+        re_eng.verify_wav_export(str(in_wav), expected_subtype="PCM_24", expected_sr=sr)
+    with pytest.raises(ValueError, match="samplerate mismatch"):
+        re_eng.verify_wav_export(str(in_wav), expected_subtype="PCM_16", expected_sr=44100)
+    with pytest.raises(FileNotFoundError):
+        re_eng.verify_wav_export(str(tmp_path / "nonexistent.wav"))
+
+    # 2. Custom export_subtype='FLOAT' verified automatically in process_single_file
+    out_file, metrics = re_eng.process_single_file(
+        str(in_wav),
+        params={"export_subtype": "FLOAT"},
+        open_folder=False,
+    )
+    assert sf.info(out_file).subtype == "FLOAT"
+    assert metrics["export_verification"]["master"]["subtype"] == "FLOAT"
+    assert metrics["export_verification"]["master"]["valid"] is True
+    assert metrics["export_verification"]["delta"]["subtype"] == "PCM_24"
 
 
 # =============================================================================
