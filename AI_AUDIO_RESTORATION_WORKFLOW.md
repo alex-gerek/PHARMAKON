@@ -54,9 +54,9 @@ PHARMAKON 2.0 addresses each acoustic defect with deterministic, causal, closed-
 ### Stage 3: Studer A800 Asymmetric Tape Warmth
 - **Problem:** Neural audio lacks analog body and contains sterile, sharp digital transitions.
 - **DSP Action:**
-  1. Asymmetric hyperbolic tangent curve with DC-offset compensation:
-     $$y = \frac{\tanh(\text{drive} \cdot x + b) - \tanh(b)}{\tanh(\text{drive})}$$
-  2. Working bias $b = 0.035$ generates musical **even 2nd harmonics at -37.8 dB**, mimicking physical magnetic tape tape compression.
+  1. 4X polyphase oversampled asymmetric hyperbolic tangent curve with global asymptote scaling:
+     $$y = \left(\tanh(\text{drive} \cdot x + b) - \tanh(b)\right) \cdot \frac{\text{ceiling}}{1 + \tanh(b)}$$
+  2. Working bias $b = 0.035$ generates musical **even 2nd harmonics at -38.05 dBc**, paired with a $10\text{ Hz}$ recursive one-pole DC-blocker ($|\text{DC}| < 10^{-7}$ in `float32`), mimicking physical magnetic tape compression.
   3. Removes digital glare and provides vintage analog cohesion ("glue").
 
 ### Stage 4: High-Frequency Polynomial Silk Exciter (> 15.5 kHz)

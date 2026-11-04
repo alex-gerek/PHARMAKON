@@ -7,7 +7,7 @@
 ### Created by Lex Gerek // Abbey Road 1974 × Blade Runner 2049
 
 <p align="center">
-  <a href="https://github.com/alex-gerek/PHARMAKON/releases/download/v2.0/PHARMAKON_v2.0_Windows_Portable.zip">
+  <a href="https://github.com/alex-gerek/PHARMAKON/releases/download/v2.0.3/PHARMAKON_v2.0.3_Windows_Portable.zip">
     <img src="https://img.shields.io/badge/Download%20Windows%20Portable%20(.exe)-0078D4?style=for-the-badge&logo=windows&logoColor=white" alt="Download Windows Portable">
   </a>
   &nbsp;
@@ -21,7 +21,9 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-2.0-emerald.svg?style=flat-square&color=10b981" alt="Version 2.0">
+  <img src="https://img.shields.io/badge/Version-2.0.3-emerald.svg?style=flat-square&color=10b981" alt="Version 2.0.3">
+  <img src="https://img.shields.io/badge/Export-24--Bit%20PCM__24-0d9488.svg?style=flat-square" alt="24-Bit PCM_24">
+  <img src="https://img.shields.io/badge/Auto--Sync-Live%20Patch%20Engine-6366f1.svg?style=flat-square" alt="Auto-Sync">
   <img src="https://img.shields.io/badge/DSP-Dynamic%20Ducker%20%2B%20Exciter-blue.svg?style=flat-square" alt="DSP Core">
   <img src="https://img.shields.io/badge/Oscilloscope-60%20FPS%20CRT%20%2B%20Phase%20Scope-brightgreen.svg?style=flat-square" alt="CRT Scope">
   <img src="https://img.shields.io/badge/True--Peak%20Limiter-4x%20Oversampling-f59e0b.svg?style=flat-square" alt="True Peak">
@@ -91,6 +93,12 @@ A 4x polyphase oversampled lookahead limiter (`scipy.signal.resample_poly`) enfo
 ### 📊 6. ITU-R BS.1770-4 / EBU R128 Loudness Metering
 True integrated LUFS calculation featuring dual-stage K-weighting filtering and gated energy integration (-70 LKFS absolute / -10 dB relative gate).
 
+### 📼 7. 4x Polyphase Asymmetric Tape Saturation & 10 Hz DC-Blocker
+Calibrated to Technical Whitepaper v2.6: combines 3.5 kHz HF pre-emphasis, 4x polyphase oversampling, global-asymptote scaled asymmetric `tanh` waveshaping (-38.05 dBc even 2nd-harmonic warmth, aliasing <= -48 dBc), and a 10 Hz recursive one-pole DC-blocker (`|DC| < 1e-7` steady-state in `float32`).
+
+### 🔒 8. Verified 24-Bit PCM_24 Export & Diagnostic Telemetry
+Every rendered studio master, `RAW_SUM`, `DELTA_POISON`, and stem WAV is explicitly written as 24-bit `PCM_24` and verified post-export (`verify_wav_export`) for frame count, sample rate, channel layout, and subtype, backed by non-intrusive `pharmakon.dsp` diagnostic logging.
+
 ---
 
 ## 3. Monitoring Bay: A / B / Δ (Delta Residue)
@@ -134,7 +142,7 @@ Repair isolated defects (such as a screeched AI vocal note at 0:45) without alte
 | Profile | Description | Factory Settings |
 |---|---|---|
 | **⚡ AUTO SCAN** | Automatic Welch PSD FFT resonance scanner | Dynamic peak search, adaptive Q-factor |
-| **🟡 SUNO v3.5/v4** | Neural vocoder detox, high-frequency air synthesis | Notch: 5200 Hz, Exciter: 18%, Sub: 34 Hz |
+| **🟡 SUNO v3.5/v4** | Neural vocoder detox, high-frequency air synthesis | Notch: 5200 Hz, Exciter: 18%, Sub: 35 Hz |
 | **🟣 UDIO 1.5** | Glassy harshness smoothing, 3D Mid/Side widening | Notch: 6100 Hz, Exciter: 14%, Tape: 1.06x |
 | **🔴 CLUB PUNCH** | High-energy kick/bass density, EDM transient puncher | Mono < 140 Hz, Drum Punch: +35%, -0.1 dBFS |
 | **⚪ AUDIOPHILE** | Transparent analog correction for acoustic & jazz | Subtle saturation, True-Peak: -0.5 dBFS |
@@ -166,6 +174,8 @@ If your production demands surgically isolated acapellas free of centered guitar
 1. **📄 OPEN FULL REPORT:** Opens an interactive HTML diagnostic report in your default browser with SVG spectrograms, LUFS/True-Peak metrics, and unique mastering serial number.
 2. **📸 EXPORT PNG CARD:** Generates a studio quality certificate card via native Windows "Save As..." dialog.
 3. **⬇ DOWNLOAD MASTER (.WAV):** Exports header-verified 24-bit `PCM_24` studio master WAV files with custom destination folder selection.
+4. **⚡ DELTA POISON (.WAV):** Exports the isolated null-difference artifact residue (`Raw - Master`) in verified 24-bit `PCM_24` WAV format.
+5. **📦 DOWNLOAD STEMS (.ZIP):** Packages all 4 separated or processed 24-bit `PCM_24` stems into a lossless studio archive.
 
 ---
 
@@ -175,7 +185,7 @@ If your production demands surgically isolated acapellas free of centered guitar
 > **No Python, no command-line, no compilers, no external libraries required.**
 
 1. **Download & Extract:**  
-   Download **[PHARMAKON_v2.0_Windows_Portable.zip](https://github.com/alex-gerek/PHARMAKON/releases/download/v2.0/PHARMAKON_v2.0_Windows_Portable.zip)** (142 MB).  
+   Download **[PHARMAKON_v2.0.3_Windows_Portable.zip](https://github.com/alex-gerek/PHARMAKON/releases/download/v2.0.3/PHARMAKON_v2.0.3_Windows_Portable.zip)** (169 MB).  
    > *Important:* Right-click the downloaded `.zip` file and select **"Extract All..."** into a folder of your choice (e.g. `Downloads`, `Desktop`, or `C:\PHARMAKON`). Running directly from inside an unextracted zip runs in a temporary cache.
 
 2. **Choose your installation method:**
@@ -196,6 +206,10 @@ If your production demands surgically isolated acapellas free of centered guitar
    * **Method C: Direct Standalone Launch**  
      - Double-click **`Start_Pharmakon.bat`** (or `Pharmakon.exe`).  
      - To cleanly stop the background engine when finished, double-click **`Stop_Pharmakon.bat`**.
+
+3. **🔄 Smart Online Auto-Update (`AUTO-SYNC`):**  
+   - On launch (or when clicking the header **`AUTO-SYNC v2.0.3`** status pill), PHARMAKON checks GitHub `VERSION.json` for verified DSP & UI patches, syntax-validates them atomically into `_live_patches/`, and hot-mounts updates on the fly.  
+   - **100% Offline Ready:** Remains completely standalone and functional with zero internet connection.
 
 ---
 
@@ -236,6 +250,12 @@ Pharmakon_GUI.bat
 *(Or run in terminal: `python gui/server.py`)*
 
 Open your browser at: 👉 **`http://127.0.0.1:7860`**
+
+#### 4. Run DSP regression & benchmark suites
+```bash
+pytest -v
+python tests/hunter_bench/run_hunter_bench.py
+```
 
 </details>
 

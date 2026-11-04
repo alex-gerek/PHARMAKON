@@ -84,7 +84,7 @@ By separating the track into **4 isolated stems (Drums, Bass, Vocals, Other/Inst
 
 Once all 4 stems are surgically treated, they are summed into the PHARMAKON Master Bus:
 
-1. **Analog Tape Density:** Inject even 2nd harmonics at $-37.8\text{ dB}$ via biased $\tanh$ curve to remove digital coldness.
+1. **Analog Tape Density:** Inject even 2nd harmonics at $-38.05\text{ dBc}$ via 4X oversampled global-asymptote scaled $\tanh$ saturation and a $10\text{ Hz}$ DC-blocker to remove digital coldness.
 2. **Silk Exciter (> 15.5 kHz):** Synthesize high-frequency air harmonics lost during 44.1 kHz neural model sampling.
 3. **4X Oversampled True-Peak Limiter:**
    - Ceiling: $-0.3\text{ dBFS}$ (Spotify / Apple Music / YouTube compliant).
@@ -105,7 +105,7 @@ Once all 4 stems are surgically treated, they are summed into the PHARMAKON Mast
    - Verify that Sub-Bass Phase Correlation reads $> +0.95$.
    - Confirm that the amber **Delta Residue ($\Delta$)** curve shows the eliminated 5.2 kHz resonance hump.
    - Check Dynamic Crest Factor ($> 10.0\text{ dB}$) confirming healthy punch.
-5. **Export:** Click `📦 DOWNLOAD STEMS (.ZIP)` for the isolated stems or `⬇ DOWNLOAD MASTER (.WAV)` for the finished track.
+5. **Export:** Click `📦 DOWNLOAD STEMS (.ZIP)` for the isolated 24-bit `PCM_24` stems or `⬇ DOWNLOAD MASTER (.WAV)` for the header-verified 24-bit `PCM_24` studio master.
 
 ---
 

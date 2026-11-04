@@ -1,10 +1,10 @@
 {
   "app": "PHARMAKON",
-  "version": "2.0.2",
-  "build_date": "2026-11-03",
+  "version": "2.0.3",
+  "build_date": "2026-11-04",
   "channel": "stable",
-  "release_url": "https://github.com/alex-gerek/PHARMAKON/releases/tag/v2.0",
-  "notes": "4X Asymmetric Tape Saturation + 10Hz DC-Blocker, Full-Track 4X True-Peak Audit, Isolated DELTA POISON Export, Non-Blocking Async Console, Audiophile Sync & Smart Online Auto-Update",
+  "release_url": "https://github.com/alex-gerek/PHARMAKON/releases/tag/v2.0.3",
+  "notes": "Verified 24-bit PCM_24 WAV Export Across All Pipelines, Post-Export WAV Header Verification, Non-Intrusive DSP Diagnostic Logging, Regression Audit Suite & Technical Documentation Fixes",
   "patch_files": [
     "remaster_engine.py",
     "gui/server.py",

@@ -10,7 +10,7 @@ $defaultDest = Join-Path ([System.Environment]::GetFolderPath('LocalApplicationD
 
 # Main Form
 $form = New-Object System.Windows.Forms.Form
-$form.Text = "PHARMAKON 2.0 // Installation Wizard"
+$form.Text = "PHARMAKON 2.0 (v2.0.3) // Installation Wizard"
 $form.Size = New-Object System.Drawing.Size(560, 420)
 $form.StartPosition = "CenterScreen"
 $form.FormBorderStyle = "FixedDialog"
@@ -35,7 +35,7 @@ $lblTitle.Size = New-Object System.Drawing.Size(500, 32)
 $form.Controls.Add($lblTitle)
 
 $lblSub = New-Object System.Windows.Forms.Label
-$lblSub.Text = "Neural Audio Antidote & Stem Mastering Setup"
+$lblSub.Text = "Neural Audio Antidote & Stem Mastering Setup | Build v2.0.3"
 $lblSub.Font = New-Object System.Drawing.Font("Segoe UI", 9)
 $lblSub.ForeColor = [System.Drawing.Color]::FromArgb(148, 163, 184)
 $lblSub.Location = New-Object System.Drawing.Point(26, 52)
@@ -235,7 +235,7 @@ $btnInstall.Add_Click({
         }
 
         [System.Windows.Forms.MessageBox]::Show(
-            "PHARMAKON 2.0 has been installed successfully!`n`nLocation: $targetDir`nDesktop Shortcut: Created",
+            "PHARMAKON v2.0.3 has been installed successfully!`n`nLocation: $targetDir`nDesktop Shortcut: Created",
             "Installation Complete",
             [System.Windows.Forms.MessageBoxButtons]::OK,
             [System.Windows.Forms.MessageBoxIcon]::Information

@@ -105,7 +105,7 @@ def browse_native(mode: str = "file"):
 @app.get("/api/system-info")
 def get_system_info():
     demos = [d for d in DEMO_TRACKS if os.path.exists(d["path"])]
-    ver = "2.0.2"
+    ver = "2.0.3"
     if auto_updater is not None:
         try:
             ver = auto_updater.get_active_version_info().get("version", ver)
@@ -125,7 +125,7 @@ def get_system_info():
 @app.get("/api/update-status")
 async def get_update_status():
     if auto_updater is None:
-        return {"state": "offline", "local_version": "2.0.2"}
+        return {"state": "offline", "local_version": "2.0.3"}
     cached = auto_updater.get_cached_status()
     if cached.get("state") == "idle":
         return await asyncio.to_thread(auto_updater.sync_online_patches, False, 2.5)
@@ -134,7 +134,7 @@ async def get_update_status():
 @app.post("/api/check-update")
 async def check_and_sync_update():
     if auto_updater is None:
-        return {"state": "offline", "local_version": "2.0.2"}
+        return {"state": "offline", "local_version": "2.0.3"}
     return await asyncio.to_thread(auto_updater.sync_online_patches, True, 4.0)
 
 @app.get("/api/presets")

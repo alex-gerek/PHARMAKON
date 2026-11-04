@@ -17,8 +17,8 @@ import urllib.request
 from pathlib import Path
 
 RAW_BASE_URL = "https://raw.githubusercontent.com/alex-gerek/PHARMAKON/master"
-RELEASE_PAGE_URL = "https://github.com/alex-gerek/PHARMAKON/releases/tag/v2.0"
-FALLBACK_VERSION = "2.0.2"
+RELEASE_PAGE_URL = "https://github.com/alex-gerek/PHARMAKON/releases/tag/v2.0.3"
+FALLBACK_VERSION = "2.0.3"
 
 _LAST_UPDATE_STATUS = {
     "state": "idle",
