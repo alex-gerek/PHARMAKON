@@ -1426,7 +1426,8 @@ def process_single_file(file_path, params=None, open_folder=True):
     os.makedirs(out_dir, exist_ok=True)
     out_file = os.path.join(out_dir, f"{track_title} - STUDIO_REMASTER.wav")
 
-    sf.write(out_file, full_mix, sr)
+    export_subtype = str(params.get('export_subtype', 'PCM_24')) if isinstance(params, dict) else 'PCM_24'
+    sf.write(out_file, full_mix, sr, subtype=export_subtype)
 
     # Save Extracted Poison Delta (Null Difference: original - master)
     try:
@@ -1580,12 +1581,13 @@ def process_stems_folder(target_folder, params=None, open_folder=True):
     master_path = os.path.join(remaster_dir, f"{track_name} - STUDIO_REMASTER.wav")
     raw_sum_path = os.path.join(remaster_dir, f"{track_name} - RAW_SUM.wav")
 
-    sf.write(v_out, vocals_proc, sr)
-    sf.write(d_out, drums_proc, sr)
-    sf.write(b_out, bass_proc, sr)
-    sf.write(o_out, other_proc, sr)
-    sf.write(master_path, master_mix, sr)
-    sf.write(raw_sum_path, raw_sum, sr)
+    export_subtype = str(params.get('export_subtype', 'PCM_24')) if isinstance(params, dict) else 'PCM_24'
+    sf.write(v_out, vocals_proc, sr, subtype=export_subtype)
+    sf.write(d_out, drums_proc, sr, subtype=export_subtype)
+    sf.write(b_out, bass_proc, sr, subtype=export_subtype)
+    sf.write(o_out, other_proc, sr, subtype=export_subtype)
+    sf.write(master_path, master_mix, sr, subtype=export_subtype)
+    sf.write(raw_sum_path, raw_sum, sr, subtype=export_subtype)
     metrics = calc_audio_metrics(raw_sum, master_mix, sr, params)
 
     # Save Extracted Poison Delta (Null Difference: raw sum - master)
@@ -1625,7 +1627,7 @@ def process_stems_folder(target_folder, params=None, open_folder=True):
 # AUTONOMOUS STEM SEPARATION & DEEP STEM MASTERING
 # -----------------------------------------------------------------------------
 
-def split_audio_to_stems(input_path, output_stems_dir=None):
+def split_audio_to_stems(input_path, output_stems_dir=None, subtype='PCM_24'):
     """
     Autonomous Stem Separation:
     Decomposes single mixed stereo track into 4 distinct stems:
@@ -1735,10 +1737,10 @@ def split_audio_to_stems(input_path, output_stems_dir=None):
     vocals_path = os.path.join(output_stems_dir, "Vocals.wav")
     other_path = os.path.join(output_stems_dir, "Other.wav")
 
-    sf.write(drums_path, drums_stem.astype(np.float32), sr)
-    sf.write(bass_path, bass_stem.astype(np.float32), sr)
-    sf.write(vocals_path, vocals_stem.astype(np.float32), sr)
-    sf.write(other_path, other_stem.astype(np.float32), sr)
+    sf.write(drums_path, drums_stem.astype(np.float32), sr, subtype=subtype)
+    sf.write(bass_path, bass_stem.astype(np.float32), sr, subtype=subtype)
+    sf.write(vocals_path, vocals_stem.astype(np.float32), sr, subtype=subtype)
+    sf.write(other_path, other_stem.astype(np.float32), sr, subtype=subtype)
 
     return output_stems_dir, {
         "drums": drums_path,
