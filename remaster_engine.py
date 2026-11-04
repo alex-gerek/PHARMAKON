@@ -138,7 +138,7 @@ def apply_tape_warmth_v2(audio: np.ndarray,
     - 3.5 kHz Pre-emphasis HF saturation tilt.
     - 4X Polyphase oversampling anti-aliasing.
     - Global-asymptote scaled asymmetric tanh waveshaping (H2 = -38.05 dBc).
-    - 10 Hz recursive One-Pole DC Blocker (clears DC drift < 10^-15).
+    - 10 Hz recursive One-Pole DC Blocker (steady-state |DC| < 1e-7 in float32).
     """
     if drive <= 1.0001 and abs(bias) < 1e-5:
         return audio.astype(np.float32)
@@ -1575,10 +1575,10 @@ def process_stems_folder(target_folder, params=None, open_folder=True):
     if params.get('phase_align_sub', True):
         bass_proc, sub_lag, sub_pol = align_sub_phase(drums_proc, bass_proc, sr, max_lag_ms=6.0)
         pol_str = " (180 deg inverted)" if sub_pol < 0 else ""
-        print(f"      Sub-Sync: Phase aligned bass by {sub_lag} samples{pol_str} (+3..+6 dB constructive lock)")
+        print(f"      Sub-Sync: Phase aligned bass sub-band by {sub_lag} samples{pol_str}")
 
     # --- VOCALS ---
-    print(f"[3/4] VOCALS: Dynamic De-Harshing ({deharsh_f}Hz), Tape Warmth...")
+    print(f"[3/4] VOCALS: Dynamic De-Harshing ({deharsh_f}Hz), Soft Saturation...")
     vocals_clean = butter_highpass(vocals, 85, sr, order=3)
     vocals_deharsh = dynamic_deharsh(vocals_clean, sr, center_freq=deharsh_f, q=deharsh_q, depth=deharsh_depth)
     vocals_proc = np.tanh(vocals_deharsh * 1.08) * 0.96
