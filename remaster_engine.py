@@ -848,6 +848,70 @@ def align_sub_phase(drums, bass, sr, max_lag_ms=6.0, crossover_freq=100.0):
     aligned_bass = (aligned_sub + bass_high)[:orig_len]
     return aligned_bass.astype(np.float32), int(best_lag), float(polarity)
 
+# Preserve explicit reference to legacy Sub-Sync implementation (P0-1)
+align_sub_phase_legacy = align_sub_phase
+
+SUB_SYNC_MODES = ('off', 'legacy', 'windowed')
+
+EXPERIMENTAL_SUB_SYNC_DEFAULTS = {
+    'sub_sync_experimental': False,      # Experimental Sub-Sync disabled by default
+    'sub_sync_mode': 'off',              # 'off' | 'legacy' | 'windowed'
+    'sub_sync_max_lag_ms': 3.0,          # Max lag bound (ms) for experimental mode
+    'sub_sync_min_gain_db': 0.5,         # Minimum <100 Hz gain (dB) required to apply shift
+    'sub_sync_crossover_hz': 100.0,      # Sub/body crossover frequency (Hz)
+    'sub_sync_window_sec': 2.0,          # Window duration (s) for windowed Sub-Sync
+    'sub_sync_hop_sec': 1.0,             # Window hop (s) for windowed Sub-Sync
+    'sub_sync_max_xover_drop_db': 1.0,   # Max allowed loss in 85-120 Hz band (dB)
+}
+
+DEFAULT_PARAMS.update(EXPERIMENTAL_SUB_SYNC_DEFAULTS)
+
+def resolve_sub_sync_config(params=None):
+    """
+    Validates and resolves Sub-Sync configuration without enabling experimental DSP.
+    Experimental 'windowed' mode remains inactive until field validation is approved.
+    """
+    p = DEFAULT_PARAMS if params is None else params
+    exp_flag = bool(p.get('sub_sync_experimental', EXPERIMENTAL_SUB_SYNC_DEFAULTS['sub_sync_experimental']))
+    req_mode = str(p.get('sub_sync_mode', EXPERIMENTAL_SUB_SYNC_DEFAULTS['sub_sync_mode'])).strip().lower()
+    if req_mode not in SUB_SYNC_MODES:
+        raise ValueError(f"Invalid sub_sync_mode={req_mode!r}; expected one of {SUB_SYNC_MODES}")
+
+    max_lag_ms = float(p.get('sub_sync_max_lag_ms', EXPERIMENTAL_SUB_SYNC_DEFAULTS['sub_sync_max_lag_ms']))
+    min_gain_db = float(p.get('sub_sync_min_gain_db', EXPERIMENTAL_SUB_SYNC_DEFAULTS['sub_sync_min_gain_db']))
+    crossover_hz = float(p.get('sub_sync_crossover_hz', EXPERIMENTAL_SUB_SYNC_DEFAULTS['sub_sync_crossover_hz']))
+    window_sec = float(p.get('sub_sync_window_sec', EXPERIMENTAL_SUB_SYNC_DEFAULTS['sub_sync_window_sec']))
+    hop_sec = float(p.get('sub_sync_hop_sec', EXPERIMENTAL_SUB_SYNC_DEFAULTS['sub_sync_hop_sec']))
+    max_xover_drop_db = float(p.get('sub_sync_max_xover_drop_db', EXPERIMENTAL_SUB_SYNC_DEFAULTS['sub_sync_max_xover_drop_db']))
+
+    if not (0.0 < max_lag_ms <= 15.0):
+        raise ValueError(f"sub_sync_max_lag_ms out of range (0, 15]: {max_lag_ms}")
+    if min_gain_db < 0.0:
+        raise ValueError(f"sub_sync_min_gain_db must be >= 0.0: {min_gain_db}")
+    if not (40.0 <= crossover_hz <= 200.0):
+        raise ValueError(f"sub_sync_crossover_hz out of range [40, 200]: {crossover_hz}")
+    if window_sec <= 0.0 or not (0.0 < hop_sec <= window_sec):
+        raise ValueError(f"Invalid window/hop configuration: window_sec={window_sec}, hop_sec={hop_sec}")
+    if max_xover_drop_db < 0.0:
+        raise ValueError(f"sub_sync_max_xover_drop_db must be >= 0.0: {max_xover_drop_db}")
+
+    phase_align_legacy = bool(p.get('phase_align_sub', True))
+    effective_mode = 'legacy' if phase_align_legacy else 'off'
+
+    return {
+        'phase_align_sub': phase_align_legacy,
+        'sub_sync_experimental': exp_flag,
+        'requested_mode': req_mode,
+        'effective_mode': effective_mode,
+        'experimental_active': False,
+        'sub_sync_max_lag_ms': max_lag_ms,
+        'sub_sync_min_gain_db': min_gain_db,
+        'sub_sync_crossover_hz': crossover_hz,
+        'sub_sync_window_sec': window_sec,
+        'sub_sync_hop_sec': hop_sec,
+        'sub_sync_max_xover_drop_db': max_xover_drop_db,
+    }
+
 def process_audio_array(audio, sr, params=None):
     """
     Processes stereo audio in-memory through the full PHARMAKON DSP mastering chain:
@@ -1572,6 +1636,7 @@ def process_stems_folder(target_folder, params=None, open_folder=True):
     drums_proc = enhance_drum_transients(drums, sr, punch_factor=punch_factor)
 
     # --- SUB-SYNC PHASE ALIGNMENT (KICK & BASS) ---
+    sub_sync_cfg = resolve_sub_sync_config(params)
     if params.get('phase_align_sub', True):
         bass_proc, sub_lag, sub_pol = align_sub_phase(drums_proc, bass_proc, sr, max_lag_ms=6.0)
         pol_str = " (180 deg inverted)" if sub_pol < 0 else ""
@@ -1650,6 +1715,7 @@ def process_stems_folder(target_folder, params=None, open_folder=True):
     if metrics:
         metrics['raw_sum_path'] = raw_sum_path
         metrics['export_verification'] = export_verif
+        metrics['sub_sync_config'] = sub_sync_cfg
 
     print(f"\n=======================================================")
     print(f"  SUCCESS! Remaster completed!")

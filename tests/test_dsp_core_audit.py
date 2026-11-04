@@ -313,6 +313,31 @@ def test_sub_sync_pure_antiphase_50hz_recovery():
     assert rms_after > rms_before * 5.0
 
 
+def test_experimental_sub_sync_config_disabled_by_default():
+    """Verifies experimental Sub-Sync config schema is prepared and disabled ('off' / False) by default."""
+    assert re_eng.align_sub_phase_legacy is re_eng.align_sub_phase
+    assert re_eng.DEFAULT_PARAMS["sub_sync_experimental"] is False
+    assert re_eng.DEFAULT_PARAMS["sub_sync_mode"] == "off"
+    assert re_eng.DEFAULT_PARAMS["sub_sync_max_lag_ms"] == 3.0
+    assert re_eng.DEFAULT_PARAMS["sub_sync_min_gain_db"] == 0.5
+    assert re_eng.DEFAULT_PARAMS["phase_align_sub"] is True
+
+    cfg = re_eng.resolve_sub_sync_config()
+    assert cfg["experimental_active"] is False
+    assert cfg["requested_mode"] == "off"
+    assert cfg["effective_mode"] == "legacy"
+
+    # Even if 'windowed' is requested in params, experimental DSP must remain inactive until approved
+    cfg_win = re_eng.resolve_sub_sync_config({"sub_sync_experimental": True, "sub_sync_mode": "windowed"})
+    assert cfg_win["requested_mode"] == "windowed"
+    assert cfg_win["experimental_active"] is False
+
+    with pytest.raises(ValueError, match="Invalid sub_sync_mode"):
+        re_eng.resolve_sub_sync_config({"sub_sync_mode": "invalid_mode"})
+    with pytest.raises(ValueError, match="sub_sync_max_lag_ms"):
+        re_eng.resolve_sub_sync_config({"sub_sync_max_lag_ms": 0.0})
+
+
 # =============================================================================
 # 4. TAPE SATURATION STAGE: HARMONICS, ALIASING & DC-BLOCKER (P1-1, P1-2)
 # =============================================================================
