@@ -204,6 +204,11 @@ def find_stem(files, keyword):
     return None
 
 # -----------------------------------------------------------------------------
+import logging
+
+logger = logging.getLogger("pharmakon.dsp")
+logger.addHandler(logging.NullHandler())
+
 def verify_wav_export(file_path, expected_subtype='PCM_24', expected_sr=None):
     """Verifies exported WAV container header, non-empty frames, sample rate, and PCM subtype."""
     if not file_path or not os.path.isfile(file_path):
@@ -221,6 +226,14 @@ def verify_wav_export(file_path, expected_subtype='PCM_24', expected_sr=None):
             f"Exported WAV samplerate mismatch for {os.path.basename(file_path)}: "
             f"got {info.samplerate}, expected {expected_sr}"
         )
+    logger.info(
+        "WAV export verified: file=%s subtype=%s sr=%d channels=%d frames=%d",
+        os.path.basename(file_path),
+        info.subtype,
+        int(info.samplerate),
+        int(info.channels),
+        int(info.frames),
+    )
     return {
         "path": file_path,
         "format": info.format,
@@ -437,6 +450,14 @@ def _true_peak_limiter_block(audio, sr, target_ceiling_db=-0.3, oversample=4):
     if peak_4x <= target_ceiling:
         true_peak_db = float(20.0 * np.log10(max(1e-9, peak_4x)))
         out_aud = audio.squeeze() if is_1d else audio
+        logger.debug(
+            "Limiter block bypass: frames=%d sr=%d peak_4x=%.6f <= ceiling=%.6f (%.2f dBFS)",
+            orig_len,
+            sr,
+            peak_4x,
+            target_ceiling,
+            target_ceiling_db,
+        )
         return out_aud.astype(np.float32), round(true_peak_db, 2)
 
     # 100% Stereo-Linked peak detection across channels
@@ -464,7 +485,24 @@ def _true_peak_limiter_block(audio, sr, target_ceiling_db=-0.3, oversample=4):
     # Soft-knee safety guard instead of brutal hard-clipping
     excess = np.maximum(0.0, np.abs(limited_1x) - target_ceiling)
     if np.any(excess > 0.0):
+        overshoot_samples = int(np.count_nonzero(excess > 0.0))
+        max_excess = float(np.max(excess))
+        logger.warning(
+            "Limiter post-decimation safety guard triggered: overshoot_samples=%d total_samples=%d max_excess=%.6f ceiling_db=%.2f",
+            overshoot_samples,
+            int(limited_1x.size),
+            max_excess,
+            target_ceiling_db,
+        )
         limited_1x = np.tanh(limited_1x / target_ceiling) * target_ceiling
+    else:
+        logger.debug(
+            "Limiter block processed: frames=%d sr=%d peak_4x_in=%.6f ceiling_db=%.2f guard_triggered=False",
+            orig_len,
+            sr,
+            peak_4x,
+            target_ceiling_db,
+        )
 
     actual_tp = float(np.max(np.abs(limited_4x)))
     true_peak_db = float(20.0 * np.log10(max(1e-9, actual_tp)))
@@ -512,6 +550,14 @@ def true_peak_limiter(audio, sr, target_ceiling_db=-0.3, oversample=4):
             if chunk_len > overlap:
                 out_audio[start_idx + overlap:start_idx + chunk_len] = proc_chunk[overlap:]
 
+    logger.info(
+        "Limiter chunked processing complete: total_frames=%d sr=%d step=%d fade_samples=%d max_tp_db=%.2f",
+        orig_len,
+        sr,
+        step,
+        fade_len,
+        round(max_tp_db, 2),
+    )
     return out_audio.astype(np.float32), round(max_tp_db, 2)
 
 
@@ -846,6 +892,14 @@ def align_sub_phase(drums, bass, sr, max_lag_ms=6.0, crossover_freq=100.0):
 
     # 4. Recombine phase-locked sub with pristine upper transient attack
     aligned_bass = (aligned_sub + bass_high)[:orig_len]
+    logger.info(
+        "Sub-Sync legacy alignment: sr=%d max_lag_ms=%.2f crossover_hz=%.1f best_lag_samples=%d polarity=%.1f",
+        sr,
+        max_lag_ms,
+        crossover_freq,
+        int(best_lag),
+        float(polarity),
+    )
     return aligned_bass.astype(np.float32), int(best_lag), float(polarity)
 
 # Preserve explicit reference to legacy Sub-Sync implementation (P0-1)
@@ -897,6 +951,13 @@ def resolve_sub_sync_config(params=None):
 
     phase_align_legacy = bool(p.get('phase_align_sub', True))
     effective_mode = 'legacy' if phase_align_legacy else 'off'
+    if exp_flag or req_mode == 'windowed':
+        logger.info(
+            "Sub-Sync experimental configuration requested (mode=%s, enabled=%s); keeping experimental DSP inactive (effective_mode=%s)",
+            req_mode,
+            exp_flag,
+            effective_mode,
+        )
 
     return {
         'phase_align_sub': phase_align_legacy,
@@ -948,6 +1009,15 @@ def process_audio_array(audio, sr, params=None):
     side_stereo_boost = float(params.get('side_stereo_boost', 1.20))
     target_ceiling_db = float(params.get('target_ceiling_db', -0.3))
     mode = params.get('mode', 'pharmakon1')
+    logger.info(
+        "DSP pipeline start: mode=%s preset=%s sr=%d frames=%d ceiling_db=%.2f tape_drive=%.3f",
+        mode,
+        params.get('preset'),
+        sr,
+        len(audio),
+        target_ceiling_db,
+        tape_drive,
+    )
 
     # 1. AUTO SPECTRAL ANTIDOTE (Intelligent resonance scanning)
     detected_freq, detected_q, detected_prom = None, None, None
@@ -1039,6 +1109,13 @@ def process_audio_array(audio, sr, params=None):
         metrics['detected_resonance_hz'] = detected_freq
         metrics['detected_prominence_db'] = detected_prom
 
+    logger.info(
+        "DSP pipeline complete: mode=%s true_peak_proc_db=%.2f lufs_proc=%.2f detected_resonance_hz=%s",
+        mode,
+        metrics.get('true_peak_proc_db'),
+        metrics.get('lufs_proc'),
+        detected_freq,
+    )
     return full_mix, metrics
 
 def generate_svg_spectrum(freqs, orig_db, proc_db, delta_db=None, width=860, height=260, zoom_mode=False):

@@ -521,3 +521,46 @@ def test_long_file_130s_chunk_boundary_continuity_and_true_peak():
 
     seam_tp_db = _measure_4x_true_peak_db(seam_slice)
     assert seam_tp_db <= ceiling_db + 0.05, f"Chunk seam 4X True-Peak {seam_tp_db:.3f} dBFS exceeded ceiling"
+
+
+# =============================================================================
+# 7. DIAGNOSTIC LOGGING TELEMETRY (ZERO AUDIO CHANGE)
+# =============================================================================
+
+def test_diagnostic_logging_emits_telemetry_without_changing_audio(tmp_path, caplog, baseline):
+    """
+    Verifies pharmakon.dsp logger emits structured pipeline, limiter safety-guard,
+    Sub-Sync, and WAV header verification records without altering a single sample.
+    """
+    import logging
+
+    sr = 48000
+    rng = np.random.default_rng(20261104)
+    t = np.arange(sr * 4, dtype=np.float64) / sr
+    sig_l = 0.45 * np.sin(2 * np.pi * 55 * t) + 0.25 * np.sin(2 * np.pi * 440 * t) + 0.18 * np.sin(2 * np.pi * 5200 * t) + 0.02 * rng.standard_normal(len(t))
+    sig_r = 0.45 * np.sin(2 * np.pi * 55 * t + 0.4) + 0.25 * np.sin(2 * np.pi * 440 * t - 0.2) + 0.18 * np.sin(2 * np.pi * 5200 * t) + 0.02 * rng.standard_normal(len(t))
+    synth_stereo = np.column_stack([sig_l, sig_r]).astype(np.float32)
+
+    with caplog.at_level(logging.DEBUG, logger="pharmakon.dsp"):
+        out_logged, _ = re_eng.process_audio_array(synth_stereo, sr)
+
+        in_wav = tmp_path / "diag_track.wav"
+        sf.write(in_wav, synth_stereo[:sr], sr, subtype="PCM_24")
+        re_eng.process_single_file(str(in_wav), open_folder=False)
+
+        # Trigger post-decimation safety guard diagnostic warning (5ms 4kHz band-limited square burst)
+        sq4 = np.sign(np.sin(2 * np.pi * 4000.0 * np.arange(960) / (sr * 4))) * 2.0
+        burst1 = signal.resample_poly(sq4, 1, 4)
+        spike = np.zeros((sr, 2), dtype=np.float32)
+        spike[1000 : 1000 + len(burst1), 0] = burst1.astype(np.float32)
+        spike[1000 : 1000 + len(burst1), 1] = burst1.astype(np.float32)
+        re_eng.true_peak_limiter(spike, sr, target_ceiling_db=-0.3, oversample=4)
+
+    messages = "\n".join(r.getMessage() for r in caplog.records if r.name == "pharmakon.dsp")
+    assert "DSP pipeline start:" in messages
+    assert "DSP pipeline complete:" in messages
+    assert "WAV export verified:" in messages
+    assert "Limiter post-decimation safety guard triggered:" in messages
+
+    # Bit-for-bit identity against Stage 1 baseline SHA-256
+    assert hashlib.sha256(out_logged.tobytes()).hexdigest() == baseline["dsp_output_hashes"]["synth_pharmakon1_sha256"]
