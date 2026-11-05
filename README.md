@@ -84,7 +84,7 @@ Unlike crude static EQ cuts that dull the entire performance, **PHARMAKON uses a
 An authentic harmonic synthesizer that extracts program material from the 8–13 kHz donor band, creates polyphonic even and odd harmonics via asymmetric non-linear saturation, high-passes above 15.5 kHz, and injects pure silky air (16–22 kHz) into the mix.
 
 ### 🎯 4. Low-End Phase Alignment (Sub Sync for Stems)
-When mastering stems (Drums + Bass + Vocals + Other), cross-correlation in the <100 Hz band estimates low-end phase offset and polarity within a bounded lag window to reduce destructive sub-bass cancellation.
+When mastering stems (Drums + Bass + Vocals + Other), cross-correlation in the <100 Hz band estimates low-end phase offset and polarity within a bounded lag window to reduce destructive sub-bass cancellation. See research article: [Death in the Club](articles/04_death_in_the_club_sub_phase_cancellation.md) ([Original publication on X](https://x.com/LexGerek/status/2118355503122182427)).
 
 ### 🛡 5. 4x Polyphase True-Peak Limiter & OOM Streaming Chunking
 A 4x polyphase oversampled lookahead limiter (`scipy.signal.resample_poly`) enforces zero inter-sample clipping across the master bus. Streaming chunking with raised-cosine crossfading prevents memory exhaustion (OOM) on long tracks and DJ sets.
@@ -275,7 +275,7 @@ Mathematical proofs, transfer functions, and AES/IEEE calibrations are documente
 * [01. Why Equalizers Cannot Cure AI Audio: The Physics of Dead Air Above 16 kHz](articles/01_why_equalizers_cannot_cure_ai_audio.md)
 * [02. Spectral Geometry vs Gigabyte Weights: Fast Deterministic DSP for Vocal Isolation](articles/02_neural_weights_vs_wiener_estimation.md)
 * [03. Beyond tanh: Engineering Asymmetric Saturation for Digital Audio](articles/03_magnetic_tape_physics_and_tanh_saturation.md) ([PDF Whitepaper](PHARMAKON_Saturation_Whitepaper.pdf))
-* [04. Death in the Club: The Low-End Phase War Between Kick and Sub-Bass (Sub-Sync)](articles/04_death_in_the_club_sub_phase_cancellation.md)
+* [04. Death in the Club: A Kick, a Bassline, and a Phase Problem That Refuses to Die](articles/04_death_in_the_club_sub_phase_cancellation.md) ([Original publication on X](https://x.com/LexGerek/status/2118355503122182427))
 * [05. Inter-Sample Peaks (True-Peak): Why Streaming Distorts and How 4X Polyphase Oversampling Solves It](articles/05_intersample_peaks_and_4x_oversampling.md)
 * [06. From Python to C++20: Architecting the Real-Time DSP Engine of PHARMAKON PRO](articles/06_from_python_to_cxx20_architecting_pharmakon_pro.md)
 

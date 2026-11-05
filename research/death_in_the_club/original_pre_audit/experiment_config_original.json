@@ -1,0 +1,84 @@
+{
+  "project": "PHARMAKON Research Task 04: Death in the Club",
+  "reference_paper": "Death in the Club: The Low-End Phase War Between Kick and Sub-Bass",
+  "environment": {
+    "os": "Windows-10-10.0.19045-SP0",
+    "python_version": "3.14.3",
+    "numpy_version": "2.4.2",
+    "scipy_version": "1.18.1",
+    "sample_rate_hz": 48000,
+    "git_commit": "0013ba7"
+  },
+  "seeds": {
+    "historical_30_runs_seed": 202611,
+    "boundary_conditions_seed": 202611
+  },
+  "methods_evaluated": {
+    "A_Baseline": "No correction (unaligned sum reference)",
+    "B_GlobalDelay": "Single global time delay and polarity inversion across full bass stem (max_lag=6.0ms)",
+    "C_LegacySubOnly": "remaster_engine.align_sub_phase (100 Hz LR4 crossover, circular roll sub-band only, max_lag=6.0ms)",
+    "D_GuardedPerKick": "Proposed Reference Prototype: Guarded Windowed Full-Range Alignment (GW-FRA, max_lag=3.0ms, min_gain=0.5dB, tukey taper)"
+  },
+  "filters": {
+    "crossover_freq_hz": 100.0,
+    "crossover_evaluation_band_hz": [
+      85.0,
+      120.0
+    ],
+    "sub_band_evaluation_cutoff_hz": 100.0
+  },
+  "summary_statistics": {
+    "A_Baseline": {
+      "total_runs": 54,
+      "all_tests_sub_gain_mean_db": 0.0,
+      "all_tests_sub_gain_min_db": 0.0,
+      "all_tests_sub_gain_max_db": 0.0,
+      "hist_30_runs_mean_db": 0.0,
+      "hist_30_runs_min_db": 0.0,
+      "hist_30_runs_max_db": 0.0,
+      "worst_crossover_drop_db": 0.0,
+      "improvements_count": 0,
+      "degradations_count": 0,
+      "neutral_count": 54
+    },
+    "B_GlobalDelay": {
+      "total_runs": 54,
+      "all_tests_sub_gain_mean_db": 2.98,
+      "all_tests_sub_gain_min_db": -0.007,
+      "all_tests_sub_gain_max_db": 116.96,
+      "hist_30_runs_mean_db": 0.202,
+      "hist_30_runs_min_db": -0.007,
+      "hist_30_runs_max_db": 0.779,
+      "worst_crossover_drop_db": -1.744,
+      "improvements_count": 32,
+      "degradations_count": 0,
+      "neutral_count": 22
+    },
+    "C_LegacySubOnly": {
+      "total_runs": 54,
+      "all_tests_sub_gain_mean_db": 2.448,
+      "all_tests_sub_gain_min_db": -1.172,
+      "all_tests_sub_gain_max_db": 116.434,
+      "hist_30_runs_mean_db": -0.451,
+      "hist_30_runs_min_db": -1.172,
+      "hist_30_runs_max_db": 0.125,
+      "worst_crossover_drop_db": -24.053,
+      "improvements_count": 12,
+      "degradations_count": 30,
+      "neutral_count": 12
+    },
+    "D_GuardedPerKick": {
+      "total_runs": 54,
+      "all_tests_sub_gain_mean_db": 2.784,
+      "all_tests_sub_gain_min_db": 0.0,
+      "all_tests_sub_gain_max_db": 116.78,
+      "hist_30_runs_mean_db": 0.581,
+      "hist_30_runs_min_db": 0.0,
+      "hist_30_runs_max_db": 1.379,
+      "worst_crossover_drop_db": -0.442,
+      "improvements_count": 36,
+      "degradations_count": 0,
+      "neutral_count": 18
+    }
+  }
+}

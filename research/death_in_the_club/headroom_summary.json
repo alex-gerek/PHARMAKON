@@ -1,0 +1,1176 @@
+{
+  "all_rows_counts": {
+    "c_degraded_all": 30,
+    "d_rows_with_any_polarity_inverted_event": 36,
+    "d_safe_path_all": 16
+  },
+  "cross_check_measurements_csv": {
+    "historical_30": {
+      "B_GlobalDelay": {
+        "mean_delta_sub_gain_db": 0.202,
+        "mean_delta_true_peak_db": 0.050867,
+        "n": 30
+      },
+      "C_LegacySubOnly": {
+        "mean_delta_sub_gain_db": -0.4512,
+        "mean_delta_true_peak_db": -1.064133,
+        "n": 30
+      },
+      "D_GuardedPerKick": {
+        "mean_delta_sub_gain_db": 0.581167,
+        "mean_delta_true_peak_db": -0.152633,
+        "n": 30
+      }
+    },
+    "source": "measurements.csv",
+    "source_sha256": "970bf2313bda994b29f0f644aadbd4d16b05426c14e38fd072fa185bbe1ff804"
+  },
+  "examples": {
+    "largest_tp_decrease": [
+      {
+        "delta_sub_gain_db": -1.1532,
+        "delta_true_peak_db": -3.0325,
+        "exp_id": "EXP_HIST_RUN_13",
+        "method": "C_LegacySubOnly"
+      },
+      {
+        "delta_sub_gain_db": 0.0337,
+        "delta_true_peak_db": -2.7396,
+        "exp_id": "EXP_HIST_RUN_05",
+        "method": "C_LegacySubOnly"
+      },
+      {
+        "delta_sub_gain_db": -0.6558,
+        "delta_true_peak_db": -2.459,
+        "exp_id": "EXP_HIST_RUN_23",
+        "method": "C_LegacySubOnly"
+      }
+    ],
+    "largest_tp_increase": [
+      {
+        "delta_sub_gain_db": 11.7507,
+        "delta_true_peak_db": 10.9546,
+        "exp_id": "EXP_PHASE_150",
+        "method": "B_GlobalDelay"
+      },
+      {
+        "delta_sub_gain_db": 11.2623,
+        "delta_true_peak_db": 10.4654,
+        "exp_id": "EXP_PHASE_150",
+        "method": "C_LegacySubOnly"
+      },
+      {
+        "delta_sub_gain_db": 6.0262,
+        "delta_true_peak_db": 6.0206,
+        "exp_id": "EXP_PHASE_120",
+        "method": "B_GlobalDelay"
+      }
+    ],
+    "sub_gain_ge_0p5db_without_tp_increase_by_method": {
+      "B_GlobalDelay": 3,
+      "C_LegacySubOnly": 0,
+      "D_GuardedPerKick": 20
+    },
+    "sub_gain_ge_0p5db_without_tp_increase_count": 23,
+    "sub_loss_and_tp_decrease_by_method": {
+      "B_GlobalDelay": 0,
+      "C_LegacySubOnly": 26,
+      "D_GuardedPerKick": 0
+    },
+    "sub_loss_and_tp_decrease_count": 26,
+    "tp_increase_gt_0p5db_with_sub_gain_lt_0p5db": [
+      {
+        "delta_sub_gain_db": 0.4385,
+        "delta_true_peak_db": 2.1634,
+        "exp_id": "EXP_HARMONIC_45HZ",
+        "method": "B_GlobalDelay"
+      },
+      {
+        "delta_sub_gain_db": 0.0373,
+        "delta_true_peak_db": 1.1786,
+        "exp_id": "EXP_HARMONIC_55HZ",
+        "method": "B_GlobalDelay"
+      },
+      {
+        "delta_sub_gain_db": 0.439,
+        "delta_true_peak_db": 1.0528,
+        "exp_id": "EXP_HIST_RUN_12",
+        "method": "B_GlobalDelay"
+      },
+      {
+        "delta_sub_gain_db": 0.0789,
+        "delta_true_peak_db": 0.7874,
+        "exp_id": "EXP_HARMONIC_50HZ",
+        "method": "B_GlobalDelay"
+      },
+      {
+        "delta_sub_gain_db": 0.1253,
+        "delta_true_peak_db": 0.7395,
+        "exp_id": "EXP_HIST_RUN_12",
+        "method": "C_LegacySubOnly"
+      }
+    ],
+    "tp_increase_gt_0p5db_with_sub_gain_lt_0p5db_count": 8
+  },
+  "excluded_scenarios": [
+    {
+      "exp_id": "EXP_BOUNDARY_LOW_ENERGY",
+      "reasons": [
+        "near-zero baseline sub RMS (-120.0000 dBFS <= -80.0 dBFS)",
+        "baseline true peak at/below floor (-120.0000 dBTP)"
+      ],
+      "signal_category": "boundary_conditions"
+    },
+    {
+      "exp_id": "EXP_BOUNDARY_SILENCE",
+      "reasons": [
+        "near-zero baseline sub RMS (-120.0000 dBFS <= -80.0 dBFS)",
+        "baseline true peak at/below floor (-120.0000 dBTP)"
+      ],
+      "signal_category": "boundary_conditions"
+    },
+    {
+      "exp_id": "EXP_PHASE_180",
+      "reasons": [
+        "near-zero baseline sub RMS (-120.0000 dBFS <= -80.0 dBFS)",
+        "baseline true peak at/below floor (-120.0000 dBTP)"
+      ],
+      "signal_category": "pure_phase_sweep"
+    }
+  ],
+  "figure6": {
+    "methods_plotted": [
+      "B_GlobalDelay",
+      "C_LegacySubOnly",
+      "D_GuardedPerKick"
+    ],
+    "n_observations_plotted": 153,
+    "n_scenarios_plotted": 51,
+    "points_outside_zoom": 9,
+    "subset": "primary_all_valid",
+    "zoom_x_db": [
+      -1.274316,
+      1.52758
+    ],
+    "zoom_y_db": [
+      -2.67742,
+      1.56152
+    ]
+  },
+  "filter_criteria": {
+    "active_methods": "method in {B_GlobalDelay, C_LegacySubOnly, D_GuardedPerKick}; Method A is the identity reference (all deltas 0 by construction) and is not an observation",
+    "axis_clipping": "none: Figure 6 panel (a) shows every observation in primary_all_valid; panel (b) is a labelled zoom and states how many points fall outside it",
+    "measurement_floor_db": -80.0,
+    "near_zero_definition": "baseline sub-band (<100 Hz, 4th-order Butterworth, zero-phase) RMS of drums+bass <= -80.0 dBFS",
+    "relative_gain_valid": "is_relative_gain_valid == True  (i.e. NOT near-zero)",
+    "subsets": {
+      "excl_abs_sub_gain_gt_3db": "primary_all_valid AND |delta_sub_gain_db| <= 3.0",
+      "excl_pure_phase_sweep": "primary_all_valid AND signal_category != 'pure_phase_sweep'",
+      "historical_30": "active method AND signal_category == 'historical_30_runs_seed202611'",
+      "non_boundary_valid": "primary_all_valid AND signal_category != 'boundary_conditions'  [the undocumented filter used by the superseded Figure 6]",
+      "primary_all_valid": "active method AND relative_gain_valid AND tp_delta_valid  [THIS IS EXACTLY THE SET PLOTTED IN FIGURE 6 AND USED FOR ALL HEADLINE CORRELATIONS]"
+    },
+    "tp_change_classes": "increase: dTP > +0.01 dB; decrease: dTP < -0.01 dB; unchanged: |dTP| <= 0.01 dB",
+    "tp_delta_valid": "is_tp_delta_valid == True  (baseline true peak > -80.0 dBTP)"
+  },
+  "integrity_checks": {
+    "clipping_applied_in_pipeline": false,
+    "clipping_note": "No np.clip / limiter in synthetic_signals, methods, remaster_engine.align_sub_phase or harness; float samples above 1.0 FS are preserved, so dBTP > 0 values are real over-ceiling measurements, not clipped values.",
+    "max_abs_headroom_identity_error_db": 0.0,
+    "max_abs_tp_delta_identity_error_db": 0.0001,
+    "meter_note": "EXP_PHASE_000 is 0.5 sin + 0.5 sin = 1.0 FS peak (0.000 dBTP analytically); the 4x resample_poly meter reads the stored value, i.e. its overshoot ripple on a stationary 50 Hz sine.",
+    "method_a_nonzero_delta_scenarios": [],
+    "phase000_baseline_tp_dbtp": 0.0055,
+    "phase000_expected_tp_dbtp": 0.0
+  },
+  "n_rows": 216,
+  "n_scenarios": 54,
+  "n_scenarios_near_zero": 3,
+  "n_scenarios_relative_valid": 51,
+  "near_zero_special_cases": [
+    {
+      "applied_lag_ms": 0.0,
+      "applied_polarity": 1.0,
+      "exp_id": "EXP_PHASE_180",
+      "method": "A_Baseline",
+      "safe_path_engaged": true,
+      "sub_rms_baseline_dbfs": -120.0,
+      "sub_rms_proc_dbfs": -120.0,
+      "true_peak_baseline_dbtp": -120.0,
+      "true_peak_baseline_linear": 0.0,
+      "true_peak_proc_dbtp": -120.0,
+      "true_peak_proc_linear": 0.0
+    },
+    {
+      "applied_lag_ms": 0.0,
+      "applied_polarity": -1.0,
+      "exp_id": "EXP_PHASE_180",
+      "method": "B_GlobalDelay",
+      "safe_path_engaged": false,
+      "sub_rms_baseline_dbfs": -120.0,
+      "sub_rms_proc_dbfs": -3.0397,
+      "true_peak_baseline_dbtp": -120.0,
+      "true_peak_baseline_linear": 0.0,
+      "true_peak_proc_dbtp": 0.0055,
+      "true_peak_proc_linear": 1.00063657
+    },
+    {
+      "applied_lag_ms": 0.0,
+      "applied_polarity": -1.0,
+      "exp_id": "EXP_PHASE_180",
+      "method": "C_LegacySubOnly",
+      "safe_path_engaged": false,
+      "sub_rms_baseline_dbfs": -120.0,
+      "sub_rms_proc_dbfs": -3.5661,
+      "true_peak_baseline_dbtp": -120.0,
+      "true_peak_baseline_linear": 0.0,
+      "true_peak_proc_dbtp": -0.521,
+      "true_peak_proc_linear": 0.94178007
+    },
+    {
+      "applied_lag_ms": 0.0,
+      "applied_polarity": -1.0,
+      "exp_id": "EXP_PHASE_180",
+      "method": "D_GuardedPerKick",
+      "safe_path_engaged": false,
+      "sub_rms_baseline_dbfs": -120.0,
+      "sub_rms_proc_dbfs": -3.2196,
+      "true_peak_baseline_dbtp": -120.0,
+      "true_peak_baseline_linear": 0.0,
+      "true_peak_proc_dbtp": 0.0055,
+      "true_peak_proc_linear": 1.00063657
+    },
+    {
+      "applied_lag_ms": 0.0,
+      "applied_polarity": 1.0,
+      "exp_id": "EXP_BOUNDARY_SILENCE",
+      "method": "A_Baseline",
+      "safe_path_engaged": true,
+      "sub_rms_baseline_dbfs": -120.0,
+      "sub_rms_proc_dbfs": -120.0,
+      "true_peak_baseline_dbtp": -120.0,
+      "true_peak_baseline_linear": 0.0,
+      "true_peak_proc_dbtp": -120.0,
+      "true_peak_proc_linear": 0.0
+    },
+    {
+      "applied_lag_ms": 0.0,
+      "applied_polarity": 1.0,
+      "exp_id": "EXP_BOUNDARY_SILENCE",
+      "method": "B_GlobalDelay",
+      "safe_path_engaged": true,
+      "sub_rms_baseline_dbfs": -120.0,
+      "sub_rms_proc_dbfs": -120.0,
+      "true_peak_baseline_dbtp": -120.0,
+      "true_peak_baseline_linear": 0.0,
+      "true_peak_proc_dbtp": -120.0,
+      "true_peak_proc_linear": 0.0
+    },
+    {
+      "applied_lag_ms": -6.0,
+      "applied_polarity": 1.0,
+      "exp_id": "EXP_BOUNDARY_SILENCE",
+      "method": "C_LegacySubOnly",
+      "safe_path_engaged": false,
+      "sub_rms_baseline_dbfs": -120.0,
+      "sub_rms_proc_dbfs": -120.0,
+      "true_peak_baseline_dbtp": -120.0,
+      "true_peak_baseline_linear": 0.0,
+      "true_peak_proc_dbtp": -120.0,
+      "true_peak_proc_linear": 0.0
+    },
+    {
+      "applied_lag_ms": 0.0,
+      "applied_polarity": 1.0,
+      "exp_id": "EXP_BOUNDARY_SILENCE",
+      "method": "D_GuardedPerKick",
+      "safe_path_engaged": true,
+      "sub_rms_baseline_dbfs": -120.0,
+      "sub_rms_proc_dbfs": -120.0,
+      "true_peak_baseline_dbtp": -120.0,
+      "true_peak_baseline_linear": 0.0,
+      "true_peak_proc_dbtp": -120.0,
+      "true_peak_proc_linear": 0.0
+    },
+    {
+      "applied_lag_ms": 0.0,
+      "applied_polarity": 1.0,
+      "exp_id": "EXP_BOUNDARY_LOW_ENERGY",
+      "method": "A_Baseline",
+      "safe_path_engaged": true,
+      "sub_rms_baseline_dbfs": -120.0,
+      "sub_rms_proc_dbfs": -120.0,
+      "true_peak_baseline_dbtp": -120.0,
+      "true_peak_baseline_linear": 0.0,
+      "true_peak_proc_dbtp": -120.0,
+      "true_peak_proc_linear": 0.0
+    },
+    {
+      "applied_lag_ms": 0.0,
+      "applied_polarity": 1.0,
+      "exp_id": "EXP_BOUNDARY_LOW_ENERGY",
+      "method": "B_GlobalDelay",
+      "safe_path_engaged": true,
+      "sub_rms_baseline_dbfs": -120.0,
+      "sub_rms_proc_dbfs": -120.0,
+      "true_peak_baseline_dbtp": -120.0,
+      "true_peak_baseline_linear": 0.0,
+      "true_peak_proc_dbtp": -120.0,
+      "true_peak_proc_linear": 0.0
+    },
+    {
+      "applied_lag_ms": 0.0,
+      "applied_polarity": -1.0,
+      "exp_id": "EXP_BOUNDARY_LOW_ENERGY",
+      "method": "C_LegacySubOnly",
+      "safe_path_engaged": false,
+      "sub_rms_baseline_dbfs": -120.0,
+      "sub_rms_proc_dbfs": -57.5455,
+      "true_peak_baseline_dbtp": -120.0,
+      "true_peak_baseline_linear": 0.0,
+      "true_peak_proc_dbtp": -54.5004,
+      "true_peak_proc_linear": 0.00188356
+    },
+    {
+      "applied_lag_ms": 0.0,
+      "applied_polarity": 1.0,
+      "exp_id": "EXP_BOUNDARY_LOW_ENERGY",
+      "method": "D_GuardedPerKick",
+      "safe_path_engaged": true,
+      "sub_rms_baseline_dbfs": -120.0,
+      "sub_rms_proc_dbfs": -120.0,
+      "true_peak_baseline_dbtp": -120.0,
+      "true_peak_baseline_linear": 0.0,
+      "true_peak_proc_dbtp": -120.0,
+      "true_peak_proc_linear": 0.0
+    }
+  ],
+  "points_hidden_by_superseded_axis_limits": [
+    {
+      "delta_sub_gain_db": 11.7507,
+      "delta_true_peak_db": 10.9546,
+      "exp_id": "EXP_PHASE_150",
+      "method": "B_GlobalDelay"
+    },
+    {
+      "delta_sub_gain_db": 11.2623,
+      "delta_true_peak_db": 10.4654,
+      "exp_id": "EXP_PHASE_150",
+      "method": "C_LegacySubOnly"
+    },
+    {
+      "delta_sub_gain_db": -1.1532,
+      "delta_true_peak_db": -3.0325,
+      "exp_id": "EXP_HIST_RUN_13",
+      "method": "C_LegacySubOnly"
+    }
+  ],
+  "previously_dropped_by_undocumented_boundary_filter": [
+    "EXP_BOUNDARY_HIGH_FREQ_NOISE",
+    "EXP_BOUNDARY_NON_OVERLAPPING"
+  ],
+  "primary_bootstrap": {
+    "pearson_ci95": [
+      0.508459,
+      0.96346
+    ],
+    "resamples": 2000,
+    "seed": 20261105,
+    "spearman_ci95": [
+      0.2542,
+      0.556963
+    ],
+    "unit": "scenario (exp_id)"
+  },
+  "primary_leave_one_scenario_out": {
+    "pearson_max": {
+      "dropped": "EXP_HIST_RUN_05",
+      "value": 0.917308
+    },
+    "pearson_min": {
+      "dropped": "EXP_PHASE_150",
+      "value": 0.783995
+    },
+    "spearman_max": {
+      "dropped": "EXP_HIST_RUN_02",
+      "value": 0.434255
+    },
+    "spearman_min": {
+      "dropped": "EXP_PHASE_060",
+      "value": 0.379332
+    }
+  },
+  "schema_version": 1,
+  "source_csv": "headroom_measurements.csv",
+  "source_csv_sha256": "96d3994ae42ed46a212f817f4da985ed8a993e76370569721ad81011094f1519",
+  "subsets": {
+    "excl_abs_sub_gain_gt_3db": {
+      "correlations": {
+        "B_GlobalDelay": {
+          "n": 48,
+          "pearson_p": 0.12335509630965746,
+          "pearson_r": 0.22547,
+          "spearman_p": 0.6616102199025564,
+          "spearman_rho": 0.064817
+        },
+        "C_LegacySubOnly": {
+          "n": 49,
+          "pearson_p": 1.581705414922427e-08,
+          "pearson_r": 0.704796,
+          "spearman_p": 9.775444709149378e-05,
+          "spearman_rho": 0.527667
+        },
+        "D_GuardedPerKick": {
+          "n": 51,
+          "pearson_p": 0.5309175834187247,
+          "pearson_r": -0.089791,
+          "spearman_p": 0.04697678284162912,
+          "spearman_rho": -0.279525
+        },
+        "pooled_BCD": {
+          "n": 148,
+          "pearson_p": 2.620415649877133e-13,
+          "pearson_r": 0.554546,
+          "spearman_p": 1.2171554626982393e-05,
+          "spearman_rho": 0.351046
+        }
+      },
+      "criterion": "primary_all_valid AND |delta_sub_gain_db| <= 3.0",
+      "n_observations": 148,
+      "n_scenarios": 51,
+      "per_method": {
+        "B_GlobalDelay": {
+          "baseline_exceeds_0dbtp_count": 42,
+          "delta_headroom_db": {
+            "max": 0.9415,
+            "mean": -0.151656,
+            "median": -0.10365,
+            "min": -2.1634,
+            "n": 48,
+            "std": 0.553776
+          },
+          "delta_sub_gain_db": {
+            "max": 1.2493,
+            "mean": 0.234477,
+            "median": 0.1303,
+            "min": -0.0095,
+            "n": 48,
+            "std": 0.28899
+          },
+          "delta_true_peak_db": {
+            "max": 2.1634,
+            "mean": 0.151656,
+            "median": 0.10365,
+            "min": -0.9415,
+            "n": 48,
+            "std": 0.553776
+          },
+          "n": 48,
+          "n_scenarios": 48,
+          "proc_exceeds_0dbtp_count": 45,
+          "safe_path_engaged_count": 1,
+          "sub_gain_degraded_count_lt_minus_0p1db": 0,
+          "tp_decrease_count": 16,
+          "tp_exactly_zero_count": 3,
+          "tp_increase_count": 28,
+          "tp_unchanged_count": 4
+        },
+        "C_LegacySubOnly": {
+          "baseline_exceeds_0dbtp_count": 42,
+          "delta_headroom_db": {
+            "max": 3.0325,
+            "mean": 0.603502,
+            "median": 0.3903,
+            "min": -3.4772,
+            "n": 49,
+            "std": 1.156563
+          },
+          "delta_sub_gain_db": {
+            "max": 2.7544,
+            "mean": -0.244869,
+            "median": -0.2163,
+            "min": -1.1724,
+            "n": 49,
+            "std": 0.629774
+          },
+          "delta_true_peak_db": {
+            "max": 3.4772,
+            "mean": -0.603502,
+            "median": -0.3903,
+            "min": -3.0325,
+            "n": 49,
+            "std": 1.156563
+          },
+          "n": 49,
+          "n_scenarios": 49,
+          "proc_exceeds_0dbtp_count": 44,
+          "safe_path_engaged_count": 0,
+          "sub_gain_degraded_count_lt_minus_0p1db": 30,
+          "tp_decrease_count": 35,
+          "tp_exactly_zero_count": 2,
+          "tp_increase_count": 10,
+          "tp_unchanged_count": 4
+        },
+        "D_GuardedPerKick": {
+          "baseline_exceeds_0dbtp_count": 42,
+          "delta_headroom_db": {
+            "max": 1.1041,
+            "mean": 0.065508,
+            "median": 0.0,
+            "min": -1.2375,
+            "n": 51,
+            "std": 0.319452
+          },
+          "delta_sub_gain_db": {
+            "max": 1.3793,
+            "mean": 0.439539,
+            "median": 0.2739,
+            "min": 0.0,
+            "n": 51,
+            "std": 0.443551
+          },
+          "delta_true_peak_db": {
+            "max": 1.2375,
+            "mean": -0.065508,
+            "median": 0.0,
+            "min": -1.1041,
+            "n": 51,
+            "std": 0.319452
+          },
+          "n": 51,
+          "n_scenarios": 51,
+          "proc_exceeds_0dbtp_count": 42,
+          "safe_path_engaged_count": 14,
+          "sub_gain_degraded_count_lt_minus_0p1db": 0,
+          "tp_decrease_count": 8,
+          "tp_exactly_zero_count": 41,
+          "tp_increase_count": 2,
+          "tp_unchanged_count": 41
+        }
+      }
+    },
+    "excl_pure_phase_sweep": {
+      "correlations": {
+        "B_GlobalDelay": {
+          "n": 45,
+          "pearson_p": 0.5799521015717756,
+          "pearson_r": 0.08474,
+          "spearman_p": 0.8815085771005752,
+          "spearman_rho": -0.022861
+        },
+        "C_LegacySubOnly": {
+          "n": 45,
+          "pearson_p": 0.0008003174036130911,
+          "pearson_r": 0.482006,
+          "spearman_p": 0.0032675836295843284,
+          "spearman_rho": 0.429117
+        },
+        "D_GuardedPerKick": {
+          "n": 45,
+          "pearson_p": 0.07093788412339815,
+          "pearson_r": -0.27176,
+          "spearman_p": 0.008715816870547706,
+          "spearman_rho": -0.386562
+        },
+        "pooled_BCD": {
+          "n": 135,
+          "pearson_p": 1.2101753476454044e-07,
+          "pearson_r": 0.436465,
+          "spearman_p": 0.0004660797123290087,
+          "spearman_rho": 0.297123
+        }
+      },
+      "criterion": "primary_all_valid AND signal_category != 'pure_phase_sweep'",
+      "n_observations": 135,
+      "n_scenarios": 45,
+      "per_method": {
+        "B_GlobalDelay": {
+          "baseline_exceeds_0dbtp_count": 41,
+          "delta_headroom_db": {
+            "max": 0.9415,
+            "mean": -0.127311,
+            "median": -0.0748,
+            "min": -2.1634,
+            "n": 45,
+            "std": 0.546401
+          },
+          "delta_sub_gain_db": {
+            "max": 0.9691,
+            "mean": 0.215656,
+            "median": 0.118,
+            "min": -0.0095,
+            "n": 45,
+            "std": 0.253161
+          },
+          "delta_true_peak_db": {
+            "max": 2.1634,
+            "mean": 0.127311,
+            "median": 0.0748,
+            "min": -0.9415,
+            "n": 45,
+            "std": 0.546401
+          },
+          "n": 45,
+          "n_scenarios": 45,
+          "proc_exceeds_0dbtp_count": 42,
+          "safe_path_engaged_count": 1,
+          "sub_gain_degraded_count_lt_minus_0p1db": 0,
+          "tp_decrease_count": 16,
+          "tp_exactly_zero_count": 2,
+          "tp_increase_count": 26,
+          "tp_unchanged_count": 3
+        },
+        "C_LegacySubOnly": {
+          "baseline_exceeds_0dbtp_count": 41,
+          "delta_headroom_db": {
+            "max": 3.0325,
+            "mean": 0.768807,
+            "median": 0.4997,
+            "min": -0.7395,
+            "n": 45,
+            "std": 0.972988
+          },
+          "delta_sub_gain_db": {
+            "max": 0.3294,
+            "mean": -0.358724,
+            "median": -0.2676,
+            "min": -1.1724,
+            "n": 45,
+            "std": 0.406356
+          },
+          "delta_true_peak_db": {
+            "max": 0.7395,
+            "mean": -0.768807,
+            "median": -0.4997,
+            "min": -3.0325,
+            "n": 45,
+            "std": 0.972988
+          },
+          "n": 45,
+          "n_scenarios": 45,
+          "proc_exceeds_0dbtp_count": 41,
+          "safe_path_engaged_count": 0,
+          "sub_gain_degraded_count_lt_minus_0p1db": 30,
+          "tp_decrease_count": 35,
+          "tp_exactly_zero_count": 1,
+          "tp_increase_count": 7,
+          "tp_unchanged_count": 3
+        },
+        "D_GuardedPerKick": {
+          "baseline_exceeds_0dbtp_count": 41,
+          "delta_headroom_db": {
+            "max": 1.1041,
+            "mean": 0.101742,
+            "median": 0.0,
+            "min": -0.0589,
+            "n": 45,
+            "std": 0.27486
+          },
+          "delta_sub_gain_db": {
+            "max": 1.3793,
+            "mean": 0.471364,
+            "median": 0.3551,
+            "min": 0.0,
+            "n": 45,
+            "std": 0.433408
+          },
+          "delta_true_peak_db": {
+            "max": 0.0589,
+            "mean": -0.101742,
+            "median": 0.0,
+            "min": -1.1041,
+            "n": 45,
+            "std": 0.27486
+          },
+          "n": 45,
+          "n_scenarios": 45,
+          "proc_exceeds_0dbtp_count": 41,
+          "safe_path_engaged_count": 11,
+          "sub_gain_degraded_count_lt_minus_0p1db": 0,
+          "tp_decrease_count": 8,
+          "tp_exactly_zero_count": 36,
+          "tp_increase_count": 1,
+          "tp_unchanged_count": 36
+        }
+      }
+    },
+    "historical_30": {
+      "correlations": {
+        "B_GlobalDelay": {
+          "n": 30,
+          "pearson_p": 0.19164944519738017,
+          "pearson_r": 0.24515,
+          "spearman_p": 0.7873951348360013,
+          "spearman_rho": 0.05139
+        },
+        "C_LegacySubOnly": {
+          "n": 30,
+          "pearson_p": 0.004522832025487616,
+          "pearson_r": 0.503924,
+          "spearman_p": 0.010738880925773088,
+          "spearman_rho": 0.458954
+        },
+        "D_GuardedPerKick": {
+          "n": 30,
+          "pearson_p": 0.24358007105638613,
+          "pearson_r": -0.219617,
+          "spearman_p": 0.0657276980115595,
+          "spearman_rho": -0.340339
+        },
+        "pooled_BCD": {
+          "n": 90,
+          "pearson_p": 1.4782492239585568e-07,
+          "pearson_r": 0.520224,
+          "spearman_p": 0.00013476087929172596,
+          "spearman_rho": 0.391682
+        }
+      },
+      "criterion": "active method AND signal_category == 'historical_30_runs_seed202611'",
+      "n_observations": 90,
+      "n_scenarios": 30,
+      "per_method": {
+        "B_GlobalDelay": {
+          "baseline_exceeds_0dbtp_count": 30,
+          "delta_headroom_db": {
+            "max": 0.9415,
+            "mean": -0.050777,
+            "median": -0.0629,
+            "min": -1.0528,
+            "n": 30,
+            "std": 0.458194
+          },
+          "delta_sub_gain_db": {
+            "max": 0.7786,
+            "mean": 0.20198,
+            "median": 0.152,
+            "min": -0.0071,
+            "n": 30,
+            "std": 0.227093
+          },
+          "delta_true_peak_db": {
+            "max": 1.0528,
+            "mean": 0.050777,
+            "median": 0.0629,
+            "min": -0.9415,
+            "n": 30,
+            "std": 0.458194
+          },
+          "n": 30,
+          "n_scenarios": 30,
+          "proc_exceeds_0dbtp_count": 30,
+          "safe_path_engaged_count": 0,
+          "sub_gain_degraded_count_lt_minus_0p1db": 0,
+          "tp_decrease_count": 11,
+          "tp_exactly_zero_count": 0,
+          "tp_increase_count": 18,
+          "tp_unchanged_count": 1
+        },
+        "C_LegacySubOnly": {
+          "baseline_exceeds_0dbtp_count": 30,
+          "delta_headroom_db": {
+            "max": 3.0325,
+            "mean": 1.064187,
+            "median": 0.99335,
+            "min": -0.7395,
+            "n": 30,
+            "std": 1.047809
+          },
+          "delta_sub_gain_db": {
+            "max": 0.1253,
+            "mean": -0.451137,
+            "median": -0.38995,
+            "min": -1.1724,
+            "n": 30,
+            "std": 0.387054
+          },
+          "delta_true_peak_db": {
+            "max": 0.7395,
+            "mean": -1.064187,
+            "median": -0.99335,
+            "min": -3.0325,
+            "n": 30,
+            "std": 1.047809
+          },
+          "n": 30,
+          "n_scenarios": 30,
+          "proc_exceeds_0dbtp_count": 30,
+          "safe_path_engaged_count": 0,
+          "sub_gain_degraded_count_lt_minus_0p1db": 23,
+          "tp_decrease_count": 25,
+          "tp_exactly_zero_count": 0,
+          "tp_increase_count": 3,
+          "tp_unchanged_count": 2
+        },
+        "D_GuardedPerKick": {
+          "baseline_exceeds_0dbtp_count": 30,
+          "delta_headroom_db": {
+            "max": 1.1041,
+            "mean": 0.152613,
+            "median": 0.0,
+            "min": -0.0589,
+            "n": 30,
+            "std": 0.326486
+          },
+          "delta_sub_gain_db": {
+            "max": 1.3793,
+            "mean": 0.581183,
+            "median": 0.62925,
+            "min": 0.0,
+            "n": 30,
+            "std": 0.443239
+          },
+          "delta_true_peak_db": {
+            "max": 0.0589,
+            "mean": -0.152613,
+            "median": 0.0,
+            "min": -1.1041,
+            "n": 30,
+            "std": 0.326486
+          },
+          "n": 30,
+          "n_scenarios": 30,
+          "proc_exceeds_0dbtp_count": 30,
+          "safe_path_engaged_count": 4,
+          "sub_gain_degraded_count_lt_minus_0p1db": 0,
+          "tp_decrease_count": 8,
+          "tp_exactly_zero_count": 21,
+          "tp_increase_count": 1,
+          "tp_unchanged_count": 21
+        }
+      }
+    },
+    "non_boundary_valid": {
+      "correlations": {
+        "B_GlobalDelay": {
+          "n": 49,
+          "pearson_p": 4.956157852681854e-26,
+          "pearson_r": 0.953067,
+          "spearman_p": 0.16126348232376586,
+          "spearman_rho": 0.20327
+        },
+        "C_LegacySubOnly": {
+          "n": 49,
+          "pearson_p": 6.615925033268502e-21,
+          "pearson_r": 0.921275,
+          "spearman_p": 4.895208560621326e-06,
+          "spearman_rho": 0.601327
+        },
+        "D_GuardedPerKick": {
+          "n": 49,
+          "pearson_p": 0.5701735885266734,
+          "pearson_r": -0.083119,
+          "spearman_p": 0.055689905480540244,
+          "spearman_rho": -0.275152
+        },
+        "pooled_BCD": {
+          "n": 147,
+          "pearson_p": 6.0904619394655236e-58,
+          "pearson_r": 0.911877,
+          "spearman_p": 1.867262852886212e-07,
+          "spearman_rho": 0.413975
+        }
+      },
+      "criterion": "primary_all_valid AND signal_category != 'boundary_conditions'  [the undocumented filter used by the superseded Figure 6]",
+      "n_observations": 147,
+      "n_scenarios": 49,
+      "per_method": {
+        "B_GlobalDelay": {
+          "baseline_exceeds_0dbtp_count": 42,
+          "delta_headroom_db": {
+            "max": 0.9415,
+            "mean": -0.567718,
+            "median": -0.1503,
+            "min": -10.9546,
+            "n": 49,
+            "std": 1.874577
+          },
+          "delta_sub_gain_db": {
+            "max": 11.7507,
+            "mean": 0.654104,
+            "median": 0.1675,
+            "min": -0.0071,
+            "n": 49,
+            "std": 1.876679
+          },
+          "delta_true_peak_db": {
+            "max": 10.9546,
+            "mean": 0.567718,
+            "median": 0.1503,
+            "min": -0.9415,
+            "n": 49,
+            "std": 1.874577
+          },
+          "n": 49,
+          "n_scenarios": 49,
+          "proc_exceeds_0dbtp_count": 48,
+          "safe_path_engaged_count": 0,
+          "sub_gain_degraded_count_lt_minus_0p1db": 0,
+          "tp_decrease_count": 16,
+          "tp_exactly_zero_count": 1,
+          "tp_increase_count": 31,
+          "tp_unchanged_count": 2
+        },
+        "C_LegacySubOnly": {
+          "baseline_exceeds_0dbtp_count": 42,
+          "delta_headroom_db": {
+            "max": 3.0325,
+            "mean": 0.260488,
+            "median": 0.3268,
+            "min": -10.4654,
+            "n": 49,
+            "std": 2.138269
+          },
+          "delta_sub_gain_db": {
+            "max": 11.2623,
+            "mean": 0.122259,
+            "median": -0.1706,
+            "min": -1.1724,
+            "n": 49,
+            "std": 1.932486
+          },
+          "delta_true_peak_db": {
+            "max": 10.4654,
+            "mean": -0.260488,
+            "median": -0.3268,
+            "min": -3.0325,
+            "n": 49,
+            "std": 2.138269
+          },
+          "n": 49,
+          "n_scenarios": 49,
+          "proc_exceeds_0dbtp_count": 44,
+          "safe_path_engaged_count": 0,
+          "sub_gain_degraded_count_lt_minus_0p1db": 28,
+          "tp_decrease_count": 34,
+          "tp_exactly_zero_count": 1,
+          "tp_increase_count": 12,
+          "tp_unchanged_count": 3
+        },
+        "D_GuardedPerKick": {
+          "baseline_exceeds_0dbtp_count": 42,
+          "delta_headroom_db": {
+            "max": 1.1041,
+            "mean": 0.068182,
+            "median": 0.0,
+            "min": -1.2375,
+            "n": 49,
+            "std": 0.325753
+          },
+          "delta_sub_gain_db": {
+            "max": 1.3793,
+            "mean": 0.45748,
+            "median": 0.3181,
+            "min": 0.0,
+            "n": 49,
+            "std": 0.443347
+          },
+          "delta_true_peak_db": {
+            "max": 1.2375,
+            "mean": -0.068182,
+            "median": 0.0,
+            "min": -1.1041,
+            "n": 49,
+            "std": 0.325753
+          },
+          "n": 49,
+          "n_scenarios": 49,
+          "proc_exceeds_0dbtp_count": 42,
+          "safe_path_engaged_count": 12,
+          "sub_gain_degraded_count_lt_minus_0p1db": 0,
+          "tp_decrease_count": 8,
+          "tp_exactly_zero_count": 39,
+          "tp_increase_count": 2,
+          "tp_unchanged_count": 39
+        }
+      }
+    },
+    "primary_all_valid": {
+      "correlations": {
+        "B_GlobalDelay": {
+          "n": 51,
+          "pearson_p": 4.111904023144488e-27,
+          "pearson_r": 0.953222,
+          "spearman_p": 0.1201673650245124,
+          "spearman_rho": 0.220392
+        },
+        "C_LegacySubOnly": {
+          "n": 51,
+          "pearson_p": 2.037744836837587e-21,
+          "pearson_r": 0.918792,
+          "spearman_p": 7.784197744851691e-06,
+          "spearman_rho": 0.581099
+        },
+        "D_GuardedPerKick": {
+          "n": 51,
+          "pearson_p": 0.5309175834187247,
+          "pearson_r": -0.089791,
+          "spearman_p": 0.04697678284162912,
+          "spearman_rho": -0.279525
+        },
+        "pooled_BCD": {
+          "n": 153,
+          "pearson_p": 9.656254549128202e-60,
+          "pearson_r": 0.910375,
+          "spearman_p": 1.0808117215264869e-07,
+          "spearman_rho": 0.413507
+        }
+      },
+      "criterion": "active method AND relative_gain_valid AND tp_delta_valid  [THIS IS EXACTLY THE SET PLOTTED IN FIGURE 6 AND USED FOR ALL HEADLINE CORRELATIONS]",
+      "n_observations": 153,
+      "n_scenarios": 51,
+      "per_method": {
+        "B_GlobalDelay": {
+          "baseline_exceeds_0dbtp_count": 42,
+          "delta_headroom_db": {
+            "max": 0.9415,
+            "mean": -0.545455,
+            "median": -0.1484,
+            "min": -10.9546,
+            "n": 51,
+            "std": 1.840072
+          },
+          "delta_sub_gain_db": {
+            "max": 11.7507,
+            "mean": 0.628267,
+            "median": 0.1614,
+            "min": -0.0095,
+            "n": 51,
+            "std": 1.843293
+          },
+          "delta_true_peak_db": {
+            "max": 10.9546,
+            "mean": 0.545455,
+            "median": 0.1484,
+            "min": -0.9415,
+            "n": 51,
+            "std": 1.840072
+          },
+          "n": 51,
+          "n_scenarios": 51,
+          "proc_exceeds_0dbtp_count": 48,
+          "safe_path_engaged_count": 1,
+          "sub_gain_degraded_count_lt_minus_0p1db": 0,
+          "tp_decrease_count": 16,
+          "tp_exactly_zero_count": 3,
+          "tp_increase_count": 31,
+          "tp_unchanged_count": 4
+        },
+        "C_LegacySubOnly": {
+          "baseline_exceeds_0dbtp_count": 42,
+          "delta_headroom_db": {
+            "max": 3.0325,
+            "mean": 0.264204,
+            "median": 0.3268,
+            "min": -10.4654,
+            "n": 51,
+            "std": 2.096354
+          },
+          "delta_sub_gain_db": {
+            "max": 11.2623,
+            "mean": 0.096102,
+            "median": -0.2127,
+            "min": -1.1724,
+            "n": 51,
+            "std": 1.898027
+          },
+          "delta_true_peak_db": {
+            "max": 10.4654,
+            "mean": -0.264204,
+            "median": -0.3268,
+            "min": -3.0325,
+            "n": 51,
+            "std": 2.096354
+          },
+          "n": 51,
+          "n_scenarios": 51,
+          "proc_exceeds_0dbtp_count": 44,
+          "safe_path_engaged_count": 0,
+          "sub_gain_degraded_count_lt_minus_0p1db": 30,
+          "tp_decrease_count": 35,
+          "tp_exactly_zero_count": 2,
+          "tp_increase_count": 12,
+          "tp_unchanged_count": 4
+        },
+        "D_GuardedPerKick": {
+          "baseline_exceeds_0dbtp_count": 42,
+          "delta_headroom_db": {
+            "max": 1.1041,
+            "mean": 0.065508,
+            "median": 0.0,
+            "min": -1.2375,
+            "n": 51,
+            "std": 0.319452
+          },
+          "delta_sub_gain_db": {
+            "max": 1.3793,
+            "mean": 0.439539,
+            "median": 0.2739,
+            "min": 0.0,
+            "n": 51,
+            "std": 0.443551
+          },
+          "delta_true_peak_db": {
+            "max": 1.2375,
+            "mean": -0.065508,
+            "median": 0.0,
+            "min": -1.1041,
+            "n": 51,
+            "std": 0.319452
+          },
+          "n": 51,
+          "n_scenarios": 51,
+          "proc_exceeds_0dbtp_count": 42,
+          "safe_path_engaged_count": 14,
+          "sub_gain_degraded_count_lt_minus_0p1db": 0,
+          "tp_decrease_count": 8,
+          "tp_exactly_zero_count": 41,
+          "tp_increase_count": 2,
+          "tp_unchanged_count": 41
+        }
+      }
+    }
+  },
+  "superseded_report_values": {
+    "claimed_c_degraded": 30,
+    "claimed_d_safe_path": 19,
+    "claimed_plotted_observations": 150,
+    "claimed_valid_scenarios": 50,
+    "historical_30": {
+      "B_GlobalDelay": {
+        "max_dtp": 2.4344,
+        "mean_dtp": 0.2858
+      },
+      "C_LegacySubOnly": {
+        "max_dtp": 1.8601,
+        "mean_dtp": 0.144
+      },
+      "D_GuardedPerKick": {
+        "max_dtp": 2.6514,
+        "mean_dtp": 0.6554
+      }
+    },
+    "valid_tests": {
+      "B_GlobalDelay": {
+        "max_dtp": 6.0206,
+        "mean_dtp": 0.6395
+      },
+      "C_LegacySubOnly": {
+        "max_dtp": 5.7289,
+        "mean_dtp": 0.315
+      },
+      "D_GuardedPerKick": {
+        "max_dtp": 6.0206,
+        "mean_dtp": 0.536
+      }
+    }
+  },
+  "verdict": {
+    "method_signs_disagree": true,
+    "per_method_spearman_sign": {
+      "B_GlobalDelay": "positive",
+      "C_LegacySubOnly": "positive",
+      "D_GuardedPerKick": "negative"
+    },
+    "pooled": "VARIABLE"
+  }
+}
