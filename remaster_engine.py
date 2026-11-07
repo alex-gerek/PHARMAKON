@@ -1283,6 +1283,8 @@ def process_audio_array(audio, sr, params=None):
     """
     if params is None:
         params = dict(DEFAULT_PARAMS)
+    if params.get('phase_align_sub', True) and params.get('sub_sync_mode') in (None, 'off'):
+        params['sub_sync_mode'] = 'limiter_aware'
     else:
         # If preset specified, merge preset values
         preset_key = params.get('preset')
@@ -1862,6 +1864,8 @@ def process_single_file(file_path, params=None, open_folder=True):
 
     if params is None:
         params = dict(DEFAULT_PARAMS)
+    if params.get('phase_align_sub', True) and params.get('sub_sync_mode') in (None, 'off'):
+        params['sub_sync_mode'] = 'limiter_aware'
 
     base_dir = os.path.dirname(file_path)
     filename = os.path.basename(file_path)
@@ -1936,6 +1940,8 @@ def process_stems_folder(target_folder, params=None, open_folder=True):
 
     if params is None:
         params = dict(DEFAULT_PARAMS)
+    if params.get('phase_align_sub', True) and params.get('sub_sync_mode') in (None, 'off'):
+        params['sub_sync_mode'] = 'limiter_aware'
 
     audio_files = []
     for ext in SUPPORTED_EXTS:
