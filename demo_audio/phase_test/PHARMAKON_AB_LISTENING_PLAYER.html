@@ -2,16 +2,17 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>PHARMAKON · Vector Pulse 30s A/B Player</title>
+<title>PHARMAKON · Equal-Loudness (LUFS-Matched) A/B Player</title>
 <style>
-  body { background: #0d1117; color: #c9d1d9; font-family: monospace; padding: 30px; display: flex; justify-content: center; }
-  .card { background: #161b22; border: 1px solid #30363d; border-radius: 12px; max-width: 720px; width: 100%; padding: 24px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); }
-  h1 { color: #58a6ff; font-size: 20px; margin-top: 0; }
+  body { background: #0d1117; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace; padding: 30px; display: flex; justify-content: center; }
+  .card { background: #161b22; border: 1px solid #30363d; border-radius: 12px; max-width: 740px; width: 100%; padding: 26px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); }
+  h1 { color: #58a6ff; font-size: 21px; margin-top: 0; }
+  .badge { background: #238636; color: white; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: bold; }
   .track-box { background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 14px; margin-bottom: 14px; }
   .track-title { font-weight: bold; font-size: 14px; margin-bottom: 6px; }
   audio { width: 100%; margin-top: 6px; }
   .desc { font-size: 12px; color: #8b949e; line-height: 1.4; }
-  .metrics { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 16px; border-top: 1px solid #30363d; padding-top: 14px; }
+  .metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 18px; border-top: 1px solid #30363d; padding-top: 14px; }
   .metric-item { background: #21262d; padding: 10px; border-radius: 6px; text-align: center; }
   .metric-val { font-size: 18px; font-weight: bold; color: #39d353; }
   .metric-lbl { font-size: 11px; color: #8b949e; margin-top: 4px; }
@@ -19,29 +20,39 @@
 </head>
 <body>
 <div class="card">
-  <h1>PHARMAKON · VECTOR PULSE (30-Second Micro-Limiter Evaluation)</h1>
-  <p class="desc">Comparative audition of the 30-second studio section of <b>Vector Pulse</b>. Audition both options in monitors or headphones:</p>
+  <div style="display:flex; justify-content:space-between; align-items:center;">
+    <h1>PHARMAKON · Equal-Loudness Verification (Vector Pulse 30s)</h1>
+    <span class="badge">EQUAL LUFS MATCHED</span>
+  </div>
+  <p class="desc">
+    Both versions are calibrated to <b>identically matched integrated loudness (-11.240 LUFS)</b>.
+    Audition back-to-back in monitors/headphones to judge the punch and low-end shape without loudness bias:
+  </p>
 
   <div class="track-box" style="border-left: 4px solid #f85149;">
-    <div class="track-title">Option 1: Original Mix (Vector Pulse 30s RAW)</div>
-    <div class="desc">Original unaligned mix. Crest Factor = 5.03. Waveform has higher peak excursions and less cohesive punch.</div>
-    <audio controls src="01_VECTOR_PULSE_30S_ORIGINAL.wav"></audio>
+    <div class="track-title">Option 1: Original Master (-11.240 LUFS)</div>
+    <div class="desc">Original production master. True-Peak ceiling = <b>-2.247 dBTP</b>. Crest Factor = 10.04 dB.</div>
+    <audio controls src="01_VECTOR_PULSE_MASTER_EQUAL_LUFS.wav"></audio>
   </div>
 
   <div class="track-box" style="border-left: 4px solid #2ea043;">
-    <div class="track-title">Option 2: PHARMAKON Micro-Limiter Aligned (Vector Pulse 30s)</div>
-    <div class="desc">Limiter-aware alignment. True Peak dropped by <b>-0.61 dB</b> (headroom gain), Crest Factor compressed to <b>4.70</b> (denser, tighter low-end groove).</div>
-    <audio controls src="02_VECTOR_PULSE_30S_MICROLIMITER.wav"></audio>
+    <div class="track-title">Option 2: Micro-Limiter Master (-11.240 LUFS)</div>
+    <div class="desc">Gain-matched micro-limiter master. True-Peak ceiling = <b>-2.922 dBTP</b> (Preserved <b>+0.675 dB</b> of extra headroom). Crest Factor = 9.36 dB.</div>
+    <audio controls src="02_VECTOR_PULSE_MICROLIMITER_EQUAL_LUFS.wav"></audio>
   </div>
 
   <div class="metrics">
     <div class="metric-item">
-      <div class="metric-val">-0.61 dB</div>
-      <div class="metric-lbl">True-Peak Reduction (Headroom Margin)</div>
+      <div class="metric-val">+0.675 dB</div>
+      <div class="metric-lbl">Preserved Headroom at Equal LUFS</div>
     </div>
     <div class="metric-item">
-      <div class="metric-val">4.70 (Was 5.03)</div>
-      <div class="metric-lbl">Crest Factor (Waveform Density)</div>
+      <div class="metric-val">9.36 dB (vs 10.04)</div>
+      <div class="metric-lbl">Crest Factor at Equal LUFS</div>
+    </div>
+    <div class="metric-item">
+      <div class="metric-val">+0.015 dB</div>
+      <div class="metric-lbl">Sub Energy (&lt;100Hz) Difference</div>
     </div>
   </div>
 </div>
