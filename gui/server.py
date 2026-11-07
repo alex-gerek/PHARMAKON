@@ -32,7 +32,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
-app = FastAPI(title="PHARMAKON Studio Console", version="2.0")
+app = FastAPI(title="PHARMAKON 3.0 Studio Console", version="3.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -105,14 +105,14 @@ def browse_native(mode: str = "file"):
 @app.get("/api/system-info")
 def get_system_info():
     demos = [d for d in DEMO_TRACKS if os.path.exists(d["path"])]
-    ver = "2.0.3"
+    ver = "3.0.0"
     if auto_updater is not None:
         try:
             ver = auto_updater.get_active_version_info().get("version", ver)
         except Exception:
             pass
     return {
-        "engine": "PHARMAKON 2.0 DSP",
+        "engine": "PHARMAKON 3.0 PRO DSP (Limiter-Guard Engine)",
         "version": ver,
         "auto_update": True,
         "author": "Lex Gerek",
