@@ -2298,3 +2298,53 @@ body.cinematic-hide-cursor, body.cinematic-hide-cursor * {
   color: #000;
   box-shadow: 0 0 15px rgba(245, 158, 11, 0.4);
 }
+
+/* ==========================================================================
+   SUB-SYNC & MICRO-LIMITER GUARD (PHARMAKON 3.0)
+   ========================================================================== */
+.subsync-mode-wrapper {
+  margin-bottom: 12px;
+}
+
+.subsync-mode-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--text-dim);
+  display: block;
+  margin-bottom: 4px;
+  letter-spacing: 0.5px;
+}
+
+.subsync-led-active {
+  font-size: 9px;
+  font-family: var(--font-mono);
+  color: var(--neon-emerald);
+  border: 1px solid var(--neon-emerald);
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(16, 185, 129, 0.12);
+  letter-spacing: 0.5px;
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.3);
+}
+
+.subsync-led-legacy {
+  font-size: 9px;
+  font-family: var(--font-mono);
+  color: var(--neon-amber);
+  border: 1px solid var(--neon-amber);
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(245, 158, 11, 0.12);
+  letter-spacing: 0.5px;
+}
+
+.subsync-led-bypass {
+  font-size: 9px;
+  font-family: var(--font-mono);
+  color: var(--text-dim);
+  border: 1px solid #3b4252;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.2);
+  letter-spacing: 0.5px;
+}

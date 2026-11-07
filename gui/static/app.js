@@ -10,6 +10,7 @@ let bundledDemos = [];
 let lastMetrics = null;
 let currentViewMode = 'dual'; // 'dual', 'single_osc', 'rta', 'static', 'waveform'
 let activeCeiling = -0.3;
+let activeSubSyncMode = 'limiter_aware';
 let currentScopeZoom = 1.0; // 0.5x to 10.0x macro inspection
 let isFrozen = false;
 
@@ -1520,7 +1521,11 @@ async function runSplitAndStemMaster() {
     drum_punch: parseFloat(document.getElementById('param_drum_punch').value),
     target_ceiling_db: activeCeiling,
     preset: currentPreset !== 'none' ? currentPreset : null,
-    phase_align_sub: true
+    phase_align_sub: activeSubSyncMode !== 'off',
+    sub_sync_mode: activeSubSyncMode,
+    sub_sync_limiter_penalty: parseFloat(document.getElementById('param_sub_sync_limiter_penalty')?.value || 1.20),
+    sub_sync_min_gain_db: parseFloat(document.getElementById('param_sub_sync_min_gain_db')?.value || 0.15),
+    sub_sync_max_lag_ms: parseFloat(document.getElementById('param_sub_sync_max_lag_ms')?.value || 3.0)
   };
 
   try {
@@ -1609,7 +1614,12 @@ async function runPharmakonProcess(isInitial = false) {
     preset: currentPreset !== 'none' ? currentPreset : null,
     region_mode: surgicalScope,
     range_start: surgicalIn,
-    range_end: surgicalOut
+    range_end: surgicalOut,
+    phase_align_sub: activeSubSyncMode !== 'off',
+    sub_sync_mode: activeSubSyncMode,
+    sub_sync_limiter_penalty: parseFloat(document.getElementById('param_sub_sync_limiter_penalty')?.value || 1.20),
+    sub_sync_min_gain_db: parseFloat(document.getElementById('param_sub_sync_min_gain_db')?.value || 0.15),
+    sub_sync_max_lag_ms: parseFloat(document.getElementById('param_sub_sync_max_lag_ms')?.value || 3.0)
   };
 
   try {
@@ -1905,10 +1915,41 @@ function updateParamValue(el, unit, mult = 1, add = 0) {
 
 function setCeiling(val) {
   activeCeiling = val;
-  document.querySelectorAll('.ceiling-btn').forEach(btn => {
+  document.querySelectorAll('.ceiling-selector:not(.subsync-mode-selector) .ceiling-btn').forEach(btn => {
     btn.classList.toggle('active', parseFloat(btn.innerText) === val);
   });
   document.getElementById('ceilingReadout').innerText = `${val} dBFS`;
+}
+
+function setSubSyncMode(mode) {
+  activeSubSyncMode = mode;
+  const btnLimiter = document.getElementById('btnSubSyncLimiter');
+  const btnLegacy = document.getElementById('btnSubSyncLegacy');
+  const btnOff = document.getElementById('btnSubSyncOff');
+  const badge = document.getElementById('subSyncLedBadge');
+
+  if (btnLimiter) btnLimiter.classList.toggle('active', mode === 'limiter_aware');
+  if (btnLegacy) btnLegacy.classList.toggle('active', mode === 'legacy');
+  if (btnOff) btnOff.classList.toggle('active', mode === 'off');
+
+  if (badge) {
+    badge.className = mode === 'limiter_aware' ? 'subsync-led-active' :
+                      (mode === 'legacy' ? 'subsync-led-legacy' : 'subsync-led-bypass');
+    badge.innerText = mode === 'limiter_aware' ? '3.0 ACTIVE' :
+                      (mode === 'legacy' ? 'LEGACY' : 'BYPASS');
+  }
+
+  // Visual dimming of knobs when bypassed
+  const unit = document.getElementById('subSyncRackUnit');
+  if (unit) {
+    const knobsRow = unit.querySelector('.knobs-row');
+    if (knobsRow) {
+      knobsRow.style.opacity = mode === 'off' ? '0.35' : '1.0';
+      knobsRow.style.pointerEvents = mode === 'off' ? 'none' : 'auto';
+    }
+  }
+
+  updateStatus(`Sub-Sync Mode: ${mode === 'limiter_aware' ? 'Limiter-Aware 3.0 Guard' : (mode === 'legacy' ? 'Legacy Sub-Sync' : 'Bypassed')}`);
 }
 
 // --------------------------------------------------------------------------
