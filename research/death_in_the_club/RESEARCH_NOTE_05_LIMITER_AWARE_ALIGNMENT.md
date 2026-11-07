@@ -174,26 +174,43 @@ To verify behavior when the mastered output is precisely matched back to the ref
 
 ---
 
-## 5. Architectural Implementation Proposal for PHARMAKON 2.0
+## 5. Production Integration & Verification: PHARMAKON 3.0
 
-These empirical and psychoacoustic proofs establish the formal justification for integrating the Micro-Limiter directly into PHARMAKON 2.0.
+The empirical, physical, and subjective audition proofs conclusively establish the foundation for graduating Candidate 1 into production as **PHARMAKON 3.0** on branch `feature/pharmakon-3.0-limiter-guard`.
 
-We propose adding an opt-in parameter within `remaster_engine.py`:
+### 5.1 Architecture & Mode Dispatcher
+The engine introduces three operational tiers with complete backward compatibility:
+
+1. **`limiter_aware` (PHARMAKON 3.0 Production Standard):**
+   Runs the transient-guarded Virtual Micro-Limiter with True-Peak penalty ($\lambda = 1.20$), Tukey window overlap-add, and autonomous Safe-Bypass for acoustic stems ($< -50	ext{ dBFS}$).
+2. **`legacy` (PHARMAKON 2.0 Global Cross-Correlation):**
+   Full backward compatibility for projects and legacy automated testing pipelines.
+3. **`off` (Safe-Bypass):**
+   Complete zero-processing bypass ($\Delta = 0.000	ext{ dB}$) when low-end phase alignment is intentionally disengaged.
 
 ```python
-# Proposed Sub-Sync Configuration
-params = {
-    'sub_sync_mode': 'limiter_aware',     # ['classic', 'limiter_aware', 'bypass']
-    'sub_sync_limiter_penalty': 1.20,     # Regularization factor lambda
-    'sub_sync_min_gain_db': 0.15,         # Net effective hurdle
-    'sub_sync_energy_floor_dbfs': -50.0,  # Autonomous silence gate
+# Resolved Configuration Schema in remaster_engine.py
+EXPERIMENTAL_SUB_SYNC_DEFAULTS = {
+    'sub_sync_mode': 'off',              # Default compatibility toggle ('off' | 'legacy' | 'limiter_aware')
+    'sub_sync_max_lag_ms': 3.0,          # Sub-lag bound (ms)
+    'sub_sync_min_gain_db': 0.15,        # Minimum sub-gain threshold (dB)
+    'sub_sync_limiter_penalty': 1.20,    # Regularization penalty factor lambda
+    'sub_sync_crossover_hz': 100.0,      # Crossover split boundary (Hz)
+    'sub_sync_window_sec': 0.20,         # Per-kick Tukey analysis window (s)
+    'sub_sync_pre_trigger_sec': 0.010,   # Transient pre-trigger window (s)
+    'sub_sync_max_xover_drop_db': 0.50,  # Crossover band (85-120 Hz) loss limit
+    'sub_sync_energy_floor_dbfs': -50.0, # Autonomous acoustic safe-bypass floor
 }
 ```
 
-### Strategic Benefits for PHARMAKON Users:
-1. **Automatic Headroom Preservation:** Users gain up to +1.0 dB of master headroom automatically without sacrificing sub weight.
-2. **Clutter-Free Mixes:** Solves low-end masking, enabling dense electronic, hip-hop, and rock mixes to breathe.
-3. **Safe & Non-Destructive:** Acoustic tracks, podcasts, and guitar performances remain bit-identical thanks to autonomous energy gates.
+### 5.2 Test Coverage & Quality Gate
+A dedicated test suite was integrated in [`tests/test_limiter_aware_sub_sync.py`](file:///C:/Users/User/PHARMAKON/tests/test_limiter_aware_sub_sync.py):
+* `test_sub_sync_mode_resolution_and_toggles`: Validates mode resolution, safe-bypass, and exception handling.
+* `test_safe_bypass_on_acoustic_and_silent_material`: Proves bit-exact identity output on acoustic/vocal material.
+* `test_destructive_phase_cancellation_recovery`: Proves recovery of cancelled sub fundamentals without peak blowout.
+* `test_process_stems_folder_with_sub_sync_modes`: Validates end-to-end stem mastering and certificate generation across all 3 modes.
+
+**Status:** 100% Passed (4/4 tests). Zero regressions across existing baseline suites.
 
 ---
 
