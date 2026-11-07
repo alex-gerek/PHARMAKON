@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>PHARMAKON · Vector Pulse 30s A/B Player</title>
+<style>
+  body { background: #0d1117; color: #c9d1d9; font-family: monospace; padding: 30px; display: flex; justify-content: center; }
+  .card { background: #161b22; border: 1px solid #30363d; border-radius: 12px; max-width: 720px; width: 100%; padding: 24px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); }
+  h1 { color: #58a6ff; font-size: 20px; margin-top: 0; }
+  .track-box { background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 14px; margin-bottom: 14px; }
+  .track-title { font-weight: bold; font-size: 14px; margin-bottom: 6px; }
+  audio { width: 100%; margin-top: 6px; }
+  .desc { font-size: 12px; color: #8b949e; line-height: 1.4; }
+  .metrics { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 16px; border-top: 1px solid #30363d; padding-top: 14px; }
+  .metric-item { background: #21262d; padding: 10px; border-radius: 6px; text-align: center; }
+  .metric-val { font-size: 18px; font-weight: bold; color: #39d353; }
+  .metric-lbl { font-size: 11px; color: #8b949e; margin-top: 4px; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>⚡ PHARMAKON · VECTOR PULSE (30-Секундный Тест Микролимитера)</h1>
+  <p class="desc">Полноценный 30-секундный ритмичный отрезок трека <b>Vector Pulse</b>. Включите по очереди в наушниках:</p>
+
+  <div class="track-box" style="border-left: 4px solid #f85149;">
+    <div class="track-title">🔴 Вариант 1: Исходный микс (Vector Pulse 30s RAW)</div>
+    <div class="desc">Исходный трек. Crest Factor = 5.03. Пики выше, волна менее собранная.</div>
+    <audio controls src="01_VECTOR_PULSE_30S_ORIGINAL.wav"></audio>
+  </div>
+
+  <div class="track-box" style="border-left: 4px solid #2ea043;">
+    <div class="track-title">🟢 Вариант 2: Микролимитер PHARMAKON (Vector Pulse 30s)</div>
+    <div class="desc">Обработка с контролем пик-фактора. True Peak упал на <b>-0.61 dB</b> (выигрыш хедрума), Crest Factor опустился до <b>4.70</b> (звук стал сбитым и монолитным).</div>
+    <audio controls src="02_VECTOR_PULSE_30S_MICROLIMITER.wav"></audio>
+  </div>
+
+  <div class="metrics">
+    <div class="metric-item">
+      <div class="metric-val">-0.61 dB</div>
+      <div class="metric-lbl">Снижение True-Peak (Запас хедрума)</div>
+    </div>
+    <div class="metric-item">
+      <div class="metric-val">4.70 (было 5.03)</div>
+      <div class="metric-lbl">Crest Factor (Плотность волны)</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
