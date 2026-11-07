@@ -34,11 +34,9 @@ def build_audit_session():
     sr = 48000
     duration = 5.0 # 5 seconds of punchy kick-bass pattern
 
-    # 1. Generate 120 BPM Kick (50 Hz sub)
     kick_mono, _, _ = generate_synthetic_kick(
         duration=duration, sr=sr, bpm=120.0, f_start=140.0, f_end=48.0, amplitude=0.85
     )
-    # 2. Generate 50 Hz Bass with deliberate 180° destructive phase conflict (murder scene)
     bass_mono, _, _ = generate_synthetic_harmonic_bass(
         duration=duration,
         sr=sr,
@@ -52,15 +50,11 @@ def build_audit_session():
     drums = ensure_stereo(kick_mono)
     bad_bass = ensure_stereo(bass_mono)
 
-    # Raw Sum (Damaged by phase cancellation)
     raw_mix = drums + bad_bass
 
-    # 3. Process with PHARMAKON Method D (GW-FRA Phase Alignment)
-    # We DO NOT modify method_d, we just call it as an external black-box tool!
     restored_bass, meta = method_d_guarded_per_kick(drums, bad_bass, sr)
     restored_mix = drums + restored_bass
 
-    # 4. Measure Metrics
     sub_raw = lowpass_filter(raw_mix, sr, 100.0)
     sub_restored = lowpass_filter(restored_mix, sr, 100.0)
     rms_raw = compute_rms(sub_raw)
@@ -74,12 +68,10 @@ def build_audit_session():
     crest_raw = tp_raw / (rms_raw + 1e-12)
     crest_restored = tp_restored / (rms_restored + 1e-12)
 
-    # 5. Delta Poison (Difference signal)
     delta_poison = restored_mix - raw_mix
     delta_rms = compute_rms(delta_poison)
     delta_dbfs = 20.0 * np.log10(max(1e-12, delta_rms))
 
-    # Normalize files cleanly for export (-0.5 dBFS ceiling to prevent any player clipping)
     max_peak = max(np.max(np.abs(raw_mix)), np.max(np.abs(restored_mix)))
     norm_factor = 0.94 / max_peak if max_peak > 0 else 1.0
 
@@ -91,10 +83,9 @@ def build_audit_session():
     sf.write(wav_restored, restored_mix * norm_factor, sr, subtype="PCM_24")
     sf.write(wav_delta, delta_poison * norm_factor, sr, subtype="PCM_24")
 
-    # 6. Generate Interactive HTML A/B Player
     html_path = os.path.join(AUDIT_DIR, "PHARMAKON_AB_LISTENING_PLAYER.html")
     html_content = f"""<!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <title>PHARMAKON · Phase Audit A/B Player</title>
@@ -117,16 +108,6 @@ def build_audit_session():
     box-shadow: 0 8px 24px rgba(0,0,0,0.5);
   }}
   h1 {{ color: #58a6ff; margin-top: 0; font-size: 22px; }}
-  .badge {{
-    display: inline-block;
-    padding: 4px 10px;
-    border-radius: 20px;
-    font-size: 12px;
-    font-weight: bold;
-    margin-bottom: 16px;
-  }}
-  .badge-danger {{ background: #da3633; color: white; }}
-  .badge-success {{ background: #238636; color: white; }}
   .track-box {{
     background: #0d1117;
     border: 1px solid #30363d;
@@ -157,42 +138,42 @@ def build_audit_session():
 </head>
 <body>
 <div class="card">
-  <h1>🎧 PHARMAKON Studio · Сравнительное прослушивание A/B</h1>
+  <h1>PHARMAKON Studio · Comparative A/B Auditioning</h1>
   <p class="desc">
-    Стресс-тест разрушительной интерференции 180°: бочка и бас бьют одновременно на 48–50 Гц.
-    Включите оба трека по очереди в наушниках или мониторах, чтобы услышать разницу в панче и глубине низа.
+    180-Degree Destructive Interference Stress Test: Kick and bass hit simultaneously at 48-50 Hz.
+    Audition both versions sequentially in studio monitors or headphones.
   </p>
 
   <div class="track-box" style="border-left: 4px solid #da3633;">
-    <div class="track-title">🔴 Вариант A: Повреждённый микс (Противофаза 180°)</div>
-    <div class="desc">Бочка и бас вычитают друг друга. Низ «ватный», удар пустой, тело провалилось.</div>
+    <div class="track-title">Option A: Phase-Damaged Mix (180° Polarity Opposition)</div>
+    <div class="desc">Kick and bass cancel each other out. Sub-bass is hollow, punch is lost, low-end body collapsed.</div>
     <audio controls src="01_PHASE_DAMAGED_MIX.wav"></audio>
   </div>
 
   <div class="track-box" style="border-left: 4px solid #238636;">
-    <div class="track-title">🟢 Вариант B: PHARMAKON Restored (Фазовое согласование)</div>
-    <div class="desc">Фаза скорректирована. Саб-бас вернулся (+{sub_gain_db:+.2f} dB), атака бочки плотная и монолитная.</div>
+    <div class="track-title">Option B: PHARMAKON Restored (Phase Aligned)</div>
+    <div class="desc">Phase aligned. Sub-bass recovered (+{sub_gain_db:+.2f} dB), punch is solid and focused without peak inflation.</div>
     <audio controls src="02_PHARMAKON_RESTORED_MIX.wav"></audio>
   </div>
 
   <div class="track-box" style="border-left: 4px solid #8957e5;">
-    <div class="track-title">🟣 Вариант C: Delta Poison (Спектр разности)</div>
-    <div class="desc">Что именно вернул алгоритм (вычитание B − A).</div>
+    <div class="track-title">Option C: Delta Poison (Subtracted Residue)</div>
+    <div class="desc">Isolated subtracted delta component (Option B minus Option A).</div>
     <audio controls src="03_DELTA_POISON.wav"></audio>
   </div>
 
   <div class="metrics">
     <div class="metric-item">
       <div class="metric-val">+{sub_gain_db:.2f} dB</div>
-      <div class="metric-lbl">Возврат саб-баса</div>
+      <div class="metric-lbl">Sub Recovery</div>
     </div>
     <div class="metric-item">
       <div class="metric-val">{tp_gain_db:+.2f} dB</div>
-      <div class="metric-lbl">Рост True Peak (0 = идеально)</div>
+      <div class="metric-lbl">True-Peak Growth</div>
     </div>
     <div class="metric-item">
       <div class="metric-val">{crest_restored:.2f}</div>
-      <div class="metric-lbl">Crest Factor (было {crest_raw:.2f})</div>
+      <div class="metric-lbl">Crest Factor (Was {crest_raw:.2f})</div>
     </div>
   </div>
 </div>
@@ -202,14 +183,8 @@ def build_audit_session():
     with open(html_path, "w", encoding="utf-8") as f:
         f.write(html_content)
 
-    print("\n[OK] Аудит успешно завершён!")
-    print(f"Аудиофайлы и интерактивный плеер созданы в папке:")
-    print(f"  -> {AUDIT_DIR}")
-    print(f"  -> 01_PHASE_DAMAGED_MIX.wav")
-    print(f"  -> 02_PHARMAKON_RESTORED_MIX.wav")
-    print(f"  -> 03_DELTA_POISON.wav")
-    print(f"  -> PHARMAKON_AB_LISTENING_PLAYER.html")
-    print("=" * 80)
+    print("\n[OK] Audit session completed successfully!")
+    print(f"Artifacts created in: {AUDIT_DIR}")
 
 
 if __name__ == "__main__":

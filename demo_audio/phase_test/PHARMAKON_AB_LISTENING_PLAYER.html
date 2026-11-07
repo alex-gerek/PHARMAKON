@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <title>PHARMAKON · Vector Pulse 30s A/B Player</title>
@@ -19,29 +19,29 @@
 </head>
 <body>
 <div class="card">
-  <h1>⚡ PHARMAKON · VECTOR PULSE (30-Секундный Тест Микролимитера)</h1>
-  <p class="desc">Полноценный 30-секундный ритмичный отрезок трека <b>Vector Pulse</b>. Включите по очереди в наушниках:</p>
+  <h1>PHARMAKON · VECTOR PULSE (30-Second Micro-Limiter Evaluation)</h1>
+  <p class="desc">Comparative audition of the 30-second studio section of <b>Vector Pulse</b>. Audition both options in monitors or headphones:</p>
 
   <div class="track-box" style="border-left: 4px solid #f85149;">
-    <div class="track-title">🔴 Вариант 1: Исходный микс (Vector Pulse 30s RAW)</div>
-    <div class="desc">Исходный трек. Crest Factor = 5.03. Пики выше, волна менее собранная.</div>
+    <div class="track-title">Option 1: Original Mix (Vector Pulse 30s RAW)</div>
+    <div class="desc">Original unaligned mix. Crest Factor = 5.03. Waveform has higher peak excursions and less cohesive punch.</div>
     <audio controls src="01_VECTOR_PULSE_30S_ORIGINAL.wav"></audio>
   </div>
 
   <div class="track-box" style="border-left: 4px solid #2ea043;">
-    <div class="track-title">🟢 Вариант 2: Микролимитер PHARMAKON (Vector Pulse 30s)</div>
-    <div class="desc">Обработка с контролем пик-фактора. True Peak упал на <b>-0.61 dB</b> (выигрыш хедрума), Crest Factor опустился до <b>4.70</b> (звук стал сбитым и монолитным).</div>
+    <div class="track-title">Option 2: PHARMAKON Micro-Limiter Aligned (Vector Pulse 30s)</div>
+    <div class="desc">Limiter-aware alignment. True Peak dropped by <b>-0.61 dB</b> (headroom gain), Crest Factor compressed to <b>4.70</b> (denser, tighter low-end groove).</div>
     <audio controls src="02_VECTOR_PULSE_30S_MICROLIMITER.wav"></audio>
   </div>
 
   <div class="metrics">
     <div class="metric-item">
       <div class="metric-val">-0.61 dB</div>
-      <div class="metric-lbl">Снижение True-Peak (Запас хедрума)</div>
+      <div class="metric-lbl">True-Peak Reduction (Headroom Margin)</div>
     </div>
     <div class="metric-item">
-      <div class="metric-val">4.70 (было 5.03)</div>
-      <div class="metric-lbl">Crest Factor (Плотность волны)</div>
+      <div class="metric-val">4.70 (Was 5.03)</div>
+      <div class="metric-lbl">Crest Factor (Waveform Density)</div>
     </div>
   </div>
 </div>

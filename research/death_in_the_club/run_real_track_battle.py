@@ -2,7 +2,7 @@
 PHARMAKON Research: Limiter-Aware Alignment Battle on Real Track
 Testing Candidate 1 (Virtual Micro-Limiter), Candidate 2 (Crest Factor), and Candidate 3 (All-Pass Phase)
 against Baseline and Current Method D (GW-FRA).
-Track: "I die of thirst" (Я умираю от жажды)
+Track: "I die of thirst"
 """
 
 import os
@@ -95,12 +95,9 @@ def evaluate_window_candidates(
             delta_peak_db = 20.0 * np.log10(max(1e-12, peak_cand_full) / max(1e-12, peak_raw_full))
 
             if mode == "micro_limiter":
-                # Score = Gain of sub minus penalty for peak inflation
-                # If peak rises by +1.5 dB, limiter would push down by 1.5 dB, canceling gain!
                 score = sub_gain_db - 1.2 * max(0.0, delta_peak_db)
             elif mode == "crest_factor":
                 cand_crest = peak_cand_full / (compute_rms(cand_full_sum) + 1e-12)
-                # We want lower crest factor (more compact wave) and positive sub gain
                 score = (crest_raw - cand_crest) + (0.5 * sub_gain_db if sub_gain_db > 0 else -10.0)
             else:
                 score = sub_gain_db
@@ -245,7 +242,6 @@ def align_allpass_sub(
     drums_stereo = ensure_stereo(drums)
     bass_stereo = ensure_stereo(bass)
 
-    # Split sub and mid/high with Linkwitz-Riley crossover
     nyq = 0.5 * sr
     f_c = crossover_hz / nyq
     sos_lp = signal.butter(4, f_c, btype='low', output='sos')
@@ -256,7 +252,6 @@ def align_allpass_sub(
 
     sub_d = signal.sosfiltfilt(sos_lp, drums_stereo, axis=0)
 
-    # Test phase rotation center frequencies around dominant bass fundamental [40, 50, 60, 70, 80 Hz]
     best_rotated_sub = sub_b
     best_score = -999.0
 
@@ -275,13 +270,11 @@ def align_allpass_sub(
             cand_peak = np.max(np.abs(cand_full_sum))
             delta_peak_db = 20.0 * np.log10(max(1e-12, cand_peak) / max(1e-12, peak_raw))
 
-            # Effective gain after limiter
             score = gain_db - max(0.0, delta_peak_db)
             if score > best_score and score > 0.10:
                 best_score = score
                 best_rotated_sub = cand_sub
 
-    # Recombine with high band
     recombined_bass = best_rotated_sub + high_b
     return recombined_bass.astype(np.float32)
 
@@ -302,7 +295,6 @@ def main():
     vox, _ = sf.read(vox_path)
     oth, _ = sf.read(oth_path)
 
-    # Convert to stereo
     drums = ensure_stereo(drums)
     bass = ensure_stereo(bass)
     vox = ensure_stereo(vox)
@@ -312,7 +304,6 @@ def main():
     baseline_kb = drums + bass
     baseline_full = drums + bass + vox + oth
 
-    # Sub-band filter for measurement (<100 Hz)
     sub_kb_base = lowpass_filter(baseline_kb, sr, cutoff=100.0)
     rms_sub_base = compute_rms(sub_kb_base)
     tp_base = compute_true_peak(baseline_kb)
@@ -321,7 +312,7 @@ def main():
 
     results = []
     results.append({
-        "Name": "0. Baseline (Оригинал без вмешательств)",
+        "Name": "0. Baseline (Unprocessed)",
         "Delta_Sub_dB": 0.0,
         "Delta_TP_KB_dB": 0.0,
         "Effective_Sub_dB": 0.0,
@@ -330,7 +321,7 @@ def main():
         "aligned_bass": bass
     })
 
-    # 2. Method D: Current GW-FRA (Max sub blind)
+    # 2. Method D: Current GW-FRA
     print("\n[1/3] Running Current Method D (GW-FRA)...")
     bass_d, meta_d = method_d_guarded_per_kick(drums, bass, sr)
     sum_d = drums + bass_d
@@ -340,7 +331,7 @@ def main():
     delta_sub_d = 20.0 * np.log10(rms_d / rms_sub_base)
     delta_tp_d = 20.0 * np.log10(tp_d / tp_base)
     results.append({
-        "Name": "1. Метод D (GW-FRA: слепой максимум)",
+        "Name": "1. Method D (GW-FRA: Sub Max)",
         "Delta_Sub_dB": delta_sub_d,
         "Delta_TP_KB_dB": delta_tp_d,
         "Effective_Sub_dB": delta_sub_d - max(0.0, delta_tp_d),
@@ -359,7 +350,7 @@ def main():
     delta_sub_c1 = 20.0 * np.log10(rms_c1 / rms_sub_base)
     delta_tp_c1 = 20.0 * np.log10(tp_c1 / tp_base)
     results.append({
-        "Name": "2. Кандидат 1 (Виртуальный микро-лимитер)",
+        "Name": "2. Candidate 1 (Micro-Limiter)",
         "Delta_Sub_dB": delta_sub_c1,
         "Delta_TP_KB_dB": delta_tp_c1,
         "Effective_Sub_dB": delta_sub_c1 - max(0.0, delta_tp_c1),
@@ -378,7 +369,7 @@ def main():
     delta_sub_c2 = 20.0 * np.log10(rms_c2 / rms_sub_base)
     delta_tp_c2 = 20.0 * np.log10(tp_c2 / tp_base)
     results.append({
-        "Name": "3. Кандидат 2 (Оптимизация Crest Factor)",
+        "Name": "3. Candidate 2 (Crest Factor)",
         "Delta_Sub_dB": delta_sub_c2,
         "Delta_TP_KB_dB": delta_tp_c2,
         "Effective_Sub_dB": delta_sub_c2 - max(0.0, delta_tp_c2),
@@ -397,7 +388,7 @@ def main():
     delta_sub_c3 = 20.0 * np.log10(rms_c3 / rms_sub_base)
     delta_tp_c3 = 20.0 * np.log10(tp_c3 / tp_base)
     results.append({
-        "Name": "4. Кандидат 3 (All-Pass фазовращатель)",
+        "Name": "4. Candidate 3 (All-Pass Phase)",
         "Delta_Sub_dB": delta_sub_c3,
         "Delta_TP_KB_dB": delta_tp_c3,
         "Effective_Sub_dB": delta_sub_c3 - max(0.0, delta_tp_c3),
@@ -406,26 +397,22 @@ def main():
         "aligned_bass": bass_c3
     })
 
-    # Print Report Table
     print("\n" + "=" * 95)
-    print("РЕЗУЛЬТАТЫ СРАВНИТЕЛЬНОГО БАТТЛА (ТРЕК: Я УМИРАЮ ОТ ЖАЖДЫ)")
+    print("COMPARATIVE BATTLE RESULTS")
     print("=" * 95)
-    header = f"{'Метод':<38} | {'Δ Саб (дБ)':<11} | {'Δ Peak (дБ)':<11} | {'Эффект. Саб':<12} | {'Crest Factor':<12}"
+    header = f"{'Method':<38} | {'Delta Sub':<11} | {'Delta Peak':<11} | {'Eff Sub':<12} | {'Crest Factor':<12}"
     print(header)
     print("-" * 95)
     for r in results:
         print(f"{r['Name']:<38} | {r['Delta_Sub_dB']:>+10.4f}  | {r['Delta_TP_KB_dB']:>+10.4f}  | {r['Effective_Sub_dB']:>+10.4f}  | {r['Crest_Factor']:>10.4f}")
     print("=" * 95)
 
-    # Save audio files for listening (both isolated Kick+Bass and Full Mix)
-    print("\nСохранение аудиофайлов для прослушивания в:", OUT_DIR)
+    print("\nSaving audio previews to:", OUT_DIR)
     for idx, r in enumerate(results):
         prefix = f"{idx:02d}_{r['Name'].split()[1] if len(r['Name'].split()) > 1 else 'Base'}"
         clean_prefix = "".join(c for c in prefix if c.isalnum() or c in ('_', '-'))
         
-        # Isolated Kick + Bass
         kb_audio = drums + r["aligned_bass"]
-        # Normalize to prevent any digital overs in preview (safe ceiling -0.5 dBFS)
         kb_peak = np.max(np.abs(kb_audio))
         if kb_peak > 0:
             scale = min(1.0, 0.94 / kb_peak)
@@ -435,7 +422,6 @@ def main():
         kb_out = os.path.join(OUT_DIR, f"{clean_prefix}_KickBass.wav")
         sf.write(kb_out, kb_audio_norm, sr, subtype="PCM_24")
 
-        # Full Mix (Kick + Bass + Vox + Other)
         full_audio = drums + r["aligned_bass"] + vox + oth
         f_peak = np.max(np.abs(full_audio))
         if f_peak > 0:
@@ -446,9 +432,9 @@ def main():
         full_out = os.path.join(OUT_DIR, f"{clean_prefix}_FullMix.wav")
         sf.write(full_out, full_audio_norm, sr, subtype="PCM_24")
 
-        print(f"  -> Сохранены: {os.path.basename(kb_out)} и {os.path.basename(full_out)}")
+        print(f"  -> Saved: {os.path.basename(kb_out)} and {os.path.basename(full_out)}")
 
-    print("\n[OK] Эксперимент успешно завершён!")
+    print("\n[OK] Experiment completed successfully!")
 
 
 if __name__ == "__main__":
