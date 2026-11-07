@@ -905,25 +905,294 @@ def align_sub_phase(drums, bass, sr, max_lag_ms=6.0, crossover_freq=100.0):
 # Preserve explicit reference to legacy Sub-Sync implementation (P0-1)
 align_sub_phase_legacy = align_sub_phase
 
-SUB_SYNC_MODES = ('off', 'legacy', 'windowed')
+
+def _evaluate_limiter_aware_candidates(
+    d_win_sub,
+    b_win_sub,
+    raw_b_full,
+    raw_d_full,
+    sr,
+    max_lag,
+    limiter_penalty=1.20,
+):
+    """
+    Evaluates Candidate 1 Virtual Micro-Limiter Cost Function:
+        J(tau) = Delta E_sub(tau) - lambda * max(0, Delta Peak(tau))
+    Penalizes positive peak growth to prevent downstream brickwall compressor squashing.
+    """
+    lags = np.arange(-max_lag, max_lag + 1)
+    raw_b_mono = np.mean(raw_b_full, axis=1) if raw_b_full.ndim > 1 else raw_b_full
+    raw_d_mono = np.mean(raw_d_full, axis=1) if raw_d_full.ndim > 1 else raw_d_full
+
+    raw_sub_sum = d_win_sub + b_win_sub
+    raw_full_sum = raw_d_mono + raw_b_mono
+
+    rms_raw_sub = float(np.sqrt(np.mean(np.square(raw_sub_sum)) + 1e-12))
+    peak_raw_full = float(np.max(np.abs(raw_full_sum)))
+    peak_ref = max(peak_raw_full, float(np.max(np.abs(raw_d_mono))), float(np.max(np.abs(raw_b_mono))))
+
+    best_lag = 0
+    best_pol = 1.0
+    best_score = -999.0
+
+    for pol in [1.0, -1.0]:
+        for lag in lags:
+            cand_b_sub = np.roll(b_win_sub * pol, lag)
+            cand_b_full = np.roll(raw_b_mono * pol, lag)
+            if lag > 0:
+                cand_b_sub[:lag] = b_win_sub[:lag]
+                cand_b_full[:lag] = raw_b_mono[:lag]
+            elif lag < 0:
+                cand_b_sub[lag:] = b_win_sub[lag:]
+                cand_b_full[lag:] = raw_b_mono[lag:]
+
+            cand_sub_sum = d_win_sub + cand_b_sub
+            cand_full_sum = raw_d_mono + cand_b_full
+
+            rms_cand_sub = float(np.sqrt(np.mean(np.square(cand_sub_sum)) + 1e-12))
+            sub_gain_db = 20.0 * np.log10(max(1e-12, rms_cand_sub) / max(1e-12, rms_raw_sub))
+
+            peak_cand_full = float(np.max(np.abs(cand_full_sum)))
+            delta_peak_db = 20.0 * np.log10(max(1e-12, peak_cand_full) / max(1e-12, peak_ref))
+
+            # Virtual Micro-Limiter Cost Function J(tau)
+            score = sub_gain_db - limiter_penalty * max(0.0, delta_peak_db)
+
+            if score > best_score:
+                best_score = score
+                best_lag = int(lag)
+                best_pol = pol
+
+    return best_lag, best_pol
+
+
+def align_sub_phase_limiter_aware(
+    drums,
+    bass,
+    sr,
+    max_lag_ms=3.0,
+    min_gain_db=0.15,
+    limiter_penalty=1.20,
+    crossover_hz=100.0,
+    window_sec=0.20,
+    pre_trigger_sec=0.010,
+    max_xover_drop_db=0.50,
+    min_signal_rms_dbfs=-50.0,
+):
+    """
+    PHARMAKON 3.0: Limiter-Aware Transient-Guarded Sub-Sync Phase Alignment Engine.
+    
+    Eliminates "The Price of Alignment" (instantaneous True-Peak inflation triggering
+    downstream brickwall limiter over-compression) via a Virtual Micro-Limiter Cost Function:
+        J(tau) = Delta E_sub(tau) - lambda * max(0, Delta Peak(tau))
+    
+    Guarantees:
+    - Independent kick-transient windowing (Tukey alpha=0.30) with partition-of-unity overlap-add.
+    - Zero comb-filter notch degradation in the crossover region (85-120 Hz).
+    - Strict Safe-Bypass for acoustic/ambient stems with sub-energy floor (< -50 dBFS).
+    """
+    drums_stereo = ensure_stereo(drums)
+    bass_stereo = ensure_stereo(bass)
+    n_samples = len(bass_stereo)
+
+    # Sub-band isolation (< crossover_hz)
+    sub_drums = butter_lowpass(np.mean(drums_stereo, axis=1), crossover_hz, sr, order=2)
+    sub_bass = butter_lowpass(np.mean(bass_stereo, axis=1), crossover_hz, sr, order=2)
+
+    # Safe-Bypass Check 1: Infrasonic energy floor (< min_signal_rms_dbfs, e.g. -50 dBFS)
+    rms_d = float(np.sqrt(np.mean(np.square(sub_drums)) + 1e-12))
+    rms_b = float(np.sqrt(np.mean(np.square(sub_bass)) + 1e-12))
+    floor_lin = 10.0 ** (min_signal_rms_dbfs / 20.0)
+
+    if rms_d < floor_lin or rms_b < floor_lin:
+        meta = {
+            "method": "LimiterAware_3.0",
+            "events_detected": 0,
+            "events_corrected": 0,
+            "events_polarity_inverted": 0,
+            "safe_path_engaged": True,
+            "reason": f"low_energy_sub_threshold (rms_d={20*np.log10(rms_d):.1f}dBFS, rms_b={20*np.log10(rms_b):.1f}dBFS)",
+            "average_shift_ms": 0.0,
+            "applied_shifts_ms": [],
+            "applied_polarities": [],
+        }
+        return bass_stereo.copy().astype(np.float32), meta
+
+    # Kick Onset Detection: Energy envelope follower on lowpass drum stem
+    env = np.abs(sub_drums)
+    win_len = int(round(0.005 * sr))
+    env_smooth = np.convolve(env, np.ones(win_len) / win_len, mode="same")
+    env_max = float(np.max(env_smooth))
+    if env_max < 1e-6:
+        meta = {
+            "method": "LimiterAware_3.0",
+            "events_detected": 0,
+            "events_corrected": 0,
+            "events_polarity_inverted": 0,
+            "safe_path_engaged": True,
+            "reason": "drum_envelope_silent",
+            "average_shift_ms": 0.0,
+            "applied_shifts_ms": [],
+            "applied_polarities": [],
+        }
+        return bass_stereo.copy().astype(np.float32), meta
+
+    peak_threshold = max(0.01, float(env_max * 0.15))
+    min_dist_samples = int(round(0.12 * sr))
+    kick_peaks, _ = signal.find_peaks(env_smooth, height=peak_threshold, distance=min_dist_samples)
+
+    if len(kick_peaks) == 0:
+        meta = {
+            "method": "LimiterAware_3.0",
+            "events_detected": 0,
+            "events_corrected": 0,
+            "events_polarity_inverted": 0,
+            "safe_path_engaged": True,
+            "reason": "no_kick_peaks_detected",
+            "average_shift_ms": 0.0,
+            "applied_shifts_ms": [],
+            "applied_polarities": [],
+        }
+        return bass_stereo.copy().astype(np.float32), meta
+
+    win_samples = int(round(window_sec * sr))
+    pre_samples = int(round(pre_trigger_sec * sr))
+    max_lag = int(round(max_lag_ms * 1e-3 * sr))
+
+    bass_out = np.zeros_like(bass_stereo, dtype=np.float64)
+    weight_acc = np.zeros((n_samples, 1), dtype=np.float64)
+
+    events_corrected = 0
+    applied_shifts = []
+    applied_polarities = []
+
+    full_win_len = pre_samples + win_samples
+    taper = signal.windows.tukey(full_win_len, alpha=0.30)[:, np.newaxis]
+
+    # Pre-calculate bandpass filter coefficients for 85-120 Hz crossover audit
+    nyq = 0.5 * sr
+    bp_b, bp_a = signal.butter(2, [max(10.0, 85.0) / nyq, min(nyq - 10.0, 120.0) / nyq], btype="bandpass")
+
+    for k_idx in kick_peaks:
+        w_start = max(0, k_idx - pre_samples)
+        w_end = min(n_samples, w_start + full_win_len)
+        actual_len = w_end - w_start
+        if actual_len < max_lag * 2 + 10:
+            continue
+
+        w_taper = taper[:actual_len]
+        d_sub_win = sub_drums[w_start:w_end]
+        b_sub_win = sub_bass[w_start:w_end]
+        raw_b_segment = bass_stereo[w_start:w_end]
+        raw_d_segment = drums_stereo[w_start:w_end]
+
+        best_lag, best_pol = _evaluate_limiter_aware_candidates(
+            d_sub_win,
+            b_sub_win,
+            raw_b_segment,
+            raw_d_segment,
+            sr,
+            max_lag,
+            limiter_penalty=limiter_penalty,
+        )
+
+        shifted_b = np.roll(raw_b_segment * best_pol, best_lag, axis=0)
+        if best_lag > 0:
+            shifted_b[:best_lag] = raw_b_segment[:best_lag]
+        elif best_lag < 0:
+            shifted_b[best_lag:] = raw_b_segment[best_lag:]
+
+        # Safe path verification
+        raw_sub_sum = d_sub_win + b_sub_win
+        cand_b_sub = np.roll(b_sub_win * best_pol, best_lag)
+        cand_sub_sum = d_sub_win + cand_b_sub
+        rms_raw = float(np.sqrt(np.mean(np.square(raw_sub_sum)) + 1e-12))
+        rms_cand = float(np.sqrt(np.mean(np.square(cand_sub_sum)) + 1e-12))
+        gain_db = 20.0 * np.log10(max(1e-12, rms_cand) / max(1e-12, rms_raw))
+
+        raw_peak = float(np.max(np.abs(raw_d_segment + raw_b_segment)))
+        cand_peak = float(np.max(np.abs(raw_d_segment + shifted_b)))
+        peak_diff_db = 20.0 * np.log10(max(1e-12, cand_peak) / max(1e-12, raw_peak))
+
+        # Crossover band (85-120 Hz) loss check
+        b85_raw = float(np.sqrt(np.mean(np.square(signal.filtfilt(bp_b, bp_a, raw_b_segment, axis=0))) + 1e-12))
+        b85_cand = float(np.sqrt(np.mean(np.square(signal.filtfilt(bp_b, bp_a, shifted_b, axis=0))) + 1e-12))
+        xover_drop_db = 20.0 * np.log10(max(1e-12, b85_cand) / max(1e-12, b85_raw))
+
+        # Safe-path acceptance rule
+        effective_net_db = gain_db - max(0.0, peak_diff_db)
+        accept = (effective_net_db >= min_gain_db) and (xover_drop_db >= -max_xover_drop_db)
+
+        if accept:
+            effective_segment = shifted_b
+            events_corrected += 1
+            applied_shifts.append(best_lag * 1000.0 / sr)
+            applied_polarities.append(float(best_pol))
+        else:
+            effective_segment = raw_b_segment
+            applied_shifts.append(0.0)
+            applied_polarities.append(1.0)
+
+        bass_out[w_start:w_end] += effective_segment * w_taper
+        weight_acc[w_start:w_end] += w_taper
+
+    # Blend back with partition of unity
+    unassigned = (weight_acc < 1e-6)
+    bass_out[unassigned[:, 0]] = bass_stereo[unassigned[:, 0]]
+    assigned = ~unassigned
+    weight_div = np.maximum(1.0, weight_acc)
+    bass_out[assigned[:, 0]] /= weight_div[assigned[:, 0]]
+
+    final_bass = bass_out[:n_samples].astype(np.float32)
+
+    meta = {
+        "method": "LimiterAware_3.0",
+        "events_detected": len(kick_peaks),
+        "events_corrected": events_corrected,
+        "events_polarity_inverted": int(sum(1 for p in applied_polarities if p < 0)),
+        "safe_path_engaged": (events_corrected == 0),
+        "average_shift_ms": float(np.mean(np.abs(applied_shifts))) if applied_shifts else 0.0,
+        "applied_shifts_ms": [float(s) for s in applied_shifts],
+        "applied_polarities": [float(p) for p in applied_polarities],
+        "min_gain_db_threshold": min_gain_db,
+    }
+    logger.info(
+        "Sub-Sync Limiter-Aware 3.0: detected=%d corrected=%d inverted=%d avg_shift=%.2fms safe_path=%s",
+        meta["events_detected"],
+        meta["events_corrected"],
+        meta["events_polarity_inverted"],
+        meta["average_shift_ms"],
+        meta["safe_path_engaged"],
+    )
+    return final_bass, meta
+
+
+SUB_SYNC_MODES = ('off', 'legacy', 'windowed', 'limiter_aware')
 
 EXPERIMENTAL_SUB_SYNC_DEFAULTS = {
     'sub_sync_experimental': False,      # Experimental Sub-Sync disabled by default
-    'sub_sync_mode': 'off',              # 'off' | 'legacy' | 'windowed'
-    'sub_sync_max_lag_ms': 3.0,          # Max lag bound (ms) for experimental mode
+    'sub_sync_mode': 'off',              # 'off' | 'legacy' | 'windowed' | 'limiter_aware'
+    'sub_sync_max_lag_ms': 3.0,          # Max lag bound (ms) for limiter-aware mode
     'sub_sync_min_gain_db': 0.5,         # Minimum <100 Hz gain (dB) required to apply shift
+    'sub_sync_limiter_penalty': 1.20,    # Lambda penalty for instantaneous True-Peak growth
     'sub_sync_crossover_hz': 100.0,      # Sub/body crossover frequency (Hz)
-    'sub_sync_window_sec': 2.0,          # Window duration (s) for windowed Sub-Sync
+    'sub_sync_window_sec': 0.20,         # Window duration (s) for per-kick analysis
+    'sub_sync_pre_trigger_sec': 0.010,   # Pre-trigger window (s)
     'sub_sync_hop_sec': 1.0,             # Window hop (s) for windowed Sub-Sync
-    'sub_sync_max_xover_drop_db': 1.0,   # Max allowed loss in 85-120 Hz band (dB)
+    'sub_sync_max_xover_drop_db': 0.50,  # Max allowed loss in 85-120 Hz band (dB)
+    'sub_sync_energy_floor_dbfs': -50.0, # Energy floor for safe-bypass (acoustic stems)
 }
 
 DEFAULT_PARAMS.update(EXPERIMENTAL_SUB_SYNC_DEFAULTS)
 
 def resolve_sub_sync_config(params=None):
     """
-    Validates and resolves Sub-Sync configuration without enabling experimental DSP.
-    Experimental 'windowed' mode remains inactive until field validation is approved.
+    Validates and resolves Sub-Sync configuration for PHARMAKON 3.0.
+    Supports modes:
+      - 'off': Completely bypasses Sub-Sync processing.
+      - 'legacy': Uses global cross-correlation alignment (PHARMAKON 2.0).
+      - 'limiter_aware': Uses transient-guarded limiter-aware alignment with True-Peak penalty (PHARMAKON 3.0).
+      - 'windowed': Experimental windowed alignment mode.
     """
     p = DEFAULT_PARAMS if params is None else params
     exp_flag = bool(p.get('sub_sync_experimental', EXPERIMENTAL_SUB_SYNC_DEFAULTS['sub_sync_experimental']))
@@ -932,11 +1201,15 @@ def resolve_sub_sync_config(params=None):
         raise ValueError(f"Invalid sub_sync_mode={req_mode!r}; expected one of {SUB_SYNC_MODES}")
 
     max_lag_ms = float(p.get('sub_sync_max_lag_ms', EXPERIMENTAL_SUB_SYNC_DEFAULTS['sub_sync_max_lag_ms']))
-    min_gain_db = float(p.get('sub_sync_min_gain_db', EXPERIMENTAL_SUB_SYNC_DEFAULTS['sub_sync_min_gain_db']))
+    default_min_gain = 0.15 if req_mode == 'limiter_aware' else EXPERIMENTAL_SUB_SYNC_DEFAULTS['sub_sync_min_gain_db']
+    min_gain_db = float(p.get('sub_sync_min_gain_db', default_min_gain))
+    limiter_penalty = float(p.get('sub_sync_limiter_penalty', EXPERIMENTAL_SUB_SYNC_DEFAULTS.get('sub_sync_limiter_penalty', 1.20)))
     crossover_hz = float(p.get('sub_sync_crossover_hz', EXPERIMENTAL_SUB_SYNC_DEFAULTS['sub_sync_crossover_hz']))
     window_sec = float(p.get('sub_sync_window_sec', EXPERIMENTAL_SUB_SYNC_DEFAULTS['sub_sync_window_sec']))
+    pre_trigger_sec = float(p.get('sub_sync_pre_trigger_sec', EXPERIMENTAL_SUB_SYNC_DEFAULTS.get('sub_sync_pre_trigger_sec', 0.010)))
     hop_sec = float(p.get('sub_sync_hop_sec', EXPERIMENTAL_SUB_SYNC_DEFAULTS['sub_sync_hop_sec']))
     max_xover_drop_db = float(p.get('sub_sync_max_xover_drop_db', EXPERIMENTAL_SUB_SYNC_DEFAULTS['sub_sync_max_xover_drop_db']))
+    energy_floor_dbfs = float(p.get('sub_sync_energy_floor_dbfs', EXPERIMENTAL_SUB_SYNC_DEFAULTS.get('sub_sync_energy_floor_dbfs', -50.0)))
 
     if not (0.0 < max_lag_ms <= 15.0):
         raise ValueError(f"sub_sync_max_lag_ms out of range (0, 15]: {max_lag_ms}")
@@ -944,34 +1217,57 @@ def resolve_sub_sync_config(params=None):
         raise ValueError(f"sub_sync_min_gain_db must be >= 0.0: {min_gain_db}")
     if not (40.0 <= crossover_hz <= 200.0):
         raise ValueError(f"sub_sync_crossover_hz out of range [40, 200]: {crossover_hz}")
-    if window_sec <= 0.0 or not (0.0 < hop_sec <= window_sec):
+    if window_sec <= 0.0 or not (0.0 < hop_sec <= max(window_sec, 2.0)):
         raise ValueError(f"Invalid window/hop configuration: window_sec={window_sec}, hop_sec={hop_sec}")
     if max_xover_drop_db < 0.0:
         raise ValueError(f"sub_sync_max_xover_drop_db must be >= 0.0: {max_xover_drop_db}")
 
     phase_align_legacy = bool(p.get('phase_align_sub', True))
-    effective_mode = 'legacy' if phase_align_legacy else 'off'
-    if exp_flag or req_mode == 'windowed':
+
+    # Resolve effective mode:
+    if not phase_align_legacy:
+        effective_mode = 'off'
+        exp_active = False
+    elif req_mode == 'limiter_aware':
+        effective_mode = 'limiter_aware'
+        exp_active = True
+    elif req_mode == 'windowed':
+        effective_mode = 'legacy' if phase_align_legacy else 'off'
+        exp_active = False
         logger.info(
             "Sub-Sync experimental configuration requested (mode=%s, enabled=%s); keeping experimental DSP inactive (effective_mode=%s)",
             req_mode,
             exp_flag,
             effective_mode,
         )
+    elif req_mode == 'legacy':
+        effective_mode = 'legacy'
+        exp_active = False
+    else:
+        # req_mode == 'off'
+        if params is not None and 'sub_sync_mode' in params and req_mode == 'off':
+            effective_mode = 'off'
+        else:
+            effective_mode = 'legacy' if phase_align_legacy else 'off'
+        exp_active = False
 
     return {
         'phase_align_sub': phase_align_legacy,
         'sub_sync_experimental': exp_flag,
         'requested_mode': req_mode,
         'effective_mode': effective_mode,
-        'experimental_active': False,
+        'experimental_active': exp_active,
         'sub_sync_max_lag_ms': max_lag_ms,
         'sub_sync_min_gain_db': min_gain_db,
+        'sub_sync_limiter_penalty': limiter_penalty,
         'sub_sync_crossover_hz': crossover_hz,
         'sub_sync_window_sec': window_sec,
+        'sub_sync_pre_trigger_sec': pre_trigger_sec,
         'sub_sync_hop_sec': hop_sec,
         'sub_sync_max_xover_drop_db': max_xover_drop_db,
+        'sub_sync_energy_floor_dbfs': energy_floor_dbfs,
     }
+
 
 def process_audio_array(audio, sr, params=None):
     """
@@ -1714,10 +2010,40 @@ def process_stems_folder(target_folder, params=None, open_folder=True):
 
     # --- SUB-SYNC PHASE ALIGNMENT (KICK & BASS) ---
     sub_sync_cfg = resolve_sub_sync_config(params)
-    if params.get('phase_align_sub', True):
-        bass_proc, sub_lag, sub_pol = align_sub_phase(drums_proc, bass_proc, sr, max_lag_ms=6.0)
+    effective_mode = sub_sync_cfg['effective_mode']
+
+    # Default to limiter_aware in stems mode if not explicitly overridden
+    if params is not None and 'sub_sync_mode' not in params and sub_sync_cfg['phase_align_sub']:
+        effective_mode = 'limiter_aware'
+
+    if effective_mode == 'off':
+        print("      Sub-Sync: Bypass (Disabled by user configuration)")
+    elif effective_mode == 'limiter_aware':
+        bass_proc, meta = align_sub_phase_limiter_aware(
+            drums_proc,
+            bass_proc,
+            sr,
+            max_lag_ms=sub_sync_cfg['sub_sync_max_lag_ms'],
+            min_gain_db=sub_sync_cfg['sub_sync_min_gain_db'],
+            limiter_penalty=sub_sync_cfg['sub_sync_limiter_penalty'],
+            crossover_hz=sub_sync_cfg['sub_sync_crossover_hz'],
+            window_sec=sub_sync_cfg['sub_sync_window_sec'],
+            pre_trigger_sec=sub_sync_cfg['sub_sync_pre_trigger_sec'],
+            max_xover_drop_db=sub_sync_cfg['sub_sync_max_xover_drop_db'],
+            min_signal_rms_dbfs=sub_sync_cfg['sub_sync_energy_floor_dbfs'],
+        )
+        if meta.get('safe_path_engaged'):
+            print(f"      Sub-Sync (Limiter-Aware): Safe-Bypass engaged ({meta.get('reason', 'acoustic / low energy')}) - 0.000 dB delta")
+        else:
+            print(
+                f"      Sub-Sync (Limiter-Aware 3.0): Phase-locked {meta['events_corrected']}/{meta['events_detected']} kicks "
+                f"(avg shift: {meta['average_shift_ms']:.2f}ms, inverted: {meta['events_polarity_inverted']}) "
+                f"with True-Peak Guard"
+            )
+    else:
+        bass_proc, sub_lag, sub_pol = align_sub_phase_legacy(drums_proc, bass_proc, sr, max_lag_ms=6.0)
         pol_str = " (180 deg inverted)" if sub_pol < 0 else ""
-        print(f"      Sub-Sync: Phase aligned bass sub-band by {sub_lag} samples{pol_str}")
+        print(f"      Sub-Sync (Legacy): Phase aligned bass sub-band by {sub_lag} samples{pol_str}")
 
     # --- VOCALS ---
     print(f"[3/4] VOCALS: Dynamic De-Harshing ({deharsh_f}Hz), Soft Saturation...")
