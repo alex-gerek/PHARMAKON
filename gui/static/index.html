@@ -166,7 +166,8 @@
           </div>
 
           <div class="ceiling-selector subsync-mode-selector">
-            <button type="button" class="ceiling-btn active" id="btnSubSyncLimiter" onclick="setSubSyncMode('limiter_aware')">LIMITER GUARD 3.0</button>
+            <button type="button" class="ceiling-btn active" id="btnSubSyncLimiter" onclick="setSubSyncMode('limiter_aware')">LOCAL GUARD 3.0</button>
+            <button type="button" class="ceiling-btn" id="btnSubSyncExisting" onclick="setSubSyncMode('existing_guard')">EXISTING GUARD</button>
             <button type="button" class="ceiling-btn" id="btnSubSyncLegacy" onclick="setSubSyncMode('legacy')">LEGACY</button>
             <button type="button" class="ceiling-btn" id="btnSubSyncOff" onclick="setSubSyncMode('off')">BYPASS</button>
           </div>
@@ -380,6 +381,11 @@
                 </div>
                 <div class="knob-readout" id="ceilingReadout">-0.3 dBFS</div>
                 <div class="param-desc">Master Ceiling</div>
+              </div>
+              <div class="knob-control" style="min-width: 130px;">
+                <label>MATCH LUFS</label>
+                <button type="button" class="ceiling-btn" id="btnMatchLoudness" onclick="toggleMatchLoudness()" style="width: 100%; height: 32px; margin-top: 6px; font-size: 10px; font-weight: 700; letter-spacing: 0.5px;">MATCH INPUT</button>
+                <div class="param-desc" id="matchLoudnessDesc" style="margin-top: 6px;">Preserve Source LUFS</div>
               </div>
             </div>
           </div>

@@ -2,7 +2,6 @@
 PHARMAKON // Advanced AI Audio Restoration & Mastering DSP Engine
 Developed by Lex Gerek (Sound Architect / Engineer)
 Architecture: Pure NumPy + SciPy (Zero external PyTorch / heavy dependencies)
-
 Features:
 - Dynamic Anti-AI De-Harshing (Band-isolated envelope follower / dynamic ducker)
 - Auto Spectral Antidote (Welch PSD + Prominence peak detection for AI metallic resonances)
@@ -13,7 +12,6 @@ Features:
 - 3D Mid-Side Stereo Expansion & Analog Tape Warmth Saturation
 - Surgical Time-Range / Region Punch-In Blending with 35ms Cosine Crossfade
 """
-
 import sys
 import os
 import io
@@ -48,6 +46,8 @@ DEFAULT_PARAMS = {
     'target_ceiling_db': -0.3,   # True-Peak ceiling (dBFS)
     'drum_punch': 1.0,           # Transient attack punch multiplier (for stems)
     'mode': 'pharmakon1',        # 'pharmakon1' (Auto Antidote) or 'pharmakon2' (Pro Rack)
+    'match_input_loudness': False, # Match Input Loudness / Сохранить громкость исходника
+    'reference_track_path': None,  # Optional external reference track path for stems mode
 }
 
 PRESETS = {
@@ -592,6 +592,132 @@ def enhance_drum_transients(drums, sr, punch_factor=1.0):
 # -----------------------------------------------------------------------------
 # 6. COMPARATIVE METRICS & SPECTRAL CURVES
 # -----------------------------------------------------------------------------
+
+def measure_true_peak_per_channel(audio: np.ndarray) -> tuple:
+    """Measures 4x Polyphase True-Peak per channel (L, R, and max) in dBFS."""
+    st = ensure_stereo(audio)
+    res_l = signal.resample_poly(st[:, 0], 4, 1)
+    res_r = signal.resample_poly(st[:, 1], 4, 1)
+    tp_l = float(20.0 * np.log10(max(1e-12, np.max(np.abs(res_l)))))
+    tp_r = float(20.0 * np.log10(max(1e-12, np.max(np.abs(res_r)))))
+    return round(tp_l, 2), round(tp_r, 2), round(max(tp_l, tp_r), 2)
+
+
+def apply_match_input_loudness(
+    master_audio: np.ndarray,
+    sr: int,
+    orig_audio: np.ndarray = None,
+    orig_path: str = None,
+    target_ceiling_db: float = -0.3,
+):
+    """
+    Trial Feature: Match Input Loudness / Сохранить громкость исходника.
+    1. Measures BS.1770-4 Integrated Loudness of original track and master.
+    2. Computes required gain: delta_lufs = lufs_orig - lufs_master.
+    3. Evaluates True-Peak Headroom: headroom_db = target_ceiling_db - tp_master_max.
+    4. Headroom Guard Rule:
+       - If delta_lufs <= headroom_db (or attenuation):
+           applied_gain_db = delta_lufs
+           status = "FULL_MATCH"
+           reason = f"Loudness matched 100% within True-Peak ceiling headroom (gain: {applied_gain_db:+.2f} dB)"
+       - If delta_lufs > headroom_db:
+           if headroom_db < 0:
+               applied_gain_db = headroom_db
+               status = "CEILING_ATTENUATED"
+               reason = (f"Master True-Peak ({tp_max_before:.2f} dBFS) exceeded ceiling ({target_ceiling_db:.2f} dBFS). "
+                         f"Attenuated by {applied_gain_db:.2f} dB to enforce ceiling.")
+           else:
+               applied_gain_db = max(0.0, headroom_db)
+               status = "CEILING_LIMITED"
+               deficit = delta_lufs - applied_gain_db
+               reason = (f"Gain capped at +{applied_gain_db:.2f} dB to prevent exceeding "
+                         f"ceiling of {target_ceiling_db:.2f} dBFS (deficit: {deficit:.2f} LUFS)")
+    5. Applies constant linear gain: out_audio = master_audio * (10 ** (applied_gain_db / 20.0)).
+    6. Re-measures post-matching: lufs_achieved, per-channel true_peak.
+    """
+    master_audio = ensure_stereo(master_audio)
+    tp_l_before, tp_r_before, tp_max_before = measure_true_peak_per_channel(master_audio)
+    lufs_master = calc_integrated_lufs(master_audio, sr)
+
+    if orig_audio is None and orig_path and os.path.exists(orig_path):
+        try:
+            orig_audio, _ = sf.read(orig_path)
+        except Exception:
+            orig_audio = None
+
+    if orig_audio is None:
+        report = {
+            "enabled": True,
+            "status": "REFERENCE_UNAVAILABLE",
+            "reason": "Reference mix file not provided and could not be located in folder hierarchy.",
+            "reference_track_path": None,
+            "lufs_orig": None,
+            "lufs_master_before": round(float(lufs_master), 2),
+            "lufs_master_after": round(float(lufs_master), 2),
+            "applied_gain_db": 0.0,
+            "target_ceiling_db": round(float(target_ceiling_db), 2),
+            "true_peak_before_l_dbfs": tp_l_before,
+            "true_peak_before_r_dbfs": tp_r_before,
+            "true_peak_before_max_dbfs": tp_max_before,
+            "true_peak_after_l_dbfs": tp_l_before,
+            "true_peak_after_r_dbfs": tp_r_before,
+            "true_peak_after_max_dbfs": tp_max_before,
+            "headroom_available_db": round(float(target_ceiling_db - tp_max_before), 2),
+            "ceiling_exceeded": False,
+        }
+        return master_audio, report
+
+    orig_audio = ensure_stereo(orig_audio)
+    lufs_orig = calc_integrated_lufs(orig_audio, sr)
+
+    delta_lufs = float(lufs_orig - lufs_master)
+    headroom_db = float(target_ceiling_db - tp_max_before)
+
+    if delta_lufs <= headroom_db:
+        applied_gain_db = delta_lufs
+        status = "FULL_MATCH"
+        reason = f"Loudness matched 100% within True-Peak ceiling headroom (gain: {applied_gain_db:+.2f} dB)"
+    else:
+        if headroom_db < 0:
+            applied_gain_db = headroom_db
+            status = "CEILING_ATTENUATED"
+            reason = (f"Master True-Peak ({tp_max_before:.2f} dBFS) exceeded ceiling ({target_ceiling_db:.2f} dBFS). "
+                      f"Attenuated by {applied_gain_db:.2f} dB to enforce ceiling.")
+        else:
+            applied_gain_db = max(0.0, headroom_db)
+            status = "CEILING_LIMITED"
+            deficit = delta_lufs - applied_gain_db
+            reason = (f"Gain capped at +{applied_gain_db:.2f} dB to prevent exceeding "
+                      f"ceiling of {target_ceiling_db:.2f} dBFS (deficit: {deficit:.2f} LUFS)")
+
+    linear_scale = 10.0 ** (applied_gain_db / 20.0)
+    matched_audio = np.ascontiguousarray(master_audio * linear_scale, dtype=np.float32)
+
+    tp_l_after, tp_r_after, tp_max_after = measure_true_peak_per_channel(matched_audio)
+    lufs_after = calc_integrated_lufs(matched_audio, sr)
+
+    report = {
+        "enabled": True,
+        "status": status,
+        "reference_track_path": orig_path,
+        "lufs_orig": round(float(lufs_orig), 2),
+        "lufs_master_before": round(float(lufs_master), 2),
+        "lufs_master_after": round(float(lufs_after), 2),
+        "lufs_target_deficit": round(float(delta_lufs - applied_gain_db), 2) if status == "CEILING_LIMITED" else 0.0,
+        "applied_gain_db": round(float(applied_gain_db), 4),
+        "target_ceiling_db": round(float(target_ceiling_db), 2),
+        "true_peak_before_l_dbfs": tp_l_before,
+        "true_peak_before_r_dbfs": tp_r_before,
+        "true_peak_before_max_dbfs": tp_max_before,
+        "true_peak_after_l_dbfs": tp_l_after,
+        "true_peak_after_r_dbfs": tp_r_after,
+        "true_peak_after_max_dbfs": tp_max_after,
+        "headroom_available_db": round(headroom_db, 2),
+        "ceiling_exceeded": bool(tp_max_after > target_ceiling_db + 0.05),
+        "reason": reason,
+    }
+    return matched_audio, report
+
 
 def calc_audio_metrics(orig, proc, sr, params=None):
     """Calculates detailed comparative metrics, True-Peak, LUFS, and FFT curves."""
@@ -1167,7 +1293,7 @@ def align_sub_phase_limiter_aware(
     return final_bass, meta
 
 
-SUB_SYNC_MODES = ('off', 'legacy', 'windowed', 'limiter_aware')
+SUB_SYNC_MODES = ('off', 'legacy', 'windowed', 'limiter_aware', 'local_guard', 'existing_guard')
 
 EXPERIMENTAL_SUB_SYNC_DEFAULTS = {
     'sub_sync_experimental': False,      # Experimental Sub-Sync disabled by default
@@ -1201,7 +1327,7 @@ def resolve_sub_sync_config(params=None):
         raise ValueError(f"Invalid sub_sync_mode={req_mode!r}; expected one of {SUB_SYNC_MODES}")
 
     max_lag_ms = float(p.get('sub_sync_max_lag_ms', EXPERIMENTAL_SUB_SYNC_DEFAULTS['sub_sync_max_lag_ms']))
-    default_min_gain = 0.15 if req_mode == 'limiter_aware' else EXPERIMENTAL_SUB_SYNC_DEFAULTS['sub_sync_min_gain_db']
+    default_min_gain = 0.15 if req_mode in ('limiter_aware', 'local_guard', 'existing_guard') else EXPERIMENTAL_SUB_SYNC_DEFAULTS['sub_sync_min_gain_db']
     min_gain_db = float(p.get('sub_sync_min_gain_db', default_min_gain))
     limiter_penalty = float(p.get('sub_sync_limiter_penalty', EXPERIMENTAL_SUB_SYNC_DEFAULTS.get('sub_sync_limiter_penalty', 1.20)))
     crossover_hz = float(p.get('sub_sync_crossover_hz', EXPERIMENTAL_SUB_SYNC_DEFAULTS['sub_sync_crossover_hz']))
@@ -1228,8 +1354,11 @@ def resolve_sub_sync_config(params=None):
     if not phase_align_legacy:
         effective_mode = 'off'
         exp_active = False
-    elif req_mode == 'limiter_aware':
-        effective_mode = 'limiter_aware'
+    elif req_mode in ('limiter_aware', 'local_guard'):
+        effective_mode = req_mode
+        exp_active = True
+    elif req_mode == 'existing_guard':
+        effective_mode = 'existing_guard'
         exp_active = True
     elif req_mode == 'windowed':
         effective_mode = 'legacy' if phase_align_legacy else 'off'
@@ -1524,6 +1653,45 @@ def generate_mastering_report_html(track_name, metrics, output_dir, params=None)
     
     svg_chart_full = generate_svg_spectrum(freqs, orig_db, proc_db, delta_db, zoom_mode=False) if freqs else ""
     svg_chart_zoom = generate_svg_spectrum(freqs, orig_db, proc_db, delta_db, zoom_mode=True) if freqs else ""
+    # Match Input Loudness Telemetry Banner
+    match_card_html = ""
+    m_data = metrics.get('match_input_loudness')
+    if m_data and isinstance(m_data, dict) and m_data.get('enabled'):
+        m_st = m_data.get('status', 'UNKNOWN')
+        b_col = '#10b981' if m_st == 'FULL_MATCH' else ('#f59e0b' if m_st == 'CEILING_LIMITED' else '#38bdf8')
+        ref_name = os.path.basename(m_data.get('reference_track_path') or '') or 'Input Track / Reference'
+        match_card_html = f'''
+    <div style="background: #090c13; border: 1px solid {b_col}; border-radius: 8px; padding: 16px 20px; margin-bottom: 20px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid #1a2233; padding-bottom: 8px;">
+        <div style="font-size: 11px; font-family: monospace; font-weight: 700; letter-spacing: 1.5px; color: {b_col};">
+          &#x2696; MATCH INPUT LOUDNESS &bull; {m_st}
+        </div>
+        <div style="font-size: 10.5px; font-family: monospace; color: var(--muted);">
+          REF: <span style="color: #fff;">{ref_name}</span>
+        </div>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; text-align: center;">
+        <div style="background: #0d111a; padding: 10px; border-radius: 6px;">
+          <div style="font-size: 9px; font-family: monospace; color: var(--muted);">SOURCE LUFS</div>
+          <div style="font-size: 16px; font-weight: bold; font-family: monospace; color: #fff; margin-top: 4px;">{m_data.get('lufs_orig', 'N/A')} <span style="font-size: 10px; color: var(--muted);">LUFS</span></div>
+        </div>
+        <div style="background: #0d111a; padding: 10px; border-radius: 6px;">
+          <div style="font-size: 9px; font-family: monospace; color: var(--muted);">MASTER (PRE &rarr; POST)</div>
+          <div style="font-size: 16px; font-weight: bold; font-family: monospace; color: {b_col}; margin-top: 4px;">{m_data.get('lufs_master_before')} &rarr; {m_data.get('lufs_master_after')}</div>
+        </div>
+        <div style="background: #0d111a; padding: 10px; border-radius: 6px;">
+          <div style="font-size: 9px; font-family: monospace; color: var(--muted);">APPLIED GAIN</div>
+          <div style="font-size: 16px; font-weight: bold; font-family: monospace; color: #38bdf8; margin-top: 4px;">{m_data.get('applied_gain_db', 0.0):+.2f} dB</div>
+        </div>
+        <div style="background: #0d111a; padding: 10px; border-radius: 6px;">
+          <div style="font-size: 9px; font-family: monospace; color: var(--muted);">POST TRUE-PEAK (L / R)</div>
+          <div style="font-size: 14px; font-weight: bold; font-family: monospace; color: #e2e8f0; margin-top: 4px;">{m_data.get('true_peak_after_l_dbfs')} / {m_data.get('true_peak_after_r_dbfs')} <span style="color: var(--muted); font-size: 10px;">(max {m_data.get('true_peak_after_max_dbfs')} dBFS)</span></div>
+        </div>
+      </div>
+      <div style="margin-top: 10px; font-size: 11px; font-family: monospace; color: #94a3b8;">
+        {m_data.get('reason', '')}
+      </div>
+    </div>'''
 
     html_content = f"""<!DOCTYPE html>
 <html lang="en">
@@ -1794,6 +1962,7 @@ def generate_mastering_report_html(track_name, metrics, output_dir, params=None)
       </div>
     </div>
 
+    {match_card_html}
     <!-- 4-Band Energy Shift Summary -->
     <div class="energy-bar-grid">
       <div class="e-band">
@@ -1899,6 +2068,20 @@ def process_single_file(file_path, params=None, open_folder=True):
     metrics['export_verification'] = {
         'master': verify_wav_export(out_file, expected_subtype=export_subtype, expected_sr=sr)
     }
+
+    # Match Input Loudness stage for single file
+    if params and params.get('match_input_loudness'):
+        matched_audio, match_loudness_report = apply_match_input_loudness(
+            full_mix, sr, orig_audio=audio, orig_path=file_path, target_ceiling_db=params.get('target_ceiling_db', -0.3)
+        )
+        if match_loudness_report.get('status') != 'REFERENCE_UNAVAILABLE':
+            matched_master_path = os.path.join(out_dir, f"{track_title} - MASTER_MATCHED_LUFS.wav")
+            sf.write(matched_master_path, matched_audio, sr, subtype=export_subtype)
+            print(f"  Match Input Loudness: {match_loudness_report.get('status')} (applied gain: {match_loudness_report.get('applied_gain_db'):+.2f} dB, final LUFS: {match_loudness_report.get('lufs_master_after')})")
+        else:
+            print(f"  Match Input Loudness: {match_loudness_report.get('reason')}")
+        metrics['match_input_loudness'] = match_loudness_report
+        metrics['matched_master_path'] = matched_master_path
 
     # Save Extracted Poison Delta (Null Difference: original - master)
     try:
@@ -2022,9 +2205,57 @@ def process_stems_folder(target_folder, params=None, open_folder=True):
     if params is not None and 'sub_sync_mode' not in params and sub_sync_cfg['phase_align_sub']:
         effective_mode = 'limiter_aware'
 
+    sub_sync_summary_result = None
+    sub_sync_mode_result = 'Bypassed'
+    sub_sync_corrected_events_result = 0
+
     if effective_mode == 'off':
         print("      Sub-Sync: Bypass (Disabled by user configuration)")
-    elif effective_mode == 'limiter_aware':
+    elif effective_mode in ('limiter_aware', 'local_guard'):
+        try:
+            from track_map_engine import process_local_sub_sync
+            bass_proc, sync_summary, _ = process_local_sub_sync(
+                drums_stereo=drums_proc,
+                bass_stereo=bass_proc,
+                sr=sr,
+                min_gain_db=sub_sync_cfg.get('sub_sync_min_gain_db', 0.00),
+                max_lag_ms=sub_sync_cfg.get('sub_sync_max_lag_ms', 3.0),
+                limiter_penalty=sub_sync_cfg.get('sub_sync_limiter_penalty', 1.20),
+            )
+            print(
+                f"      Sub-Sync (Local Guard 3.0): Phase-locked {sync_summary.get('events_corrected', 0)}/{sync_summary.get('events_detected', 0)} kicks "
+                f"(avg shift: {sync_summary.get('average_shift_ms', 0.0):.2f}ms) with True-Peak Guard"
+            )
+            sub_sync_summary_result = sync_summary
+            sub_sync_mode_result = 'Local Guard 3.0'
+            sub_sync_corrected_events_result = sync_summary.get('events_corrected', 0)
+        except Exception as e:
+            logger.warning(f"Local Guard 3.0 fallback: {e}")
+            bass_proc, meta = align_sub_phase_limiter_aware(
+                drums_proc,
+                bass_proc,
+                sr,
+                max_lag_ms=sub_sync_cfg['sub_sync_max_lag_ms'],
+                min_gain_db=sub_sync_cfg['sub_sync_min_gain_db'],
+                limiter_penalty=sub_sync_cfg['sub_sync_limiter_penalty'],
+                crossover_hz=sub_sync_cfg['sub_sync_crossover_hz'],
+                window_sec=sub_sync_cfg['sub_sync_window_sec'],
+                pre_trigger_sec=sub_sync_cfg['sub_sync_pre_trigger_sec'],
+                max_xover_drop_db=sub_sync_cfg['sub_sync_max_xover_drop_db'],
+                min_signal_rms_dbfs=sub_sync_cfg['sub_sync_energy_floor_dbfs'],
+            )
+            if meta.get('safe_path_engaged'):
+                print(f"      Sub-Sync (Limiter-Aware): Safe-Bypass engaged ({meta.get('reason', 'acoustic / low energy')}) - 0.000 dB delta")
+            else:
+                print(
+                    f"      Sub-Sync (Limiter-Aware 3.0): Phase-locked {meta['events_corrected']}/{meta['events_detected']} kicks "
+                    f"(avg shift: {meta['average_shift_ms']:.2f}ms, inverted: {meta['events_polarity_inverted']}) "
+                    f"with True-Peak Guard"
+                )
+            sub_sync_summary_result = meta
+            sub_sync_mode_result = 'Limiter-Aware 3.0'
+            sub_sync_corrected_events_result = meta.get('events_corrected', 0)
+    elif effective_mode == 'existing_guard':
         bass_proc, meta = align_sub_phase_limiter_aware(
             drums_proc,
             bass_proc,
@@ -2039,17 +2270,21 @@ def process_stems_folder(target_folder, params=None, open_folder=True):
             min_signal_rms_dbfs=sub_sync_cfg['sub_sync_energy_floor_dbfs'],
         )
         if meta.get('safe_path_engaged'):
-            print(f"      Sub-Sync (Limiter-Aware): Safe-Bypass engaged ({meta.get('reason', 'acoustic / low energy')}) - 0.000 dB delta")
+            print(f"      Sub-Sync (Existing Guard): Safe-Bypass engaged ({meta.get('reason', 'acoustic / low energy')}) - 0.000 dB delta")
         else:
             print(
-                f"      Sub-Sync (Limiter-Aware 3.0): Phase-locked {meta['events_corrected']}/{meta['events_detected']} kicks "
+                f"      Sub-Sync (Existing Guard 2.0): Phase-locked {meta['events_corrected']}/{meta['events_detected']} kicks "
                 f"(avg shift: {meta['average_shift_ms']:.2f}ms, inverted: {meta['events_polarity_inverted']}) "
                 f"with True-Peak Guard"
             )
+        sub_sync_summary_result = meta
+        sub_sync_mode_result = 'Existing Guard 2.0'
+        sub_sync_corrected_events_result = meta.get('events_corrected', 0)
     else:
         bass_proc, sub_lag, sub_pol = align_sub_phase_legacy(drums_proc, bass_proc, sr, max_lag_ms=6.0)
         pol_str = " (180 deg inverted)" if sub_pol < 0 else ""
         print(f"      Sub-Sync (Legacy): Phase aligned bass sub-band by {sub_lag} samples{pol_str}")
+        sub_sync_mode_result = 'Legacy Sub-Sync'
 
     # --- VOCALS ---
     print(f"[3/4] VOCALS: Dynamic De-Harshing ({deharsh_f}Hz), Soft Saturation...")
@@ -2078,6 +2313,29 @@ def process_stems_folder(target_folder, params=None, open_folder=True):
     remaster_dir = os.path.join(target_folder, "Remaster")
     os.makedirs(remaster_dir, exist_ok=True)
 
+    export_subtype = str(params.get('export_subtype', 'PCM_24')) if isinstance(params, dict) else 'PCM_24'
+
+    # Match Input Loudness stage for stems
+    match_loudness_report = None
+    matched_master_path = None
+    if params and params.get('match_input_loudness'):
+        ref_cand = params.get('reference_track_path')
+        if not ref_cand or not os.path.exists(ref_cand):
+            parent_dir = os.path.dirname(os.path.abspath(target_folder))
+            cands = [os.path.join(parent_dir, f) for f in os.listdir(parent_dir) if f.lower().endswith(('.wav', '.flac')) and 'stem' not in f.lower()]
+            if not cands:
+                cands = [os.path.join(target_folder, f) for f in os.listdir(target_folder) if f.lower().endswith(('.wav', '.flac')) and f.lower() not in ('drums.wav', 'bass.wav', 'vocals.wav', 'other.wav')]
+            ref_cand = cands[0] if cands else None
+        matched_audio, match_loudness_report = apply_match_input_loudness(
+            master_mix, sr, orig_path=ref_cand, target_ceiling_db=target_ceiling_db
+        )
+        if match_loudness_report.get('status') != 'REFERENCE_UNAVAILABLE':
+            matched_master_path = os.path.join(remaster_dir, f"{track_name} - MASTER_MATCHED_LUFS.wav")
+            sf.write(matched_master_path, matched_audio, sr, subtype=export_subtype)
+            print(f"  Match Input Loudness: {match_loudness_report.get('status')} (applied gain: {match_loudness_report.get('applied_gain_db'):+.2f} dB, final LUFS: {match_loudness_report.get('lufs_master_after')})")
+        else:
+            print(f"  Match Input Loudness: {match_loudness_report.get('reason')}")
+
     # Save cleaned stems
     v_out = os.path.join(remaster_dir, f"{track_name} - vocals_cleaned.wav")
     d_out = os.path.join(remaster_dir, f"{track_name} - drums_punched.wav")
@@ -2102,6 +2360,11 @@ def process_stems_folder(target_folder, params=None, open_folder=True):
         'raw_sum': verify_wav_export(raw_sum_path, expected_subtype=export_subtype, expected_sr=sr),
     }
     metrics = calc_audio_metrics(raw_sum, master_mix, sr, params)
+    metrics['sub_sync_summary'] = sub_sync_summary_result
+    metrics['sub_sync_mode'] = sub_sync_mode_result
+    metrics['sub_sync_corrected_events'] = sub_sync_corrected_events_result
+    metrics['match_input_loudness'] = match_loudness_report
+    metrics['matched_master_path'] = matched_master_path
 
     # Save Extracted Poison Delta (Null Difference: raw sum - master)
     try:

@@ -1525,7 +1525,8 @@ async function runSplitAndStemMaster() {
     sub_sync_mode: activeSubSyncMode,
     sub_sync_limiter_penalty: parseFloat(document.getElementById('param_sub_sync_limiter_penalty')?.value || 1.20),
     sub_sync_min_gain_db: parseFloat(document.getElementById('param_sub_sync_min_gain_db')?.value || 0.15),
-    sub_sync_max_lag_ms: parseFloat(document.getElementById('param_sub_sync_max_lag_ms')?.value || 3.0)
+    sub_sync_max_lag_ms: parseFloat(document.getElementById('param_sub_sync_max_lag_ms')?.value || 3.0),
+    match_input_loudness: matchInputLoudness
   };
 
   try {
@@ -1619,7 +1620,8 @@ async function runPharmakonProcess(isInitial = false) {
     sub_sync_mode: activeSubSyncMode,
     sub_sync_limiter_penalty: parseFloat(document.getElementById('param_sub_sync_limiter_penalty')?.value || 1.20),
     sub_sync_min_gain_db: parseFloat(document.getElementById('param_sub_sync_min_gain_db')?.value || 0.15),
-    sub_sync_max_lag_ms: parseFloat(document.getElementById('param_sub_sync_max_lag_ms')?.value || 3.0)
+    sub_sync_max_lag_ms: parseFloat(document.getElementById('param_sub_sync_max_lag_ms')?.value || 3.0),
+    match_input_loudness: matchInputLoudness
   };
 
   try {
@@ -1924,25 +1926,36 @@ function setCeiling(val) {
 function setSubSyncMode(mode) {
   activeSubSyncMode = mode;
   const btnLimiter = document.getElementById('btnSubSyncLimiter');
+  const btnExisting = document.getElementById('btnSubSyncExisting');
   const btnLegacy = document.getElementById('btnSubSyncLegacy');
   const btnOff = document.getElementById('btnSubSyncOff');
   const badge = document.getElementById('subSyncLedBadge');
   const ledDot = document.getElementById('subSyncLedDot');
 
-  if (btnLimiter) btnLimiter.classList.toggle('active', mode === 'limiter_aware');
+  if (btnLimiter) btnLimiter.classList.toggle('active', mode === 'limiter_aware' || mode === 'local_guard');
+  if (btnExisting) btnExisting.classList.toggle('active', mode === 'existing_guard');
   if (btnLegacy) btnLegacy.classList.toggle('active', mode === 'legacy');
   if (btnOff) btnOff.classList.toggle('active', mode === 'off');
 
   if (badge) {
-    badge.className = mode === 'limiter_aware' ? 'subsync-led-active' :
-                      (mode === 'legacy' ? 'subsync-led-legacy' : 'subsync-led-bypass');
-    badge.innerText = mode === 'limiter_aware' ? '3.0 ACTIVE' :
-                      (mode === 'legacy' ? 'LEGACY' : 'BYPASS');
+    if (mode === 'limiter_aware' || mode === 'local_guard') {
+      badge.className = 'subsync-led-active';
+      badge.innerText = 'LOCAL 3.0';
+    } else if (mode === 'existing_guard') {
+      badge.className = 'subsync-led-active';
+      badge.innerText = 'EXISTING';
+    } else if (mode === 'legacy') {
+      badge.className = 'subsync-led-legacy';
+      badge.innerText = 'LEGACY';
+    } else {
+      badge.className = 'subsync-led-bypass';
+      badge.innerText = 'BYPASS';
+    }
   }
 
   if (ledDot) {
     ledDot.className = 'ribbon-led-dot ' + 
-      (mode === 'limiter_aware' ? 'glow-emerald' :
+      ((mode === 'limiter_aware' || mode === 'local_guard' || mode === 'existing_guard') ? 'glow-emerald' : 
        (mode === 'legacy' ? 'dot-amber' : 'dot-off'));
   }
 
@@ -1953,7 +1966,26 @@ function setSubSyncMode(mode) {
     drawerKnobs.style.pointerEvents = mode === 'off' ? 'none' : 'auto';
   }
 
-  updateStatus(`Sub-Sync Mode: ${mode === 'limiter_aware' ? 'Limiter-Aware 3.0 Guard' : (mode === 'legacy' ? 'Legacy Sub-Sync' : 'Bypassed')}`);
+  const modeName = (mode === 'limiter_aware' || mode === 'local_guard') ? 'Local Guard 3.0' :
+                   (mode === 'existing_guard' ? 'Existing Guard 2.0' :
+                   (mode === 'legacy' ? 'Legacy Sub-Sync' : 'Bypassed'));
+  updateStatus(`Sub-Sync Mode: ${modeName}`);
+}
+
+let matchInputLoudness = false;
+
+function toggleMatchLoudness() {
+  matchInputLoudness = !matchInputLoudness;
+  const btn = document.getElementById('btnMatchLoudness');
+  if (btn) {
+    btn.classList.toggle('active', matchInputLoudness);
+    btn.style.borderColor = matchInputLoudness ? '#10b981' : '';
+    btn.style.color = matchInputLoudness ? '#10b981' : '';
+    btn.style.boxShadow = matchInputLoudness ? '0 0 10px rgba(16, 185, 129, 0.4)' : '';
+  }
+  const desc = document.getElementById('matchLoudnessDesc');
+  if (desc) desc.innerText = matchInputLoudness ? 'Active (Headroom Guard)' : 'Preserve Source LUFS';
+  updateStatus(`Match Input Loudness: ${matchInputLoudness ? 'ENABLED' : 'DISABLED'}`);
 }
 
 function toggleSubSyncDrawer() {
