@@ -157,6 +157,75 @@
           <div class="module-tag pro-tag">REAL-TIME TACTILE HARDWARE</div>
         </div>
 
+        <!-- SUB-SYNC & MICRO-LIMITER GUARD HARDWARE STRIP (SLEEK INTEGRATION) -->
+        <div class="subsync-ribbon-strip">
+          <div class="ribbon-brand">
+            <span class="ribbon-led-dot glow-emerald" id="subSyncLedDot"></span>
+            <span class="ribbon-title">SUB-SYNC &amp; MICRO-LIMITER GUARD</span>
+            <span id="subSyncLedBadge" class="subsync-led-active">3.0 ACTIVE</span>
+          </div>
+
+          <div class="ceiling-selector subsync-mode-selector">
+            <button type="button" class="ceiling-btn active" id="btnSubSyncLimiter" onclick="setSubSyncMode('limiter_aware')">LIMITER GUARD 3.0</button>
+            <button type="button" class="ceiling-btn" id="btnSubSyncLegacy" onclick="setSubSyncMode('legacy')">LEGACY</button>
+            <button type="button" class="ceiling-btn" id="btnSubSyncOff" onclick="setSubSyncMode('off')">BYPASS</button>
+          </div>
+
+          <button type="button" class="btn-subsync-drawer" id="btnSubSyncDrawer" onclick="toggleSubSyncDrawer()" title="Fine calibration: TP Penalty (λ), Min Hurdle, Window Range">
+            <span class="drawer-icon">⚙</span> CALIBRATION <span id="drawerChevron">▼</span>
+          </button>
+        </div>
+
+        <!-- COLLAPSIBLE CALIBRATION DRAWER -->
+        <div id="subSyncDrawer" class="subsync-drawer" style="display: none;">
+          <div class="drawer-inner">
+            <div class="drawer-title">SUB-SYNC GUARD FINE CALIBRATION:</div>
+            <div class="knobs-row drawer-knobs">
+              <div class="knob-control" data-param="sub_sync_limiter_penalty" data-min="0.5" data-max="2.5" data-val="1.20" data-step="0.05" data-unit="λ">
+                <label>TP PENALTY (λ)</label>
+                <div class="knob-housing">
+                  <div class="knob-ticks"></div>
+                  <div class="knob-3d" id="knob_sub_sync_penalty">
+                    <div class="knob-cap"></div>
+                    <div class="knob-indicator glow-emerald" id="ind_sub_sync_penalty"></div>
+                  </div>
+                </div>
+                <input type="hidden" id="param_sub_sync_limiter_penalty" value="1.20">
+                <div class="knob-readout"><span class="val">1.20</span> λ</div>
+                <div class="param-desc">True-Peak Guard</div>
+              </div>
+
+              <div class="knob-control" data-param="sub_sync_min_gain_db" data-min="0.05" data-max="0.80" data-val="0.15" data-step="0.05" data-unit="dB">
+                <label>MIN SUB GAIN</label>
+                <div class="knob-housing">
+                  <div class="knob-ticks"></div>
+                  <div class="knob-3d" id="knob_sub_sync_min_gain">
+                    <div class="knob-cap"></div>
+                    <div class="knob-indicator glow-cyan" id="ind_sub_sync_min_gain"></div>
+                  </div>
+                </div>
+                <input type="hidden" id="param_sub_sync_min_gain_db" value="0.15">
+                <div class="knob-readout">+<span class="val">0.15</span> dB</div>
+                <div class="param-desc">Shift Hurdle</div>
+              </div>
+
+              <div class="knob-control" data-param="sub_sync_max_lag_ms" data-min="1.0" data-max="6.0" data-val="3.0" data-step="0.5" data-unit="ms">
+                <label>MAX LAG</label>
+                <div class="knob-housing">
+                  <div class="knob-ticks"></div>
+                  <div class="knob-3d" id="knob_sub_sync_max_lag">
+                    <div class="knob-cap"></div>
+                    <div class="knob-indicator glow-amber" id="ind_sub_sync_max_lag"></div>
+                  </div>
+                </div>
+                <input type="hidden" id="param_sub_sync_max_lag_ms" value="3.0">
+                <div class="knob-readout"><span class="val">3.0</span> ms</div>
+                <div class="param-desc">Window Range</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div class="rack-grid">
           <!-- SUB MATRIX -->
           <div class="rack-unit">
@@ -315,66 +384,6 @@
             </div>
           </div>
 
-          <!-- SUB-SYNC & MICRO-LIMITER GUARD (PHARMAKON 3.0) -->
-          <div class="rack-unit" id="subSyncRackUnit">
-            <div class="unit-title" style="display: flex; justify-content: space-between; align-items: center;">
-              <span>SUB-SYNC &amp; MICRO-LIMITER GUARD</span>
-              <span id="subSyncLedBadge" class="subsync-led-active">3.0 ACTIVE</span>
-            </div>
-            
-            <div class="subsync-mode-wrapper">
-              <label class="subsync-mode-label">SYNC &amp; GUARD MODE</label>
-              <div class="ceiling-selector subsync-mode-selector">
-                <button type="button" class="ceiling-btn active" id="btnSubSyncLimiter" onclick="setSubSyncMode('limiter_aware')">LIMITER GUARD 3.0</button>
-                <button type="button" class="ceiling-btn" id="btnSubSyncLegacy" onclick="setSubSyncMode('legacy')">LEGACY</button>
-                <button type="button" class="ceiling-btn" id="btnSubSyncOff" onclick="setSubSyncMode('off')">BYPASS</button>
-              </div>
-            </div>
-
-            <div class="knobs-row">
-              <div class="knob-control" data-param="sub_sync_limiter_penalty" data-min="0.5" data-max="2.5" data-val="1.20" data-step="0.05" data-unit="λ">
-                <label>TP PENALTY (λ)</label>
-                <div class="knob-housing">
-                  <div class="knob-ticks"></div>
-                  <div class="knob-3d" id="knob_sub_sync_penalty">
-                    <div class="knob-cap"></div>
-                    <div class="knob-indicator glow-emerald" id="ind_sub_sync_penalty"></div>
-                  </div>
-                </div>
-                <input type="hidden" id="param_sub_sync_limiter_penalty" value="1.20">
-                <div class="knob-readout"><span class="val">1.20</span> λ</div>
-                <div class="param-desc">True-Peak Guard</div>
-              </div>
-
-              <div class="knob-control" data-param="sub_sync_min_gain_db" data-min="0.05" data-max="0.80" data-val="0.15" data-step="0.05" data-unit="dB">
-                <label>MIN SUB GAIN</label>
-                <div class="knob-housing">
-                  <div class="knob-ticks"></div>
-                  <div class="knob-3d" id="knob_sub_sync_min_gain">
-                    <div class="knob-cap"></div>
-                    <div class="knob-indicator glow-cyan" id="ind_sub_sync_min_gain"></div>
-                  </div>
-                </div>
-                <input type="hidden" id="param_sub_sync_min_gain_db" value="0.15">
-                <div class="knob-readout">+<span class="val">0.15</span> dB</div>
-                <div class="param-desc">Shift Hurdle</div>
-              </div>
-
-              <div class="knob-control" data-param="sub_sync_max_lag_ms" data-min="1.0" data-max="6.0" data-val="3.0" data-step="0.5" data-unit="ms">
-                <label>MAX LAG</label>
-                <div class="knob-housing">
-                  <div class="knob-ticks"></div>
-                  <div class="knob-3d" id="knob_sub_sync_max_lag">
-                    <div class="knob-cap"></div>
-                    <div class="knob-indicator glow-amber" id="ind_sub_sync_max_lag"></div>
-                  </div>
-                </div>
-                <input type="hidden" id="param_sub_sync_max_lag_ms" value="3.0">
-                <div class="knob-readout"><span class="val">3.0</span> ms</div>
-                <div class="param-desc">Window Range</div>
-              </div>
-            </div>
-          </div>
         </div>
       </section>
 

@@ -1927,6 +1927,7 @@ function setSubSyncMode(mode) {
   const btnLegacy = document.getElementById('btnSubSyncLegacy');
   const btnOff = document.getElementById('btnSubSyncOff');
   const badge = document.getElementById('subSyncLedBadge');
+  const ledDot = document.getElementById('subSyncLedDot');
 
   if (btnLimiter) btnLimiter.classList.toggle('active', mode === 'limiter_aware');
   if (btnLegacy) btnLegacy.classList.toggle('active', mode === 'legacy');
@@ -1939,17 +1940,39 @@ function setSubSyncMode(mode) {
                       (mode === 'legacy' ? 'LEGACY' : 'BYPASS');
   }
 
-  // Visual dimming of knobs when bypassed
-  const unit = document.getElementById('subSyncRackUnit');
-  if (unit) {
-    const knobsRow = unit.querySelector('.knobs-row');
-    if (knobsRow) {
-      knobsRow.style.opacity = mode === 'off' ? '0.35' : '1.0';
-      knobsRow.style.pointerEvents = mode === 'off' ? 'none' : 'auto';
-    }
+  if (ledDot) {
+    ledDot.className = 'ribbon-led-dot ' + 
+      (mode === 'limiter_aware' ? 'glow-emerald' :
+       (mode === 'legacy' ? 'dot-amber' : 'dot-off'));
+  }
+
+  // Visual dimming of drawer knobs when bypassed
+  const drawerKnobs = document.querySelector('.drawer-knobs');
+  if (drawerKnobs) {
+    drawerKnobs.style.opacity = mode === 'off' ? '0.35' : '1.0';
+    drawerKnobs.style.pointerEvents = mode === 'off' ? 'none' : 'auto';
   }
 
   updateStatus(`Sub-Sync Mode: ${mode === 'limiter_aware' ? 'Limiter-Aware 3.0 Guard' : (mode === 'legacy' ? 'Legacy Sub-Sync' : 'Bypassed')}`);
+}
+
+function toggleSubSyncDrawer() {
+  const drawer = document.getElementById('subSyncDrawer');
+  const btn = document.getElementById('btnSubSyncDrawer');
+  const chevron = document.getElementById('drawerChevron');
+  if (!drawer) return;
+  const isHidden = (drawer.style.display === 'none' || drawer.classList.contains('hidden'));
+  if (isHidden) {
+    drawer.style.display = 'block';
+    drawer.classList.remove('hidden');
+    if (btn) btn.classList.add('active');
+    if (chevron) chevron.innerText = '▲';
+  } else {
+    drawer.style.display = 'none';
+    drawer.classList.add('hidden');
+    if (btn) btn.classList.remove('active');
+    if (chevron) chevron.innerText = '▼';
+  }
 }
 
 // --------------------------------------------------------------------------
