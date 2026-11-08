@@ -20,6 +20,12 @@ However, deep-dive acoustic experiments across multi-stem AI audio revealed a cr
 3. **PHARMAKON Track Intelligence Map**: 9-sector automated structural composition map with interactive section inspection and intra-section kick onset tracking.
 4. **Preservation of v2.0**: The proven PHARMAKON 2.0 processing core remains fully intact, with v3.0 serving as an advanced intelligence layer.
 
+### 1.1 Legacy PHARMAKON 2.0: Permanent Availability & Frozen Archive Policy
+We recognize that many producers and sound engineers formed their sonic workflows around the specific analog character, saturation curve, and coloration of **PHARMAKON 2.0**.
+- **Permanent Access**: The complete, self-contained **PHARMAKON v2.0.3 package remains permanently hosted and downloadable** in our releases archive.
+- **Frozen Archive Status**: Version 2.0 is now officially closed to active development. **It will receive no further patches, DSP revisions, or feature updates.**
+- **The Path Forward**: All subsequent research, multi-genre calibrations (Drum & Bass, Hip-Hop, Rock, Pop), dynamic limiter refinements, and architectural enhancements will be deployed exclusively on the PHARMAKON 3.0+ engine.
+
 ---
 
 ## 2. Limiter-Aware Sub-Sync: Mathematical Foundations

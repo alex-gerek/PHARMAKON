@@ -61,6 +61,15 @@ INCLUDED GUIDES & DOCUMENTATION (see docs/ folder):
 - docs/AI_AUDIO_RESTORATION_WORKFLOW.md
   The engineering blueprint for taming metallic AI whistle and MP3 phase dispersion.
 
+LEGACY PHARMAKON 2.0 (FROZEN ARCHIVE POLICY):
+------------------------------------------------------------------------
+For producers and engineers who prefer the established sound and workflow
+of PHARMAKON 2.0, the complete v2.0.3 release package remains permanently
+available in our GitHub Releases archive. Please note that version 2.0 is
+now a frozen archive and will receive no further patches or updates. All
+ongoing DSP research, multi-genre profiles, and limiter refinements will
+be developed exclusively in PHARMAKON 3.0+.
+
 CREDITS & OPEN-SOURCE LICENSE:
 ------------------------------------------------------------------------
 Architect: Lex Gerek | Lazuli Pictures

@@ -100,7 +100,7 @@ Compared to PHARMAKON 2.0, version 3.0 represents a major evolutionary leap from
 5. **Engineering Transparency & Multi-Genre Research Roadmap**:
    - **Current status**: Fully operational and stable in production, with current mathematical calibration benchmarked on high-energy club music (**Techno / EDM**).
    - **Where we are going next**: Actively extending automated genre heuristics across **Drum & Bass, Hip-Hop/Trap, Rock/Metal, and Ambient/Pop**, followed by genre-adaptive dynamic processing curves.
-   - **PHARMAKON 2.0 is fully preserved**: Users who prefer the legacy workflow can still download v2.0.3 anytime.
+   - **Legacy PHARMAKON 2.0 LTS & Frozen Archive Policy**: For producers and engineers who prefer the established sound, workflow, or specific sonic character of version 2.0, **PHARMAKON v2.0.3 remains permanently available for download**. Please note that **version 2.0 is now a finalized, frozen archive**: it will receive no further DSP updates, patches, or feature expansions. All future engineering, mathematical research, and multi-genre developments will occur exclusively on PHARMAKON 3.0+.
 
 ---
 
