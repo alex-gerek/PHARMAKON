@@ -8,36 +8,36 @@
 
 <p align="center">
   <a href="https://github.com/alex-gerek/PHARMAKON/releases/download/v3.0.0/PHARMAKON_v3.0.0_Windows_Portable.zip">
-    <img src="https://img.shields.io/badge/Download%20Windows%20Portable%20v3.0.0%20(.exe)-0078D4?style=for-the-badge&logo=windows&logoColor=white" alt="Download Windows Portable v3.0.0">
+    <img src="assets/badges/btn_download_v3.svg" alt="Download Windows Portable v3.0.0">
   </a>
   &nbsp;
   <a href="https://github.com/alex-gerek/PHARMAKON/releases/download/v2.0.3/PHARMAKON_v2.0.3_Windows_Portable.zip">
-    <img src="https://img.shields.io/badge/Download%20Legacy%20v2.0.3%20(.exe)-475569?style=for-the-badge&logo=windows&logoColor=white" alt="Download Legacy v2.0.3">
+    <img src="assets/badges/btn_download_v2.svg" alt="Download Legacy v2.0.3">
   </a>
   &nbsp;
   <a href="https://x.com/LexGerek/status/2116217723654955252?a=MI6yI7pf75A6ecEz4HM&s=20" target="_blank">
-    <img src="https://img.shields.io/badge/Watch%20Walkthrough%20on%20X-000000?style=for-the-badge&logo=x&logoColor=white" alt="Watch Studio Walkthrough">
+    <img src="assets/badges/btn_watch_x.svg" alt="Watch Studio Walkthrough">
   </a>
   &nbsp;
   <a href="https://github.com/alex-gerek/PHARMAKON/archive/refs/heads/master.zip">
-    <img src="https://img.shields.io/badge/Source%20Code%20ZIP-238636?style=for-the-badge&logo=github&logoColor=white" alt="Download Source Code ZIP">
+    <img src="assets/badges/btn_source_zip.svg" alt="Download Source Code ZIP">
   </a>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-3.0.0-emerald.svg?style=flat-square&color=10b981" alt="Version 3.0.0">
-  <img src="https://img.shields.io/badge/Track%20Map-9--Sector%20Intelligence-8b5cf6.svg?style=flat-square" alt="Track Map">
-  <img src="https://img.shields.io/badge/Sub--Sync-Limiter--Aware%20Phase%20Lock-06b6d4.svg?style=flat-square" alt="Sub-Sync">
-  <img src="https://img.shields.io/badge/True--Peak%20Guard-4x%20Oversampling-f59e0b.svg?style=flat-square" alt="True Peak Guard">
-  <img src="https://img.shields.io/badge/Export-24--Bit%20PCM__24-0d9488.svg?style=flat-square" alt="24-Bit PCM_24">
-  <img src="https://img.shields.io/badge/Auto--Sync-Live%20Patch%20Engine-6366f1.svg?style=flat-square" alt="Auto-Sync">
-  <img src="https://img.shields.io/badge/DSP-Dynamic%20Ducker%20%2B%20Exciter-blue.svg?style=flat-square" alt="DSP Core">
-  <img src="https://img.shields.io/badge/Oscilloscope-60%20FPS%20CRT%20%2B%20Phase%20Scope-brightgreen.svg?style=flat-square" alt="CRT Scope">
-  <img src="https://img.shields.io/badge/Monitoring-A%20%2F%20B%20%2F%20Delta-purple.svg?style=flat-square" alt="Monitoring">
-  <img src="https://img.shields.io/badge/Loudness-ITU--R%20BS.1770--4%20LUFS-cyan.svg?style=flat-square" alt="LUFS">
-  <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-0078d7?style=flat-square" alt="Platform">
-  <img src="https://img.shields.io/badge/Author-Lex%20Gerek-black.svg?style=flat-square&logo=x" alt="Lex Gerek">
-  <img src="https://img.shields.io/badge/License-MIT-orange.svg?style=flat-square" alt="License">
+  <img src="assets/badges/badge_version_3.svg" alt="Version 3.0.0">
+  <img src="assets/badges/badge_track_map.svg" alt="Track Map">
+  <img src="assets/badges/badge_sub_sync.svg" alt="Sub-Sync">
+  <img src="assets/badges/badge_true_peak.svg" alt="True Peak Guard">
+  <img src="assets/badges/badge_pcm_24.svg" alt="24-Bit PCM_24">
+  <img src="assets/badges/badge_auto_sync.svg" alt="Auto-Sync">
+  <img src="assets/badges/badge_dsp_core.svg" alt="DSP Core">
+  <img src="assets/badges/badge_crt_scope.svg" alt="CRT Scope">
+  <img src="assets/badges/badge_monitoring.svg" alt="Monitoring">
+  <img src="assets/badges/badge_lufs.svg" alt="LUFS">
+  <img src="assets/badges/badge_platform.svg" alt="Platform">
+  <img src="assets/badges/badge_author.svg" alt="Lex Gerek">
+  <img src="assets/badges/badge_license.svg" alt="License">
 </p>
 
 ---
