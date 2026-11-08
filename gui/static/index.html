@@ -382,14 +382,29 @@
                 <div class="knob-readout" id="ceilingReadout">-0.3 dBFS</div>
                 <div class="param-desc">Master Ceiling</div>
               </div>
-              <div class="knob-control" style="min-width: 130px;">
-                <label>MATCH LUFS</label>
-                <button type="button" class="ceiling-btn" id="btnMatchLoudness" onclick="toggleMatchLoudness()" style="width: 100%; height: 32px; margin-top: 6px; font-size: 10px; font-weight: 700; letter-spacing: 0.5px;">MATCH INPUT</button>
-                <div class="param-desc" id="matchLoudnessDesc" style="margin-top: 6px;">Preserve Source LUFS</div>
-              </div>
+
             </div>
           </div>
 
+        </div>
+
+        <!-- OUTPUT LEVEL HARDWARE STRIP (MATCH INPUT LOUDNESS) -->
+        <div class="output-level-strip">
+          <div class="output-strip-brand">
+            <span class="ribbon-led-dot dot-off" id="matchLoudnessLedDot"></span>
+            <div class="output-strip-labels">
+              <span class="output-strip-title">OUTPUT LEVEL // MATCH INPUT LOUDNESS</span>
+              <span class="output-strip-desc" id="matchLoudnessDesc">1:1 A/B Level &bull; Preserves original source LUFS without altering transient punch</span>
+            </div>
+          </div>
+
+          <div class="output-strip-controls">
+            <div class="ceiling-selector output-toggle-group">
+              <button type="button" class="ceiling-btn active" id="btnMatchLoudnessOff" onclick="setMatchLoudness(false)">OFF</button>
+              <button type="button" class="ceiling-btn" id="btnMatchLoudnessOn" onclick="setMatchLoudness(true)">ON</button>
+            </div>
+            <span id="matchLoudnessBadge" class="output-status-badge badge-off">FULL LOUDNESS</span>
+          </div>
         </div>
       </section>
 

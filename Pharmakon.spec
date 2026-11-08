@@ -36,6 +36,8 @@ hidden_imports = [
     'tkinter',
     'tkinter.filedialog',
     'auto_updater',
+    'remaster_engine',
+    'track_map_engine',
 ]
 hidden_imports += collect_submodules('uvicorn')
 hidden_imports += collect_submodules('fastapi')

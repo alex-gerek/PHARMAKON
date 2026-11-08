@@ -2,13 +2,17 @@
   <img src="gui/static/studio_icon.png" width="130" height="130" alt="PHARMAKON Logo">
 </p>
 
-# PHARMAKON 2.0
-## Studio-Grade Audio Antidote, AI De-Harshing & True-Peak Mastering Console
+# PHARMAKON 3.0
+## Studio-Grade Audio Antidote, AI De-Harshing, Limiter-Aware Sub-Sync & True-Peak Mastering Console
 ### Created by Lex Gerek // Abbey Road 1974 × Blade Runner 2049
 
 <p align="center">
+  <a href="https://github.com/alex-gerek/PHARMAKON/releases/download/v3.0.0/PHARMAKON_v3.0.0_Windows_Portable.zip">
+    <img src="https://img.shields.io/badge/Download%20Windows%20Portable%20v3.0.0%20(.exe)-0078D4?style=for-the-badge&logo=windows&logoColor=white" alt="Download Windows Portable v3.0.0">
+  </a>
+  &nbsp;
   <a href="https://github.com/alex-gerek/PHARMAKON/releases/download/v2.0.3/PHARMAKON_v2.0.3_Windows_Portable.zip">
-    <img src="https://img.shields.io/badge/Download%20Windows%20Portable%20(.exe)-0078D4?style=for-the-badge&logo=windows&logoColor=white" alt="Download Windows Portable">
+    <img src="https://img.shields.io/badge/Download%20Legacy%20v2.0.3%20(.exe)-475569?style=for-the-badge&logo=windows&logoColor=white" alt="Download Legacy v2.0.3">
   </a>
   &nbsp;
   <a href="https://x.com/LexGerek/status/2116217723654955252?a=MI6yI7pf75A6ecEz4HM&s=20" target="_blank">
@@ -21,12 +25,14 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-2.0.3-emerald.svg?style=flat-square&color=10b981" alt="Version 2.0.3">
+  <img src="https://img.shields.io/badge/Version-3.0.0-emerald.svg?style=flat-square&color=10b981" alt="Version 3.0.0">
+  <img src="https://img.shields.io/badge/Track%20Map-9--Sector%20Intelligence-8b5cf6.svg?style=flat-square" alt="Track Map">
+  <img src="https://img.shields.io/badge/Sub--Sync-Limiter--Aware%20Phase%20Lock-06b6d4.svg?style=flat-square" alt="Sub-Sync">
+  <img src="https://img.shields.io/badge/True--Peak%20Guard-4x%20Oversampling-f59e0b.svg?style=flat-square" alt="True Peak Guard">
   <img src="https://img.shields.io/badge/Export-24--Bit%20PCM__24-0d9488.svg?style=flat-square" alt="24-Bit PCM_24">
   <img src="https://img.shields.io/badge/Auto--Sync-Live%20Patch%20Engine-6366f1.svg?style=flat-square" alt="Auto-Sync">
   <img src="https://img.shields.io/badge/DSP-Dynamic%20Ducker%20%2B%20Exciter-blue.svg?style=flat-square" alt="DSP Core">
   <img src="https://img.shields.io/badge/Oscilloscope-60%20FPS%20CRT%20%2B%20Phase%20Scope-brightgreen.svg?style=flat-square" alt="CRT Scope">
-  <img src="https://img.shields.io/badge/True--Peak%20Limiter-4x%20Oversampling-f59e0b.svg?style=flat-square" alt="True Peak">
   <img src="https://img.shields.io/badge/Monitoring-A%20%2F%20B%20%2F%20Delta-purple.svg?style=flat-square" alt="Monitoring">
   <img src="https://img.shields.io/badge/Loudness-ITU--R%20BS.1770--4%20LUFS-cyan.svg?style=flat-square" alt="LUFS">
   <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-0078d7?style=flat-square" alt="Platform">
@@ -39,6 +45,8 @@
 ## 📚 Engineering Guides & Knowledge Base
 
 Deep architectural and operational documentation for producers, audio engineers, and AI creators:
+- [🔬 **PHARMAKON 3.0 Architectural Blueprint: Limiter-Aware Sub-Sync, Track Intelligence Map & True-Peak Ceiling Guard** (PHARMAKON_3_ARCHITECTURAL_GUIDE.md)](PHARMAKON_3_ARCHITECTURAL_GUIDE.md)  
+  *Micro-transient phase alignment, Virtual Micro-Limiter cost function, 9-sector macro segmentation, and subjective listening evaluation.*
 - [📖 **The Definitive Guide to Stem Mastering AI Music** (STEM_MASTERING_GUIDE.md)](STEM_MASTERING_GUIDE.md)  
   *4-stem Wiener decomposition, sub-bass Linkwitz-Riley LR4 mono-locking, resolving kick-bass phase clashes, and streaming loudness targets.*
 - [🔬 **Neural Audio Detox: AI Audio Restoration Workflow** (AI_AUDIO_RESTORATION_WORKFLOW.md)](AI_AUDIO_RESTORATION_WORKFLOW.md)  
@@ -69,6 +77,30 @@ Generative audio models (**Suno v3/v3.5/v4**, **Udio 1.5**, Stable Audio) have r
 
 **PHARMAKON 2.0 is a dedicated analog-digital resuscitation console.**  
 Fusing **Abbey Road 1974** analog tape warmth with **Blade Runner 2049** telemetry, it surgically extracts digital venom, resynthesizes lost acoustic silk, and bonds the master using pure mathematical DSP.
+
+---
+
+## ⚡ What's New in PHARMAKON 3.0 (Comparison with v2.0)
+
+Compared to PHARMAKON 2.0, version 3.0 represents a major evolutionary leap from static single-track heuristics to **dynamic musical intelligence and transient-guarded mastering**:
+
+1. **Limiter-Aware Transient-Guarded Sub-Sync (Local Guard)**:
+   - In v2.0, stem phase alignment was calculated as a single global time-shift across the entire song. In complex arrangements, this static shift frequently overshot True-Peak limits or smeared percussive punch in dense passages.
+   - In v3.0, **Local Guard** isolates every individual kick transient (e.g. 134 detected events in our *Vector Pulse* benchmark) and evaluates proposed micro-shifts against a **Virtual Micro-Limiter Cost Function**. If a shift risks transient distortion or excessive headroom loss, the engine executes an **Autonomous Acoustic Safe-Bypass (0 ms)**.
+2. **Real-Time 4x Oversampling True-Peak Limiter Guard**:
+   - Integrated polyphase brickwall ceiling capped at **-0.3 dBFS True-Peak** (EBU R128 / ITU-R BS.1770-5 compliant), guaranteeing that subsequent lossy streaming transcoding (Spotify, Apple Music, YouTube) will not introduce inter-sample clipping distortion.
+3. **PHARMAKON Track Intelligence Map**:
+   - Automated 9-sector structural musical segmentation: **Intro, Drop, Groove, Development, Dense Middle, Interlude, Breakdown, Buildup, Outro**.
+   - Musical bar and BPM awareness, dynamic crest factor measurement, sub-bass energy (<100 Hz), and per-section mastering verdicts.
+   - **Interactive Section Inspector**: click any card or timeline segment in the GUI to open an enlarged high-resolution diagnostic card with intra-section kick onset mapping.
+4. **Subjective Listening Verdict**:
+   - Noticeably expanded 3D stereo stage with rock-solid centered sub-bass.
+   - Tighter, punchier kick-bass definition without muddy drone.
+   - Vocal formants and instrumental lines remain bright, open, and articulate with zero ear fatigue.
+5. **Engineering Transparency & Multi-Genre Research Roadmap**:
+   - **Current status**: Fully operational and stable in production, with current mathematical calibration benchmarked on high-energy club music (**Techno / EDM**).
+   - **Where we are going next**: Actively extending automated genre heuristics across **Drum & Bass, Hip-Hop/Trap, Rock/Metal, and Ambient/Pop**, followed by genre-adaptive dynamic processing curves.
+   - **PHARMAKON 2.0 is fully preserved**: Users who prefer the legacy workflow can still download v2.0.3 anytime.
 
 ---
 

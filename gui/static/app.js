@@ -530,9 +530,15 @@ function renderDualOscilloscopes() {
     analyserRaw.getByteTimeDomainData(timeDataRaw);
     analyserHealed.getByteTimeDomainData(timeDataHealed);
 
-    // Keep both tracks sample-synced
-    if (Math.abs(audioRaw.currentTime - audioHealed.currentTime) > 0.03) {
-      audioRaw.currentTime = audioHealed.currentTime;
+    // Soft sample-sync with throttling and seeking check (prevents seeking storm freeze)
+    if (!audioRaw.seeking && Math.abs(audioRaw.currentTime - audioHealed.currentTime) > 0.25) {
+      if (!window._lastAudioSyncTime || (performance.now() - window._lastAudioSyncTime > 1500)) {
+        window._lastAudioSyncTime = performance.now();
+        audioRaw.currentTime = audioHealed.currentTime;
+      }
+    }
+    if (audioRaw.paused && !audioHealed.paused && isPlaying) {
+      audioRaw.play().catch(() => {});
     }
 
     // Save active wave snapshot to persistent storage
@@ -1974,18 +1980,39 @@ function setSubSyncMode(mode) {
 
 let matchInputLoudness = false;
 
-function toggleMatchLoudness() {
-  matchInputLoudness = !matchInputLoudness;
-  const btn = document.getElementById('btnMatchLoudness');
-  if (btn) {
-    btn.classList.toggle('active', matchInputLoudness);
-    btn.style.borderColor = matchInputLoudness ? '#10b981' : '';
-    btn.style.color = matchInputLoudness ? '#10b981' : '';
-    btn.style.boxShadow = matchInputLoudness ? '0 0 10px rgba(16, 185, 129, 0.4)' : '';
-  }
+function setMatchLoudness(enable) {
+  matchInputLoudness = !!enable;
+  playHardwareClick('toggle');
+
+  const btnOn = document.getElementById('btnMatchLoudnessOn');
+  const btnOff = document.getElementById('btnMatchLoudnessOff');
+  const ledDot = document.getElementById('matchLoudnessLedDot');
+  const badge = document.getElementById('matchLoudnessBadge');
   const desc = document.getElementById('matchLoudnessDesc');
-  if (desc) desc.innerText = matchInputLoudness ? 'Active (Headroom Guard)' : 'Preserve Source LUFS';
-  updateStatus(`Match Input Loudness: ${matchInputLoudness ? 'ENABLED' : 'DISABLED'}`);
+
+  if (btnOn) btnOn.classList.toggle('active', matchInputLoudness);
+  if (btnOff) btnOff.classList.toggle('active', !matchInputLoudness);
+
+  if (ledDot) {
+    ledDot.className = 'ribbon-led-dot ' + (matchInputLoudness ? 'glow-emerald' : 'dot-off');
+  }
+
+  if (badge) {
+    badge.className = 'output-status-badge ' + (matchInputLoudness ? 'badge-active' : 'badge-off');
+    badge.innerText = matchInputLoudness ? '1:1 MATCHED (SOURCE LUFS)' : 'FULL LOUDNESS';
+  }
+
+  if (desc) {
+    desc.innerText = matchInputLoudness 
+      ? 'Active (Headroom Guard) • Master loudness matches original track' 
+      : '1:1 A/B Level • Preserves original source LUFS without altering transient punch';
+  }
+
+  updateStatus(`Match Input Loudness: ${matchInputLoudness ? 'ENABLED (1:1 Source LUFS)' : 'DISABLED (Full Loudness)'}`);
+}
+
+function toggleMatchLoudness() {
+  setMatchLoudness(!matchInputLoudness);
 }
 
 function toggleSubSyncDrawer() {
@@ -2803,6 +2830,81 @@ function openMasteringReportModal() {
       </div>
     </div>
 
+    <!-- TRACK INTELLIGENCE MAP IN MODAL -->
+    ${(() => {
+      const tm = m.track_map || (m.sub_sync_summary && m.sub_sync_summary.track_map);
+      if (!tm || !tm.sections || tm.sections.length === 0) return '';
+      const dur = tm.total_duration_s || 1.0;
+      const bpmVal = tm.estimated_bpm || tm.tempo_bpm || 120.0;
+      const segs = tm.sections.map(s => {
+        const sIdx = s.sec_index || s.section_index || 1;
+        const durS = s.duration_s || 1.0;
+        const c = s.color || '#0ea5e9';
+        const tag = s.sec_tag || s.tag || 'SECTION';
+        const timeStr = s.time_str || (s.start_str && s.end_str ? `${s.start_str} - ${s.end_str}` : `${(s.start_s||0).toFixed(1)}s`);
+        return `<div onclick="inspectTrackMapSection(${sIdx})" title="${s.name}: ${timeStr} (Click to inspect)" style="flex:${durS}; border:1px solid ${c}; border-radius:3px; background:linear-gradient(180deg, ${c}33 0%, ${c}11 100%); display:flex; flex-direction:column; align-items:center; justify-content:center; padding:3px 2px; overflow:hidden; min-width:24px; cursor:pointer; transition:all 0.15s ease;" onmouseover="this.style.boxShadow='0 0 10px ${c}'; this.style.borderColor='#fff';" onmouseout="this.style.boxShadow='none'; this.style.borderColor='${c}';">
+          <span style="font-size:9.5px; font-weight:bold; color:${c}; font-family:var(--font-mono);">${tag}</span>
+          <span style="font-size:8.5px; color:#cbd5e1; font-family:var(--font-mono);">${timeStr}</span>
+        </div>`;
+      }).join('');
+
+      const cards = tm.sections.map(s => {
+        const c = s.color || '#0ea5e9';
+        const sIdx = s.sec_index || s.section_index || 1;
+        const tag = s.sec_tag || s.tag || 'SECTION';
+        const timeStr = s.time_str || (s.start_str && s.end_str ? `${s.start_str} - ${s.end_str}` : `${(s.start_s||0).toFixed(1)}s`);
+        const kCnt = (s.kick_events_count !== undefined) ? s.kick_events_count : (s.kicks_count || 0);
+        const acc = s.events_accepted || 0;
+        const rej = s.events_rejected || 0;
+        const lockStat = (acc + rej > 0) ? `${acc} / ${kCnt} locked` : `${kCnt} kicks`;
+        const lockColor = acc > 0 ? '#10b981' : (kCnt > 0 ? '#f59e0b' : '#64748b');
+        const pk = (s.peak_mix_dbfs !== undefined) ? Number(s.peak_mix_dbfs).toFixed(1) : ((s.peak_dbfs !== undefined) ? Number(s.peak_dbfs).toFixed(1) : '-0.1');
+        const rms = (s.rms_mix_dbfs !== undefined) ? Number(s.rms_mix_dbfs).toFixed(1) : '-14.0';
+        const crest = (s.crest_factor_db !== undefined) ? Number(s.crest_factor_db).toFixed(1) : '9.0';
+        const nameClean = (s.name || 'Section').split('/')[0].trim();
+        return `<div onclick="inspectTrackMapSection(${sIdx})" title="Click to enlarge & inspect section" style="background:#090c13; border:1px solid #1a2233; border-top:3px solid ${c}; border-radius:6px; padding:8px 10px; font-family:var(--font-mono); cursor:pointer; transition:all 0.2s ease; user-select:none;" onmouseover="this.style.transform='translateY(-2px)'; this.style.borderColor='${c}'; this.style.boxShadow='0 4px 14px ${c}33';" onmouseout="this.style.transform='translateY(0)'; this.style.borderColor='#1a2233'; this.style.borderTopColor='${c}'; this.style.boxShadow='none';">
+          <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #161e2e; padding-bottom:4px; margin-bottom:6px;">
+            <span style="background:${c}26; color:${c}; border:1px solid ${c}66; border-radius:3px; padding:2px 5px; font-size:8.5px; font-weight:bold; letter-spacing:0.5px;">${tag}</span>
+            <span style="font-size:10.5px; font-weight:bold; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:95px;">${nameClean}</span>
+            <span style="font-size:9px; color:#94a3b8;">${timeStr}</span>
+          </div>
+          <div style="font-size:9.5px; display:flex; justify-content:space-between; margin-bottom:3px;"><span style="color:#64748b;">CREST:</span><span style="color:#fff; font-weight:bold;">${crest} dB</span></div>
+          <div style="font-size:9.5px; display:flex; justify-content:space-between; margin-bottom:3px;"><span style="color:#64748b;">PEAK / RMS:</span><span>${pk} / ${rms}</span></div>
+          <div style="font-size:9.5px; display:flex; justify-content:space-between; margin-bottom:3px;"><span style="color:#64748b;">KICKS / PHASE:</span><span style="color:${lockColor}; font-weight:bold;">${lockStat}</span></div>
+          <div style="font-size:9.5px; display:flex; justify-content:space-between; margin-bottom:3px;"><span style="color:#64748b;">SUB-CORRELATION:</span><span style="color:#38bdf8;">${Number(s.sub_correlation_r || 0.0).toFixed(2)} r</span></div>
+          <div style="font-size:8.5px; color:${c}; margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">▪ ${s.policy_verdict || ''}</div>
+        </div>`;
+      }).join('');
+
+      return `
+        <div style="background:#070a12; border:1px solid #1f2738; border-radius:6px; padding:10px 14px; margin-bottom:12px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; font-family:var(--font-mono); flex-wrap:wrap; gap:6px;">
+            <div style="display:flex; align-items:center; gap:6px;">
+              <span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:#10b981; box-shadow:0 0 6px #10b981;"></span>
+              <span style="font-size:10.5px; font-weight:bold; color:#fff; letter-spacing:1px;">PHARMAKON 3.0 TRACK INTELLIGENCE MAP</span>
+              <span style="font-size:9.5px; color:#64748b;">${bpmVal} BPM · 4/4 · ${tm.sections.length} SECTORS</span>
+            </div>
+            <div style="display:flex; gap:6px; font-size:8.5px; font-weight:bold;">
+              <span style="color:#f59e0b;">■ INTRO</span>
+              <span style="color:#f43f5e;">■ DROP</span>
+              <span style="color:#0ea5e9;">■ GROOVE</span>
+              <span style="color:#6366f1;">■ INTERLUDE</span>
+              <span style="color:#10b981;">■ BREAK</span>
+              <span style="color:#f97316;">■ BUILDUP</span>
+              <span style="color:#a855f7;">■ OUTRO</span>
+            </div>
+          </div>
+          <div style="display:flex; height:34px; gap:2px; background:#04060a; border:1px solid #141b27; border-radius:4px; padding:2px; margin-bottom:8px;">
+            ${segs}
+          </div>
+          <div id="tmSectionInspector"></div>
+          <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:8px;">
+            ${cards}
+          </div>
+        </div>
+      `;
+    })()}
+
     <!-- 4-Band Energy Shift Bar in Modal -->
     <div style="display:flex; justify-content:space-between; align-items:center; background:#070a12; border:1px solid #1f2738; border-radius:6px; padding:8px 16px; margin-bottom:12px; font-family:var(--font-mono); font-size:11px;">
       <div style="color:#64748b; font-weight:bold;">4-BAND MASTER PROFILE:</div>
@@ -2848,25 +2950,135 @@ function closeReportModal() {
 }
 
 function openReportInNewTab() {
-  const rPath = lastResult?.report_path || lastResult?.metrics?.report_path;
-  if (rPath) {
-    // 1. Tell local server to open HTML report in system default browser via os.startfile
-    fetch('/api/open-report', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: rPath })
-    }).catch(err => console.warn("API open-report notice:", err));
+  const rPath = lastResult?.report_path || lastResult?.metrics?.report_path || lastMetrics?.report_path || "";
+  updateStatus("Opening Full Mastering & Diagnostic Report...");
 
-    // 2. Also try window.open in case running in a normal web browser tab
-    try {
+  // 1. Open via local OS default browser (Chrome / Edge / Safari)
+  fetch('/api/open-report', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path: rPath })
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.success && data.opened) {
+      updateStatus(`Mastering Report opened: ${data.opened}`);
+    } else {
+      // Fallback: open in new tab
       window.open(`/api/report?path=${encodeURIComponent(rPath)}`, '_blank');
-    } catch (e) {}
+    }
+  })
+  .catch(err => {
+    window.open(`/api/report?path=${encodeURIComponent(rPath)}`, '_blank');
+  });
 
-    updateStatus(`Opened Mastering Report in browser: ${rPath}`);
-  } else {
-    updateStatus("Report path not found yet. Click 'COMMENCE RE-MASTERING' first!");
-    openOutputFolder();
+  // 2. Also open new browser tab as direct preview
+  try {
+    window.open(`/api/report?path=${encodeURIComponent(rPath)}`, '_blank');
+  } catch(e) {}
+}
+
+let activeInspectedSection = null;
+
+function inspectTrackMapSection(secIdx) {
+  const tm = lastMetrics?.track_map || (lastMetrics?.sub_sync_summary && lastMetrics?.sub_sync_summary.track_map);
+  if (!tm || !tm.sections) return;
+  const s = tm.sections.find(x => (x.sec_index === secIdx || x.section_index === secIdx));
+  if (!s) return;
+
+  activeInspectedSection = s;
+  const inspector = document.getElementById('tmSectionInspector');
+  if (!inspector) return;
+
+  const c = s.color || '#0ea5e9';
+  const tag = s.sec_tag || s.tag || 'SECTION';
+  const timeStr = s.time_str || (s.start_str && s.end_str ? `${s.start_str} - ${s.end_str}` : `${(s.start_s||0).toFixed(1)}s`);
+  const kCnt = (s.kick_events_count !== undefined) ? s.kick_events_count : (s.kicks_count || 0);
+  const acc = s.events_accepted || 0;
+  const rej = s.events_rejected || 0;
+  const lockStat = (acc + rej > 0) ? `${acc} / ${kCnt} locked` : `${kCnt} kicks`;
+  const lockColor = acc > 0 ? '#10b981' : (kCnt > 0 ? '#f59e0b' : '#64748b');
+  const pk = (s.peak_mix_dbfs !== undefined) ? Number(s.peak_mix_dbfs).toFixed(1) : '-0.1';
+  const rms = (s.rms_mix_dbfs !== undefined) ? Number(s.rms_mix_dbfs).toFixed(1) : '-14.0';
+  const crest = (s.crest_factor_db !== undefined) ? Number(s.crest_factor_db).toFixed(1) : '9.0';
+  const nameClean = (s.name || 'Section').trim();
+  const subDb = (s.rms_sub_bass_dbfs !== undefined) ? Number(s.rms_sub_bass_dbfs).toFixed(1) : '-14.0';
+  const durSec = s.duration_s || ((s.end_s || 0) - (s.start_s || 0)).toFixed(1);
+  const bars = s.bars_count || Math.round(durSec / 1.72);
+
+  // Build mini timeline of kicks
+  let kickMarkersHtml = '';
+  if (s.kicks_detail && s.kicks_detail.length > 0) {
+    kickMarkersHtml = s.kicks_detail.map(kd => {
+      const isLocked = kd.decision === 'ACCEPT';
+      const mColor = isLocked ? '#10b981' : '#64748b';
+      const shiftTxt = isLocked ? `${(kd.applied_shift_ms||0).toFixed(2)}ms` : (kd.reason ? kd.reason.split('(')[0] : '0ms');
+      return `<div title="Kick at ${kd.time_s}s: ${kd.decision} (${shiftTxt})" style="position:absolute; left:${kd.rel_pct}%; top:2px; bottom:2px; width:3px; background:${mColor}; border-radius:2px; transform:translateX(-50%);"></div>`;
+    }).join('');
   }
+
+  inspector.innerHTML = `
+    <div style="background:#0c101c; border:2px solid ${c}; border-radius:8px; padding:16px 20px; margin-top:10px; margin-bottom:14px; box-shadow:0 8px 28px ${c}26; font-family:var(--font-mono); position:relative; animation:fadeIn 0.25s ease;">
+      <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #1e293b; padding-bottom:10px; margin-bottom:12px;">
+        <div style="display:flex; align-items:center; gap:12px;">
+          <span style="background:${c}33; color:${c}; border:1.5px solid ${c}; border-radius:5px; padding:4px 10px; font-size:13px; font-weight:800; letter-spacing:1px;">${tag}</span>
+          <span style="font-size:16px; font-weight:800; color:#fff; letter-spacing:0.5px;">${nameClean}</span>
+          <span style="font-size:13px; color:#94a3b8; background:#1e293b; border-radius:4px; padding:2px 8px;">${timeStr} (${durSec}s · ${bars} bars)</span>
+        </div>
+        <button onclick="closeTrackMapInspector()" style="background:#1e293b; border:1px solid #334155; color:#94a3b8; border-radius:4px; padding:4px 10px; font-size:12px; cursor:pointer; font-weight:bold; transition:all 0.15s ease;" onmouseover="this.style.color='#fff'; this.style.borderColor='#f43f5e';" onmouseout="this.style.color='#94a3b8'; this.style.borderColor='#334155';">✕ CLOSE ENLARGED VIEW</button>
+      </div>
+
+      <div style="display:grid; grid-template-columns:repeat(5, 1fr); gap:12px; margin-bottom:14px;">
+        <div style="background:#080b12; border:1px solid #1f293d; border-radius:6px; padding:10px 12px;">
+          <div style="font-size:10px; color:#64748b; font-weight:bold; margin-bottom:4px;">DYNAMIC CREST</div>
+          <div style="font-size:16px; font-weight:800; color:#fff;">${crest} <span style="font-size:11px; font-weight:normal; color:#94a3b8;">dB</span></div>
+          <div style="font-size:9.5px; color:#10b981; margin-top:2px;">Punch Headroom</div>
+        </div>
+        <div style="background:#080b12; border:1px solid #1f293d; border-radius:6px; padding:10px 12px;">
+          <div style="font-size:10px; color:#64748b; font-weight:bold; margin-bottom:4px;">PEAK / RMS LEVEL</div>
+          <div style="font-size:16px; font-weight:800; color:#38bdf8;">${pk} <span style="font-size:12px; color:#64748b;">/</span> ${rms}</div>
+          <div style="font-size:9.5px; color:#94a3b8; margin-top:2px;">dBFS Master Mix</div>
+        </div>
+        <div style="background:#080b12; border:1px solid #1f293d; border-radius:6px; padding:10px 12px;">
+          <div style="font-size:10px; color:#64748b; font-weight:bold; margin-bottom:4px;">SUB-BASS ENERGY</div>
+          <div style="font-size:16px; font-weight:800; color:#fde047;">${subDb} <span style="font-size:11px; font-weight:normal; color:#94a3b8;">dBFS</span></div>
+          <div style="font-size:9.5px; color:#94a3b8; margin-top:2px;">&lt; 100 Hz Sub Band</div>
+        </div>
+        <div style="background:#080b12; border:1px solid #1f293d; border-radius:6px; padding:10px 12px;">
+          <div style="font-size:10px; color:#64748b; font-weight:bold; margin-bottom:4px;">KICKS / PHASE LOCK</div>
+          <div style="font-size:16px; font-weight:800; color:${lockColor};">${lockStat}</div>
+          <div style="font-size:9.5px; color:#94a3b8; margin-top:2px;">Zero-Peak Integrity</div>
+        </div>
+        <div style="background:#080b12; border:1px solid #1f293d; border-radius:6px; padding:10px 12px;">
+          <div style="font-size:10px; color:#64748b; font-weight:bold; margin-bottom:4px;">SUB-CORRELATION</div>
+          <div style="font-size:16px; font-weight:800; color:#0ea5e9;">${Number(s.sub_correlation_r || 0.0).toFixed(2)} <span style="font-size:11px; font-weight:normal; color:#94a3b8;">r</span></div>
+          <div style="font-size:9.5px; color:#10b981; margin-top:2px;">Coherent Alignment</div>
+        </div>
+      </div>
+
+      <div style="background:#080b12; border:1px solid #1f293d; border-radius:6px; padding:10px 14px; margin-bottom:12px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; font-size:11px; margin-bottom:6px;">
+          <span style="color:#94a3b8; font-weight:bold;">INTRA-SECTION KICK ONSET MAP (${kCnt} events):</span>
+          <span style="font-size:10px; color:#64748b;">${s.policy_verdict || ''}</span>
+        </div>
+        <div style="position:relative; height:18px; background:#04060a; border:1px solid #1e293b; border-radius:4px; overflow:hidden;">
+          ${kickMarkersHtml || '<div style="font-size:9px; color:#475569; text-align:center; line-height:18px;">No percussive kicks in this section (Acoustic Transparency)</div>'}
+        </div>
+      </div>
+
+      <div style="display:flex; justify-content:space-between; align-items:center; font-size:11.5px; color:${c}; background:${c}15; border:1px solid ${c}40; border-radius:5px; padding:8px 12px;">
+        <div><strong>MASTERING POLICY:</strong> ${s.policy_verdict || 'Linear balance maintained.'}</div>
+        <div style="font-size:10.5px; color:#94a3b8;">Section ${s.sec_index || s.section_index} of ${tm.sections.length}</div>
+      </div>
+    </div>
+  `;
+  inspector.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function closeTrackMapInspector() {
+  const inspector = document.getElementById('tmSectionInspector');
+  if (inspector) inspector.innerHTML = '';
+  activeInspectedSection = null;
 }
 
 async function downloadReportPNG() {

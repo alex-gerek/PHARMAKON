@@ -125,7 +125,7 @@ def get_system_info():
 @app.get("/api/update-status")
 async def get_update_status():
     if auto_updater is None:
-        return {"state": "offline", "local_version": "2.0.3"}
+        return {"state": "offline", "local_version": "3.0.0"}
     cached = auto_updater.get_cached_status()
     if cached.get("state") == "idle":
         return await asyncio.to_thread(auto_updater.sync_online_patches, False, 2.5)
@@ -134,7 +134,7 @@ async def get_update_status():
 @app.post("/api/check-update")
 async def check_and_sync_update():
     if auto_updater is None:
-        return {"state": "offline", "local_version": "2.0.3"}
+        return {"state": "offline", "local_version": "3.0.0"}
     return await asyncio.to_thread(auto_updater.sync_online_patches, True, 4.0)
 
 @app.get("/api/presets")
@@ -278,62 +278,108 @@ def stream_audio(path: str):
         raise HTTPException(status_code=404, detail="Audio file not found")
     return FileResponse(clean_path, media_type="audio/wav")
 
+def _find_latest_mastering_report(clean_path: str = "") -> str:
+    """Finds the requested report or the most recently modified MASTERING_REPORT.html."""
+    if clean_path and os.path.isfile(clean_path):
+        return clean_path
+
+    # Search candidates
+    search_dirs = [
+        PROJECT_DIR / "uploads",
+        PROJECT_DIR / "Remaster",
+        PROJECT_DIR / "demo_audio",
+        PROJECT_DIR,
+        Path(r"D:/КЛИПЫ/Reels/Vector Pulse/Vector_Pulse_Full_Stems/Remaster"),
+        Path(r"D:/КЛИПЫ/Reels"),
+    ]
+
+    all_reports = []
+    for sdir in search_dirs:
+        try:
+            if sdir.exists():
+                for root, _, files in os.walk(str(sdir)):
+                    for f in files:
+                        if f.endswith("MASTERING_REPORT.html") or f.endswith("interactive_map.html"):
+                            full = os.path.join(root, f)
+                            if os.path.isfile(full):
+                                all_reports.append((os.path.getmtime(full), full))
+        except Exception:
+            pass
+
+    if all_reports:
+        all_reports.sort(key=lambda x: x[0], reverse=True)
+        return all_reports[0][1]
+
+    return ""
+
+
 @app.get("/api/report")
-def get_mastering_report(path: str):
+def get_mastering_report(path: str = ""):
     """Serves the standalone HTML Mastering Report & Certificate."""
-    clean_path = urllib.parse.unquote(path).strip().strip('"').strip("'")
-    if not os.path.isfile(clean_path):
-        candidate = PROJECT_DIR / clean_path
-        if candidate.exists():
-            clean_path = str(candidate.resolve())
-    if not os.path.isfile(clean_path):
+    clean_path = urllib.parse.unquote(path).strip().strip('"').strip("'") if path else ""
+    target_file = _find_latest_mastering_report(clean_path)
+    if not target_file or not os.path.isfile(target_file):
         raise HTTPException(status_code=404, detail="Mastering report not found")
-    return FileResponse(clean_path, media_type="text/html")
+    return FileResponse(target_file, media_type="text/html")
+
 
 @app.post("/api/open-report")
 async def open_report_file(request: Request):
     """Opens HTML report in system default web browser (Chrome, Edge, etc.)."""
     try:
         body = await request.json()
-        report_path = body.get("path", "").strip().strip('"').strip("'")
-        report_path = urllib.parse.unquote(report_path)
-        if report_path.startswith("file:///"):
-            report_path = report_path[8:]
+        raw_path = body.get("path", "").strip().strip('"').strip("'")
+        if raw_path.startswith("file:///"):
+            raw_path = raw_path[8:]
+        clean_path = urllib.parse.unquote(raw_path)
 
-        # Smart fallback: if path is empty or not on disk, search candidate directories
-        if not report_path or not os.path.isfile(report_path):
-            candidates = [
-                PROJECT_DIR / report_path if report_path else None,
-                PROJECT_DIR / "demo_audio" / "bronze_psalter" / "Remaster" / "Bronze_Psalter_Demo - MASTERING_REPORT.html",
-                PROJECT_DIR / "demo_audio" / "gravity_stems" / "Remaster" / "Gravity_Has_An_Address - MASTERING_REPORT.html",
-            ]
-            for c in candidates:
-                if c and c.exists() and os.path.isfile(str(c)):
-                    report_path = str(c.resolve())
-                    break
-
-        if not report_path or not os.path.isfile(report_path):
-            # Also search for any *MASTERING_REPORT.html in PROJECT_DIR
-            for root, dirs, files in os.walk(str(PROJECT_DIR)):
-                for f in files:
-                    if f.endswith("MASTERING_REPORT.html"):
-                        candidate = os.path.join(root, f)
-                        if os.path.isfile(candidate):
-                            report_path = candidate
-                            break
-                if report_path and os.path.isfile(report_path):
-                    break
-
-        if not report_path or not os.path.isfile(report_path):
+        target_file = _find_latest_mastering_report(clean_path)
+        if not target_file or not os.path.isfile(target_file):
             return {"success": False, "error": "Report not found on disk. Please render a master first!"}
 
-        report_path = os.path.normpath(report_path)
+        target_file = os.path.normpath(target_file)
         if sys.platform == "win32":
-            os.startfile(report_path)
-            return {"success": True, "opened": report_path}
+            os.startfile(target_file)
+            return {"success": True, "opened": target_file}
 
         return {"success": False, "error": "Platform not supported"}
     except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@app.post("/api/save-track-map")
+async def save_track_map(request: Request):
+    """Saves edited track map metadata to track_map.json."""
+    try:
+        body = await request.json()
+        target_path = body.get("target_path", "")
+        track_map = body.get("track_map", {})
+
+        if not track_map or not track_map.get("sections"):
+            return {"success": False, "error": "Invalid track map data"}
+
+        if target_path and os.path.exists(target_path):
+            if os.path.isfile(target_path):
+                base_dir = os.path.dirname(target_path)
+            else:
+                base_dir = target_path
+        else:
+            base_dir = r"C:\Users\User\PHARMAKON\uploads\!!!Vector Pulse_V000_Stems"
+
+        remaster_dir = os.path.join(base_dir, "Remaster")
+        save_dir = remaster_dir if os.path.exists(remaster_dir) else base_dir
+
+        out_json_path = os.path.join(save_dir, "track_map.json")
+        with open(out_json_path, "w", encoding="utf-8") as f_out:
+            json.dump(track_map, f_out, indent=2)
+
+        return {
+            "success": True,
+            "saved_json": out_json_path,
+            "total_sections": len(track_map.get("sections", []))
+        }
+    except Exception as e:
+        logger.error(f"Failed to save track map: {e}")
         return {"success": False, "error": str(e)}
 
 @app.post("/api/save-image-as")

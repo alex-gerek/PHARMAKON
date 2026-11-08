@@ -6,11 +6,11 @@ Add-Type -AssemblyName System.Drawing
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 if (-not $scriptDir) { $scriptDir = (Get-Location).Path }
 
-$defaultDest = Join-Path ([System.Environment]::GetFolderPath('LocalApplicationData')) "Programs\PHARMAKON 2.0"
+$defaultDest = Join-Path ([System.Environment]::GetFolderPath('LocalApplicationData')) "Programs\PHARMAKON 3.0"
 
 # Main Form
 $form = New-Object System.Windows.Forms.Form
-$form.Text = "PHARMAKON 2.0 (v2.0.3) // Installation Wizard"
+$form.Text = "PHARMAKON 3.0 (v3.0.0) // Installation Wizard"
 $form.Size = New-Object System.Drawing.Size(560, 420)
 $form.StartPosition = "CenterScreen"
 $form.FormBorderStyle = "FixedDialog"
@@ -27,7 +27,7 @@ if (Test-Path $icoPath) {
 
 # Header Label
 $lblTitle = New-Object System.Windows.Forms.Label
-$lblTitle.Text = "PHARMAKON 2.0 Studio Console"
+$lblTitle.Text = "PHARMAKON 3.0 Studio Console"
 $lblTitle.Font = New-Object System.Drawing.Font("Segoe UI", 16, [System.Drawing.FontStyle]::Bold)
 $lblTitle.ForeColor = [System.Drawing.Color]::FromArgb(6, 182, 212)
 $lblTitle.Location = New-Object System.Drawing.Point(24, 18)
@@ -35,7 +35,7 @@ $lblTitle.Size = New-Object System.Drawing.Size(500, 32)
 $form.Controls.Add($lblTitle)
 
 $lblSub = New-Object System.Windows.Forms.Label
-$lblSub.Text = "Neural Audio Antidote & Stem Mastering Setup | Build v2.0.3"
+$lblSub.Text = "Neural Audio Antidote & Stem Mastering Setup | Build v3.0.0"
 $lblSub.Font = New-Object System.Drawing.Font("Segoe UI", 9)
 $lblSub.ForeColor = [System.Drawing.Color]::FromArgb(148, 163, 184)
 $lblSub.Location = New-Object System.Drawing.Point(26, 52)
@@ -76,7 +76,7 @@ $btnBrowse.ForeColor = [System.Drawing.Color]::White
 $btnBrowse.FlatStyle = "Flat"
 $btnBrowse.Add_Click({
     $fbd = New-Object System.Windows.Forms.FolderBrowserDialog
-    $fbd.Description = "Select destination folder for PHARMAKON 2.0"
+    $fbd.Description = "Select destination folder for PHARMAKON 3.0"
     $fbd.SelectedPath = $txtDest.Text
     if ($fbd.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
         $txtDest.Text = $fbd.SelectedPath
@@ -102,7 +102,7 @@ $chkStartMenu.Size = New-Object System.Drawing.Size(450, 24)
 $form.Controls.Add($chkStartMenu)
 
 $chkLaunch = New-Object System.Windows.Forms.CheckBox
-$chkLaunch.Text = "Launch PHARMAKON 2.0 immediately after installation"
+$chkLaunch.Text = "Launch PHARMAKON 3.0 immediately after installation"
 $chkLaunch.Checked = $true
 $chkLaunch.Font = New-Object System.Drawing.Font("Segoe UI", 9.5)
 $chkLaunch.Location = New-Object System.Drawing.Point(28, 224)
@@ -171,7 +171,7 @@ $btnInstall.Add_Click({
         $dstFull = [System.IO.Path]::GetFullPath($targetDir).TrimEnd('\')
 
         if ($srcFull -ne $dstFull) {
-            $lblStatus.Text = "Copying PHARMAKON 2.0 files..."
+            $lblStatus.Text = "Copying PHARMAKON 3.0 files..."
             $pBar.Value = 40
             $form.Refresh()
 
@@ -199,10 +199,10 @@ $btnInstall.Add_Click({
         # 1. Desktop Shortcut
         if ($chkDesktop.Checked) {
             $desktopDir = [System.Environment]::GetFolderPath('Desktop')
-            $deskShortcut = $wsh.CreateShortcut((Join-Path $desktopDir "PHARMAKON 2.0.lnk"))
+            $deskShortcut = $wsh.CreateShortcut((Join-Path $desktopDir "PHARMAKON 3.0.lnk"))
             $deskShortcut.TargetPath = $targetExe
             $deskShortcut.WorkingDirectory = $targetDir
-            $deskShortcut.Description = "PHARMAKON 2.0 Studio Console // Neural Audio Antidote & Stem Mastering"
+            $deskShortcut.Description = "PHARMAKON 3.0 Studio Console // Neural Audio Antidote & Stem Mastering"
             if (Test-Path $iconTarget) {
                 $deskShortcut.IconLocation = "$iconTarget,0"
             }
@@ -211,14 +211,14 @@ $btnInstall.Add_Click({
 
         # 2. Start Menu Shortcut
         if ($chkStartMenu.Checked) {
-            $programsDir = Join-Path ([System.Environment]::GetFolderPath('Programs')) "PHARMAKON 2.0"
+            $programsDir = Join-Path ([System.Environment]::GetFolderPath('Programs')) "PHARMAKON 3.0"
             if (-not (Test-Path $programsDir)) {
                 New-Item -ItemType Directory -Path $programsDir -Force | Out-Null
             }
-            $startShortcut = $wsh.CreateShortcut((Join-Path $programsDir "PHARMAKON 2.0.lnk"))
+            $startShortcut = $wsh.CreateShortcut((Join-Path $programsDir "PHARMAKON 3.0.lnk"))
             $startShortcut.TargetPath = $targetExe
             $startShortcut.WorkingDirectory = $targetDir
-            $startShortcut.Description = "PHARMAKON 2.0 Studio Console"
+            $startShortcut.Description = "PHARMAKON 3.0 Studio Console"
             if (Test-Path $iconTarget) {
                 $startShortcut.IconLocation = "$iconTarget,0"
             }
@@ -235,7 +235,7 @@ $btnInstall.Add_Click({
         }
 
         [System.Windows.Forms.MessageBox]::Show(
-            "PHARMAKON v2.0.3 has been installed successfully!`n`nLocation: $targetDir`nDesktop Shortcut: Created",
+            "PHARMAKON v3.0.0 has been installed successfully!`n`nLocation: $targetDir`nDesktop Shortcut: Created",
             "Installation Complete",
             [System.Windows.Forms.MessageBoxButtons]::OK,
             [System.Windows.Forms.MessageBoxIcon]::Information

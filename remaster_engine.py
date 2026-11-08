@@ -1613,6 +1613,466 @@ def generate_svg_spectrum(freqs, orig_db, proc_db, delta_db=None, width=860, hei
       {delta_element}
     </svg>"""
 
+def generate_track_map_html(track_map, target_path=""):
+    import json
+    sections = track_map.get('sections', [])
+    bpm = track_map.get('estimated_bpm', 120.0)
+    dur = track_map.get('total_duration_s', 0.0)
+    total_kicks = track_map.get('total_kick_events', 0)
+    sections_json = json.dumps(sections)
+
+    tag_colors = {
+        "INTRO": "#f59e0b",
+        "DROP": "#f43f5e",
+        "GROOVE": "#0ea5e9",
+        "INTERLUDE": "#6366f1",
+        "BREAKDOWN": "#10b981",
+        "BUILDUP": "#f97316",
+        "OUTRO": "#a855f7",
+        "SECTION": "#38bdf8",
+        "VERSE": "#8b5cf6",
+        "CHORUS": "#ec4899",
+        "PRE-CHORUS": "#eab308"
+    }
+
+    seg_html_list = []
+    cards_html_list = []
+
+    for s in sections:
+        idx = s['section_index']
+        c = s.get('color', '#38bdf8')
+        tag = s.get('tag', 'SECTION')
+        name = s.get('name', f'Section {idx:02d}').split('/')[0].strip()
+        t0 = s.get('time_start_s', 0.0)
+        t1 = s.get('time_end_s', 0.0)
+        dur_s = s.get('duration_s', round(t1 - t0, 1))
+        t_str = s.get('time_str', f"{t0:.1f} - {t1:.1f}")
+        k_cnt = s.get('kick_events_count', 0)
+        acc = s.get('events_accepted', 0)
+        rej = s.get('events_rejected', 0)
+
+        lock_stat = f"{acc} / {k_cnt} locked" if (acc + rej > 0) else f"{k_cnt} kicks"
+        lock_color = "#10b981" if acc > 0 else ("#f59e0b" if k_cnt > 0 else "#64748b")
+
+        reasons_text = ""
+        if s.get('rejection_reasons'):
+            r_items = [f"{k} ({v})" for k, v in s['rejection_reasons'].items()]
+            reasons_text = f"<div style='color:#94a3b8; font-size:9px; margin-top:3px;'>Audit: {', '.join(r_items)}</div>"
+
+        seg_html_list.append(f'''
+          <div class="tm-seg" id="tm-seg-{idx}" onclick="selectTrackSector({idx})" title="{name}: {t_str} ({dur_s}s)" style="flex: {dur_s}; border-color: {c}; background: linear-gradient(180deg, {c}33 0%, {c}11 100%);">
+            <span class="tm-seg-tag" style="color: {c};">{tag}</span>
+            <span class="tm-seg-time">{t_str}</span>
+          </div>''')
+
+        cards_html_list.append(f'''
+          <div class="tm-sector-card" id="tm-sec-{idx}" onclick="selectTrackSector({idx})" style="border-top: 3px solid {c};">
+            <div class="tm-card-header">
+              <span class="tm-card-badge" style="background: {c}26; color: {c}; border: 1px solid {c}66;">{tag}</span>
+              <span class="tm-card-title">{idx:02d} // {name}</span>
+              <span class="tm-card-time">{t_str}</span>
+            </div>
+            <div class="tm-card-body">
+              <div class="tm-grid-row">
+                <span class="tm-lbl">CREST FACTOR</span>
+                <span class="tm-val" style="color:#fff;">{s.get('crest_factor_db', 0.0):.1f} dB</span>
+              </div>
+              <div class="tm-grid-row">
+                <span class="tm-lbl">PEAK / RMS</span>
+                <span class="tm-val">{s.get('peak_dbfs', 0.0):.1f} / {s.get('rms_mix_dbfs', 0.0):.1f} dBFS</span>
+              </div>
+              <div class="tm-grid-row">
+                <span class="tm-lbl">KICKS / PHASE</span>
+                <span class="tm-val" style="color:{lock_color}; font-weight:700;">{lock_stat}</span>
+              </div>
+              <div class="tm-grid-row">
+                <span class="tm-lbl">SUB-CORRELATION</span>
+                <span class="tm-val" style="color:#38bdf8;">{s.get('sub_correlation_r', 0.0):+.2f} r</span>
+              </div>
+              <div style="margin-top:5px; font-size:9.5px; font-family:monospace; color:{c};">
+                &#9642; {s.get('policy_verdict', '')}
+              </div>
+              {reasons_text}
+            </div>
+          </div>''')
+
+    timeline_html = "".join(seg_html_list)
+    cards_html = "".join(cards_html_list)
+
+    return f'''
+    <!-- PHARMAKON 3.0 TRACK INTELLIGENCE MAP -->
+    <div class="track-map-card" id="trackMapRoot">
+      <script id="tm-raw-data" type="application/json">{sections_json}</script>
+      <input type="hidden" id="tm-target-path" value="{target_path}" />
+      
+      <div class="track-map-header">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#10b981; box-shadow:0 0 8px #10b981;"></span>
+          <div>
+            <div style="font-size:12px; font-weight:800; letter-spacing:1.5px; color:#fff; font-family:monospace;">PHARMAKON 3.0 TRACK INTELLIGENCE MAP</div>
+            <div style="font-size:10px; font-family:monospace; color:#94a3b8; margin-top:2px;">
+              TEMPO: <span style="color:#38bdf8;">{bpm:.1f} BPM</span> &bull; RHYTHM MESH: <span style="color:#fff;">4/4</span> &bull; PHRASE SECTORS: <span style="color:#f59e0b;">{len(sections)}</span> &bull; TOTAL DURATION: <span style="color:#fff;">{dur:.1f}s</span> ({total_kicks} KICKS)
+            </div>
+          </div>
+        </div>
+        <div class="tm-legend">
+          <span class="tm-legend-chip" style="color:#f59e0b;">&#9632; INTRO</span>
+          <span class="tm-legend-chip" style="color:#f43f5e;">&#9632; DROP</span>
+          <span class="tm-legend-chip" style="color:#0ea5e9;">&#9632; GROOVE</span>
+          <span class="tm-legend-chip" style="color:#6366f1;">&#9632; INTERLUDE</span>
+          <span class="tm-legend-chip" style="color:#10b981;">&#9632; BREAKDOWN</span>
+          <span class="tm-legend-chip" style="color:#f97316;">&#9632; BUILDUP</span>
+          <span class="tm-legend-chip" style="color:#a855f7;">&#9632; OUTRO</span>
+        </div>
+      </div>
+
+      <!-- Interactive Phrase Timeline Bar -->
+      <div class="tm-timeline-bar" id="tmTimelineBar">
+        {timeline_html}
+      </div>
+
+      <!-- INTERACTIVE SECTION INSPECTOR & EDITOR -->
+      <div class="tm-inspector" id="tmInspector" style="display:none;">
+        <div class="tm-insp-header">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span class="tm-card-badge" id="inspBadge" style="font-size:10px; padding:3px 6px;">SECTION</span>
+            <span style="font-size:12px; font-weight:800; color:#fff; font-family:monospace;" id="inspTitle">SECTION 01</span>
+            <span style="font-size:10px; color:#94a3b8; font-family:monospace;" id="inspTiming">(0:00 - 0:28 &bull; 28.1s)</span>
+          </div>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <button class="tm-btn tm-btn-play" onclick="playCurrentSection()" id="btnPlaySection" title="Audition this section from its start time">
+              &#9654; PLAY FROM HERE
+            </button>
+            <button class="tm-btn tm-btn-save" onclick="saveEditedTrackMap()" id="btnSaveMap" title="Save edited boundaries and names to track_map.json and report">
+              &#128190; SAVE EDITED MAP
+            </button>
+          </div>
+        </div>
+
+        <!-- Editor Controls Row -->
+        <div class="tm-insp-controls">
+          <div class="tm-control-group">
+            <label class="tm-label">SECTION ROLE / PRESET</label>
+            <select class="tm-select" id="inspPresetSelect" onchange="onPresetSelected(this.value)">
+              <option value="Intro">Intro</option>
+              <option value="Verse">Verse</option>
+              <option value="Pre-Chorus">Pre-Chorus</option>
+              <option value="Chorus">Chorus</option>
+              <option value="Groove">Groove</option>
+              <option value="Drop">Drop</option>
+              <option value="Breakdown">Breakdown</option>
+              <option value="Buildup">Buildup</option>
+              <option value="Interlude">Interlude</option>
+              <option value="Outro">Outro</option>
+              <option value="Section">Section (Neutral)</option>
+              <option value="Custom">Custom...</option>
+            </select>
+          </div>
+
+          <div class="tm-control-group">
+            <label class="tm-label">CUSTOM NAME</label>
+            <input type="text" class="tm-input" id="inspCustomName" placeholder="Section name..." oninput="onCustomNameChanged(this.value)" />
+          </div>
+
+          <div class="tm-control-group">
+            <label class="tm-label">START TIME (s)</label>
+            <div style="display:flex; align-items:center; gap:3px;">
+              <button class="tm-nudge-btn" onclick="nudgeTime('start', -1.0)">-1s</button>
+              <button class="tm-nudge-btn" onclick="nudgeTime('start', -0.2)">-0.2s</button>
+              <input type="number" step="0.1" class="tm-input tm-input-num" id="inspStartTime" onchange="onManualTimeChange('start', this.value)" />
+              <button class="tm-nudge-btn" onclick="nudgeTime('start', 0.2)">+0.2s</button>
+              <button class="tm-nudge-btn" onclick="nudgeTime('start', 1.0)">+1s</button>
+            </div>
+          </div>
+
+          <div class="tm-control-group">
+            <label class="tm-label">END TIME (s)</label>
+            <div style="display:flex; align-items:center; gap:3px;">
+              <button class="tm-nudge-btn" onclick="nudgeTime('end', -1.0)">-1s</button>
+              <button class="tm-nudge-btn" onclick="nudgeTime('end', -0.2)">-0.2s</button>
+              <input type="number" step="0.1" class="tm-input tm-input-num" id="inspEndTime" onchange="onManualTimeChange('end', this.value)" />
+              <button class="tm-nudge-btn" onclick="nudgeTime('end', 0.2)">+0.2s</button>
+              <button class="tm-nudge-btn" onclick="nudgeTime('end', 1.0)">+1s</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Mini Kick Events Strip (if Local Guard audit available) -->
+        <div style="margin-top:10px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+            <span style="font-size:9.5px; font-weight:700; color:#94a3b8; font-family:monospace;" id="inspKickCount">KICK TRANSIENTS IN SECTION: 0</span>
+            <span style="font-size:8.5px; font-family:monospace; color:#64748b;">Green: Phase-Locked &bull; Cyan: Zero-Lag Optimal &bull; Amber: Bypassed</span>
+          </div>
+          <div class="tm-kick-strip" id="inspKickStrip">
+            <!-- Dynamically injected kick dots -->
+          </div>
+        </div>
+
+        <div class="tm-notice-disclaimer">
+          &#9432; Note: Adjusting boundaries or renaming sections updates project structural metadata and does not alter DSP audio processing.
+        </div>
+      </div>
+
+      <!-- Sector Cards Grid -->
+      <div class="tm-sectors-grid">
+        {cards_html}
+      </div>
+
+      <div id="tmToast" class="tm-toast" style="display:none;"></div>
+    </div>
+
+    <!-- TRACK MAP CLIENT-SIDE INTERACTIVITY SCRIPT -->
+    <script>
+      (function() {{
+        let tmSections = [];
+        try {{
+          tmSections = JSON.parse(document.getElementById('tm-raw-data').textContent);
+        }} catch(e) {{
+          console.error("Failed to parse track map data:", e);
+        }}
+
+        let activeIdx = -1;
+
+        const TAG_COLORS = {json.dumps(tag_colors)};
+
+        function formatTimeStr(sec) {{
+          sec = Math.max(0, sec);
+          const m = Math.floor(sec / 60);
+          const s = Math.floor(sec % 60);
+          return m + ":" + (s < 10 ? "0" : "") + s;
+        }}
+
+        window.selectTrackSector = function(idx) {{
+          activeIdx = idx;
+          const s = tmSections.find(item => item.section_index === idx);
+          if (!s) return;
+
+          // Toggle active classes
+          document.querySelectorAll('.tm-sector-card').forEach(c => c.classList.remove('active'));
+          document.querySelectorAll('.tm-seg').forEach(seg => seg.classList.remove('active'));
+
+          const card = document.getElementById('tm-sec-' + idx);
+          const seg = document.getElementById('tm-seg-' + idx);
+          if (card) {{
+            card.classList.add('active');
+            card.scrollIntoView({{ behavior: 'smooth', block: 'nearest' }});
+          }}
+          if (seg) seg.classList.add('active');
+
+          // Populate Inspector
+          const insp = document.getElementById('tmInspector');
+          insp.style.display = 'block';
+
+          const c = s.color || '#38bdf8';
+          const badge = document.getElementById('inspBadge');
+          badge.textContent = s.tag || 'SECTION';
+          badge.style.background = c + '26';
+          badge.style.color = c;
+          badge.style.borderColor = c + '66';
+
+          document.getElementById('inspTitle').textContent = idx.toString().padStart(2, '0') + ' // ' + s.name;
+          const dur = (s.time_end_s - s.time_start_s).toFixed(1);
+          document.getElementById('inspTiming').textContent = '(' + formatTimeStr(s.time_start_s) + ' - ' + formatTimeStr(s.time_end_s) + ' • ' + dur + 's)';
+
+          document.getElementById('inspStartTime').value = Number(s.time_start_s).toFixed(2);
+          document.getElementById('inspEndTime').value = Number(s.time_end_s).toFixed(2);
+          document.getElementById('inspCustomName').value = s.name;
+
+          const sel = document.getElementById('inspPresetSelect');
+          if (['Intro', 'Verse', 'Pre-Chorus', 'Chorus', 'Groove', 'Drop', 'Breakdown', 'Buildup', 'Interlude', 'Outro', 'Section'].includes(s.name)) {{
+            sel.value = s.name;
+          }} else {{
+            sel.value = 'Custom';
+          }}
+
+          // Populate Kick Strip
+          const kicks = s.kicks_detail || [];
+          document.getElementById('inspKickCount').textContent = 'KICK TRANSIENTS IN SECTION: ' + kicks.length + ' (' + (s.events_accepted || 0) + ' locked)';
+          const strip = document.getElementById('inspKickStrip');
+          strip.innerHTML = '';
+          if (kicks.length === 0) {{
+            strip.innerHTML = '<span style="font-size:9px; color:#64748b; padding-left:8px;">No stem audit kicks detected in this time interval.</span>';
+          }} else {{
+            kicks.forEach((k, kIdx) => {{
+              const dot = document.createElement('div');
+              dot.className = 'tm-kick-dot';
+              dot.style.left = Math.max(1, Math.min(99, k.rel_pct)) + '%';
+              let dotColor = '#38bdf8';
+              if (k.decision === 'ACCEPT') dotColor = '#10b981';
+              else if (k.decision === 'REJECT' && k.reason && k.reason.includes('zero_lag')) dotColor = '#38bdf8';
+              else dotColor = '#f59e0b';
+              dot.style.background = dotColor;
+              dot.title = 'Kick #' + (k.event_index || kIdx+1) + ' @ ' + k.time_s.toFixed(2) + 's [' + (k.decision || 'DETECTED') + '] ' + (k.reason || '');
+              strip.appendChild(dot);
+            }});
+          }}
+        }};
+
+        window.playCurrentSection = function() {{
+          if (activeIdx === -1) return;
+          const s = tmSections.find(item => item.section_index === activeIdx);
+          if (!s) return;
+          const t0 = s.time_start_s;
+          // Trigger audio seeking
+          const audio = document.querySelector('audio') || window.parentAudio || (window.parent && window.parent.document.querySelector('audio'));
+          if (audio) {{
+            audio.currentTime = t0;
+            audio.play();
+            showToast('Seeking audio to ' + formatTimeStr(t0) + '...');
+          }} else {{
+            showToast('Audio player not loaded in this view. Target time: ' + formatTimeStr(t0));
+          }}
+        }};
+
+        window.onPresetSelected = function(val) {{
+          if (activeIdx === -1) return;
+          const s = tmSections.find(item => item.section_index === activeIdx);
+          if (!s) return;
+          if (val !== 'Custom') {{
+            s.name = val;
+            s.tag = val.toUpperCase().replace('-', '_');
+            s.color = TAG_COLORS[s.tag] || '#38bdf8';
+            document.getElementById('inspCustomName').value = val;
+            updateDomAfterEdit(s);
+          }}
+        }};
+
+        window.onCustomNameChanged = function(val) {{
+          if (activeIdx === -1) return;
+          const s = tmSections.find(item => item.section_index === activeIdx);
+          if (!s) return;
+          s.name = val.trim() || 'Section ' + activeIdx;
+          document.getElementById('inspPresetSelect').value = 'Custom';
+          updateDomAfterEdit(s);
+        }};
+
+        window.nudgeTime = function(field, delta) {{
+          if (activeIdx === -1) return;
+          const s = tmSections.find(item => item.section_index === activeIdx);
+          if (!s) return;
+          if (field === 'start') {{
+            s.time_start_s = Math.max(0, Math.round((s.time_start_s + delta) * 100) / 100);
+            if (s.time_start_s >= s.time_end_s) s.time_start_s = s.time_end_s - 0.5;
+            document.getElementById('inspStartTime').value = s.time_start_s.toFixed(2);
+          }} else {{
+            s.time_end_s = Math.round((s.time_end_s + delta) * 100) / 100;
+            if (s.time_end_s <= s.time_start_s) s.time_end_s = s.time_start_s + 0.5;
+            document.getElementById('inspEndTime').value = s.time_end_s.toFixed(2);
+          }}
+          s.duration_s = Math.round((s.time_end_s - s.time_start_s) * 10) / 10;
+          s.time_str = formatTimeStr(s.time_start_s) + ' - ' + formatTimeStr(s.time_end_s);
+          updateDomAfterEdit(s);
+        }};
+
+        window.onManualTimeChange = function(field, val) {{
+          const num = parseFloat(val);
+          if (isNaN(num)) return;
+          if (activeIdx === -1) return;
+          const s = tmSections.find(item => item.section_index === activeIdx);
+          if (!s) return;
+          if (field === 'start') {{
+            s.time_start_s = Math.max(0, num);
+            if (s.time_start_s >= s.time_end_s) s.time_start_s = s.time_end_s - 0.5;
+          }} else {{
+            s.time_end_s = Math.max(s.time_start_s + 0.5, num);
+          }}
+          s.duration_s = Math.round((s.time_end_s - s.time_start_s) * 10) / 10;
+          s.time_str = formatTimeStr(s.time_start_s) + ' - ' + formatTimeStr(s.time_end_s);
+          updateDomAfterEdit(s);
+        }};
+
+        function updateDomAfterEdit(s) {{
+          const c = s.color || '#38bdf8';
+          const badge = document.getElementById('inspBadge');
+          badge.textContent = s.tag;
+          badge.style.background = c + '26';
+          badge.style.color = c;
+          badge.style.borderColor = c + '66';
+
+          document.getElementById('inspTitle').textContent = s.section_index.toString().padStart(2, '0') + ' // ' + s.name;
+          document.getElementById('inspTiming').textContent = '(' + s.time_str + ' • ' + s.duration_s + 's)';
+
+          // Update timeline segment
+          const seg = document.getElementById('tm-seg-' + s.section_index);
+          if (seg) {{
+            seg.style.flex = s.duration_s;
+            seg.style.borderColor = c;
+            seg.style.background = 'linear-gradient(180deg, ' + c + '33 0%, ' + c + '11 100%)';
+            seg.querySelector('.tm-seg-tag').textContent = s.tag;
+            seg.querySelector('.tm-seg-tag').style.color = c;
+            seg.querySelector('.tm-seg-time').textContent = s.time_str;
+          }}
+
+          // Update card
+          const card = document.getElementById('tm-sec-' + s.section_index);
+          if (card) {{
+            card.style.borderTopColor = c;
+            const b = card.querySelector('.tm-card-badge');
+            b.textContent = s.tag;
+            b.style.background = c + '26';
+            b.style.color = c;
+            b.style.borderColor = c + '66';
+            card.querySelector('.tm-card-title').textContent = s.section_index.toString().padStart(2, '0') + ' // ' + s.name;
+            card.querySelector('.tm-card-time').textContent = s.time_str;
+          }}
+        }}
+
+        window.saveEditedTrackMap = function() {{
+          const targetPath = document.getElementById('tm-target-path').value || '';
+          const payload = {{
+            target_path: targetPath,
+            track_map: {{
+              status: "edited",
+              estimated_bpm: {bpm:.2f},
+              total_duration_s: {dur:.2f},
+              total_kick_events: {total_kicks},
+              total_sections: tmSections.length,
+              sections: tmSections
+            }}
+          }};
+
+          const btn = document.getElementById('btnSaveMap');
+          btn.textContent = 'SAVING...';
+          btn.disabled = true;
+
+          fetch('/api/save-track-map', {{
+            method: 'POST',
+            headers: {{ 'Content-Type': 'application/json' }},
+            body: JSON.stringify(payload)
+          }})
+          .then(res => res.json())
+          .then(data => {{
+            btn.textContent = '💾 SAVE EDITED MAP';
+            btn.disabled = false;
+            if (data.success) {{
+              showToast('Track Map successfully saved to project (' + data.saved_json + ')!');
+            }} else {{
+              showToast('Saved locally: ' + (data.error || 'Server error'));
+            }}
+          }})
+          .catch(err => {{
+            btn.textContent = '💾 SAVE EDITED MAP';
+            btn.disabled = false;
+            showToast('Saved to session state (server connection offline)');
+          }});
+        }};
+
+        function showToast(msg) {{
+          const t = document.getElementById('tmToast');
+          t.textContent = msg;
+          t.style.display = 'block';
+          setTimeout(() => {{ t.style.display = 'none'; }}, 3500);
+        }}
+
+        // Auto-select Drop Section 04 on load for demonstration
+        setTimeout(() => {{
+          if (window.selectTrackSector) window.selectTrackSector(4);
+        }}, 100);
+      }})();
+    </script>
+    <!-- /PHARMAKON 3.0 TRACK INTELLIGENCE MAP -->
+    '''
+
 def generate_mastering_report_html(track_name, metrics, output_dir, params=None):
     """Generates self-contained standalone HTML Mastering & Spectral Diagnosis Certificate."""
     import time
@@ -1653,6 +2113,13 @@ def generate_mastering_report_html(track_name, metrics, output_dir, params=None)
     
     svg_chart_full = generate_svg_spectrum(freqs, orig_db, proc_db, delta_db, zoom_mode=False) if freqs else ""
     svg_chart_zoom = generate_svg_spectrum(freqs, orig_db, proc_db, delta_db, zoom_mode=True) if freqs else ""
+    
+    # Track Map HTML (Phrase sectors & event auditing)
+    track_map = metrics.get('track_map')
+    if not track_map and 'sub_sync_summary' in metrics and isinstance(metrics['sub_sync_summary'], dict):
+        track_map = metrics['sub_sync_summary'].get('track_map')
+    track_map_html = generate_track_map_html(track_map)
+
     # Match Input Loudness Telemetry Banner
     match_card_html = ""
     m_data = metrics.get('match_input_loudness')
@@ -1898,6 +2365,271 @@ def generate_mastering_report_html(track_name, metrics, output_dir, params=None)
       color: var(--emerald);
       font-weight: bold;
     }}
+    /* Track Map Styles */
+    .track-map-card {{
+      background: #090c13;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px 20px;
+      margin-bottom: 24px;
+    }}
+    .track-map-header {{
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #1a2233;
+      padding-bottom: 12px;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+      gap: 10px;
+    }}
+    .tm-legend {{
+      display: flex;
+      gap: 12px;
+      font-family: monospace;
+      font-size: 10px;
+      font-weight: 700;
+    }}
+    .tm-timeline-bar {{
+      display: flex;
+      width: 100%;
+      height: 44px;
+      background: #04060a;
+      border: 1px solid #1f2738;
+      border-radius: 6px;
+      overflow: hidden;
+      margin-bottom: 16px;
+      gap: 2px;
+      padding: 2px;
+    }}
+    .tm-seg {{
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      border: 1px solid;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s;
+      overflow: hidden;
+      user-select: none;
+      min-width: 32px;
+    }}
+    .tm-seg:hover, .tm-seg.active {{
+      filter: brightness(1.3);
+      box-shadow: 0 0 10px currentColor;
+    }}
+    .tm-seg-tag {{
+      font-size: 9.5px;
+      font-weight: 800;
+      font-family: monospace;
+      letter-spacing: 0.8px;
+    }}
+    .tm-seg-time {{
+      font-size: 8.5px;
+      color: #94a3b8;
+      font-family: monospace;
+      white-space: nowrap;
+    }}
+    .tm-sectors-grid {{
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+    }}
+    @media (max-width: 800px) {{
+      .tm-sectors-grid {{ grid-template-columns: repeat(2, 1fr); }}
+    }}
+    .tm-sector-card {{
+      background: #0d111a;
+      border: 1px solid #1a2233;
+      border-radius: 6px;
+      padding: 10px 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }}
+    .tm-sector-card:hover, .tm-sector-card.active {{
+      border-color: #38bdf8;
+      background: #111724;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+    }}
+    .tm-card-header {{
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid #161e2e;
+      padding-bottom: 6px;
+      margin-bottom: 8px;
+    }}
+    .tm-card-badge {{
+      font-size: 8.5px;
+      font-weight: 800;
+      font-family: monospace;
+      padding: 2px 5px;
+      border-radius: 3px;
+    }}
+    .tm-card-title {{
+      font-size: 10px;
+      font-weight: 700;
+      color: #fff;
+      font-family: monospace;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      flex: 1;
+      margin: 0 6px;
+    }}
+    .tm-card-time {{
+      font-size: 9px;
+      color: var(--muted);
+      font-family: monospace;
+    }}
+    
+    .tm-inspector {
+      background: #090d16;
+      border: 1px solid #1e293b;
+      border-radius: 6px;
+      padding: 12px 16px;
+      margin-bottom: 16px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+    }
+    .tm-insp-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #161e2e;
+      padding-bottom: 8px;
+      margin-bottom: 10px;
+    }
+    .tm-insp-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: flex-end;
+    }
+    .tm-control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .tm-label {
+      font-size: 8.5px;
+      font-weight: 700;
+      color: #64748b;
+      font-family: monospace;
+      letter-spacing: 0.5px;
+    }
+    .tm-select, .tm-input {
+      background: #04060a;
+      border: 1px solid #334155;
+      color: #fff;
+      border-radius: 4px;
+      padding: 4px 8px;
+      font-size: 11px;
+      font-family: monospace;
+    }
+    .tm-input-num {
+      width: 58px;
+      text-align: center;
+    }
+    .tm-nudge-btn {
+      background: #1e293b;
+      border: 1px solid #334155;
+      color: #94a3b8;
+      border-radius: 3px;
+      padding: 3px 6px;
+      font-size: 9px;
+      font-family: monospace;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .tm-nudge-btn:hover {
+      background: #38bdf8;
+      color: #000;
+    }
+    .tm-btn {
+      border: none;
+      border-radius: 4px;
+      padding: 6px 12px;
+      font-size: 10px;
+      font-weight: 800;
+      font-family: monospace;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .tm-btn-play {
+      background: #0ea5e9;
+      color: #fff;
+    }
+    .tm-btn-play:hover {
+      background: #38bdf8;
+      box-shadow: 0 0 10px #38bdf866;
+    }
+    .tm-btn-save {
+      background: #10b981;
+      color: #04060a;
+    }
+    .tm-btn-save:hover {
+      background: #34d399;
+      box-shadow: 0 0 10px #10b98166;
+    }
+    .tm-kick-strip {
+      width: 100%;
+      height: 20px;
+      background: #04060a;
+      border: 1px solid #1e293b;
+      border-radius: 4px;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+    }
+    .tm-kick-dot {
+      position: absolute;
+      top: 3px;
+      width: 3px;
+      height: 14px;
+      border-radius: 1.5px;
+      cursor: pointer;
+      transition: transform 0.1s;
+    }
+    .tm-kick-dot:hover {
+      transform: scaleY(1.3);
+      box-shadow: 0 0 6px currentColor;
+    }
+    .tm-notice-disclaimer {
+      font-size: 9px;
+      color: #64748b;
+      font-family: monospace;
+      margin-top: 8px;
+      font-style: italic;
+    }
+    .tm-toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: #10b981;
+      color: #04060a;
+      font-family: monospace;
+      font-weight: 800;
+      font-size: 11px;
+      padding: 8px 16px;
+      border-radius: 4px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.8);
+      z-index: 9999;
+    }
+
+    .tm-grid-row {{
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 9.5px;
+      font-family: monospace;
+      margin-bottom: 4px;
+    }}
+    .tm-lbl {{ color: var(--muted); }}
+    .tm-val {{ color: #e2e8f0; font-weight: 600; }}
+
     @media print {{
       body {{ background: #fff; color: #000; padding: 0; }}
       .certificate-card {{ border: 1px solid #ccc; box-shadow: none; }}
@@ -1963,6 +2695,7 @@ def generate_mastering_report_html(track_name, metrics, output_dir, params=None)
     </div>
 
     {match_card_html}
+    {track_map_html}
     <!-- 4-Band Energy Shift Summary -->
     <div class="energy-bar-grid">
       <div class="e-band">
@@ -2016,6 +2749,19 @@ def generate_mastering_report_html(track_name, metrics, output_dir, params=None)
       document.getElementById('tabFull').classList.toggle('active', mode === 'full');
       document.getElementById('tabZoom').classList.toggle('active', mode === 'zoom');
     }}
+    function focusTrackSector(idx) {{
+      document.querySelectorAll('.tm-sector-card').forEach(c => c.classList.remove('active'));
+      document.querySelectorAll('.tm-seg').forEach(s => s.classList.remove('active'));
+      const card = document.getElementById('tm-sec-' + idx);
+      const seg = document.getElementById('tm-seg-' + idx);
+      if (card) {{
+        card.classList.add('active');
+        card.scrollIntoView({{ behavior: 'smooth', block: 'nearest' }});
+      }}
+      if (seg) {{
+        seg.classList.add('active');
+      }}
+    }}
   </script>
 </body>
 </html>"""
@@ -2058,6 +2804,11 @@ def process_single_file(file_path, params=None, open_folder=True):
     print(f"[4/4] Summing, Analog Tape Warmth & 4x True-Peak Limiter ({params.get('target_ceiling_db', -0.3)} dBFS)...")
 
     full_mix, metrics = process_audio_array(audio, sr, params)
+    try:
+        from track_map_engine import build_provisional_track_map
+        metrics['track_map'] = build_provisional_track_map(audio, sr=sr)
+    except Exception as tm_err:
+        print(f"[WARN] Track Map build error for single file: {tm_err}")
 
     out_dir = os.path.join(base_dir, "Remaster")
     os.makedirs(out_dir, exist_ok=True)
@@ -2365,6 +3116,14 @@ def process_stems_folder(target_folder, params=None, open_folder=True):
     metrics['sub_sync_corrected_events'] = sub_sync_corrected_events_result
     metrics['match_input_loudness'] = match_loudness_report
     metrics['matched_master_path'] = matched_master_path
+    if sub_sync_summary_result and isinstance(sub_sync_summary_result, dict) and 'track_map' in sub_sync_summary_result:
+        metrics['track_map'] = sub_sync_summary_result['track_map']
+    else:
+        try:
+            from track_map_engine import build_provisional_track_map
+            metrics['track_map'] = build_provisional_track_map(raw_sum, sr=sr)
+        except Exception as tm_err:
+            print(f"[WARN] Track Map build error: {tm_err}")
 
     # Save Extracted Poison Delta (Null Difference: raw sum - master)
     try:

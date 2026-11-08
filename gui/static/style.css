@@ -2454,3 +2454,102 @@ body.cinematic-hide-cursor, body.cinematic-hide-cursor * {
   background: rgba(0, 0, 0, 0.2);
   letter-spacing: 0.5px;
 }
+
+/* ==========================================================================
+   OUTPUT LEVEL // MATCH INPUT LOUDNESS HARDWARE STRIP
+   ========================================================================== */
+.output-level-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: linear-gradient(180deg, #131722 0%, #0a0c14 100%);
+  border: 1px solid #1f283d;
+  border-radius: 6px;
+  padding: 8px 16px;
+  margin-top: 14px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 3px 10px rgba(0, 0, 0, 0.4);
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.output-strip-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.output-strip-labels {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.output-strip-title {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: #e2e8f0;
+}
+
+.output-strip-desc {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: #64748b;
+  letter-spacing: 0.3px;
+}
+
+.output-strip-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.output-toggle-group {
+  display: flex;
+  gap: 4px;
+}
+
+.output-toggle-group .ceiling-btn {
+  padding: 5px 14px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+}
+
+.output-toggle-group .ceiling-btn#btnMatchLoudnessOn.active {
+  background: rgba(16, 185, 129, 0.18);
+  border-color: #10b981;
+  color: #10b981;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.35);
+}
+
+.output-status-badge {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  padding: 2px 7px;
+  border-radius: 3px;
+  border: 1px solid #334155;
+  color: #64748b;
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.output-status-badge.badge-active {
+  border-color: rgba(16, 185, 129, 0.5);
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.12);
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.25);
+}
+
+@media (max-width: 900px) {
+  .output-level-strip {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .output-strip-controls {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
