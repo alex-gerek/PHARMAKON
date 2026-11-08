@@ -46,7 +46,7 @@ DEFAULT_PARAMS = {
     'target_ceiling_db': -0.3,   # True-Peak ceiling (dBFS)
     'drum_punch': 1.0,           # Transient attack punch multiplier (for stems)
     'mode': 'pharmakon1',        # 'pharmakon1' (Auto Antidote) or 'pharmakon2' (Pro Rack)
-    'match_input_loudness': False, # Match Input Loudness / Сохранить громкость исходника
+    'match_input_loudness': False, # Match Input Loudness (Preserve original source loudness)
     'reference_track_path': None,  # Optional external reference track path for stems mode
 }
 
@@ -611,7 +611,7 @@ def apply_match_input_loudness(
     target_ceiling_db: float = -0.3,
 ):
     """
-    Trial Feature: Match Input Loudness / Сохранить громкость исходника.
+    Trial Feature: Match Input Loudness (Preserve original source loudness).
     1. Measures BS.1770-4 Integrated Loudness of original track and master.
     2. Computes required gain: delta_lufs = lufs_orig - lufs_master.
     3. Evaluates True-Peak Headroom: headroom_db = target_ceiling_db - tp_master_max.
