@@ -141,6 +141,14 @@ def activate_live_patches(load_server: bool = False) -> bool:
 
     saved_engine = sys.modules.get("remaster_engine")
     try:
+        tm_file = patch_dir / "track_map_engine.py"
+        if tm_file.is_file():
+            new_tm = _load_module_from_file("track_map_engine", tm_file)
+            for mod_key in ("gui.server", "remaster_engine", "__main__"):
+                m = sys.modules.get(mod_key)
+                if m is not None and hasattr(m, "track_map_engine"):
+                    setattr(m, "track_map_engine", new_tm)
+
         eng_file = patch_dir / "remaster_engine.py"
         if eng_file.is_file():
             new_eng = _load_module_from_file("remaster_engine", eng_file)
@@ -197,7 +205,7 @@ def _fetch_bytes(url: str, timeout: float) -> bytes:
     req = urllib.request.Request(
         url,
         headers={
-            "User-Agent": "PHARMAKON-Studio-AutoSync/2.0",
+            "User-Agent": "PHARMAKON-Studio-AutoSync/3.0",
             "Cache-Control": "no-cache",
         },
     )

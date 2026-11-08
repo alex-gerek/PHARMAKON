@@ -10,6 +10,7 @@
     "gui/server.py",
     "gui/static/index.html",
     "gui/static/app.js",
-    "gui/static/style.css"
+    "gui/static/style.css",
+    "track_map_engine.py"
   ]
 }
