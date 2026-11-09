@@ -14,7 +14,7 @@ Every change in this release follows one rule:
 ## What you will hear (Clean Chain vs 3.1, measured on 14 AI tracks)
 
 - **No more "glassy" top end.** 3.1 added +1.5…2 dB of "air" and up to +1.7 dB of brilliance to every track. 3.2 keeps the top end close to the original: cymbals, hi-hats and "s" sounds stop stinging.
-- **"Metallic" AI resonances removed — only where they occur.** The new Auto Antidote v2 finds resonant colouring that persists through the track and cuts it only in the passages where it is present. It never touches musical notes (the 3.1 detector could cut a note by 8–10 dB).
+- **"Metallic" AI resonances removed — only where they occur.** The new Auto Antidote v2 finds resonant colouring that persists through the track and cuts it only in the passages where it is present. It never touches musical notes (the 3.1 detector could cut a note by 8–10 dB). Works in both modes: PHARMAKON 1 (Auto) and PHARMAKON 2 (Studio Pro Rack).
 - **Cleaner dense passages.** Saturation distortion on music drops from −30…−38 dB (it used to depend on how loud the source was rendered) to −44 dB on every track.
 - **More natural dynamics.** Crest factor +1.3 dB on average: kicks and plucked strings breathe more.
 - Loudness, the True-Peak ceiling, mono low end and Sub-Sync are unchanged.

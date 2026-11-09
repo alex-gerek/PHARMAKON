@@ -1799,9 +1799,11 @@ def process_audio_array(audio, sr, params=None):
     sound_profile, profile = resolve_sound_profile(params)
     antidote_v2 = bool(profile['antidote_v2'])
     v2_resonances, v2_applied, v2_timeline = [], [], None
-    if mode == 'pharmakon1' and antidote_v2:
-        # v2: matched static correction of persistent colouring (2-9 kHz); the dynamic
-        # de-harsher keeps its preset frequency for transient harshness.
+    if antidote_v2:
+        # v2 runs in BOTH workflow modes: it is a defect remover (persistent resonant
+        # colouring, 2-9 kHz, only where present, never notes), not a tonal control, so it
+        # does not conflict with the manual Pro Rack knobs. The dynamic de-harsher keeps the
+        # user's / preset frequency for transient harshness.
         v2_det = detect_resonances_v2(audio, sr)
         v2_resonances = v2_det["resonances"]
         v2_timeline = ({"seg_starts": v2_det["_seg_starts"], "seg_n": v2_det["_seg_n"]}

@@ -70,3 +70,16 @@ def test_local_correction_only_where_resonance_present():
     assert abs(d_edge_loc) < 0.5          # local: clean region untouched
     assert d_edge_glob < -1.0             # global: clean region would be cut (band-average)
     assert d_mid_loc < 2.5                # resonance still removed where present
+
+
+def test_antidote_v2_runs_in_both_workflow_modes():
+    clean = VR.synth_music(2, seconds=16.0)
+    f0, q = 4500.0, 10.0
+    x = VR.inject(clean, SR, f0, 6.0, q)
+    for mode in ("pharmakon1", "pharmakon2"):
+        _, m = _chain(x, mode=mode)
+        assert m["sound_profile"] == "Clean Chain 3.2"
+        assert any(abs(c["hz"] - f0) <= 0.03 * f0 for c in m["antidote_v2_corrections"]), mode
+    # Classic 3.1 in Pro Rack mode keeps the old behaviour: no automatic detection at all
+    _, m = _chain(x, mode="pharmakon2", classic_31=True)
+    assert "antidote_v2_corrections" not in m and "detected_resonance_hz" not in m

@@ -319,3 +319,11 @@ Any parameter given explicitly overrides the profile. `process_audio_array` and 
 **Docs.** README (EN) and `articles_ru/README_RU.md` have a new section "Clean Chain — the default sound profile": goal (no fatigue from measurable defects, taste kept), the defects-vs-taste rule (Pareto), measured comparison on 14 AI tracks, the Classic switch. Wording deliberately makes no medical claims.
 
 **Not done (release process, owner decision):** `VERSION.json`, the README title ("PHARMAKON 3.0"), auto-updater release metadata and the portable build still say 3.0/3.1; the profile is labelled "3.2". Bumping the version and building/publishing a release is a separate step.
+
+## 20. Antidote v2 runs in both workflow modes
+
+In 3.1 the automatic resonance detection ran only in `pharmakon1` (Auto Antidote), because in `pharmakon2` (Studio Pro Rack) the user sets the de-harsh frequency manually. Antidote v2 is not a tonal control but a defect remover (persistent resonant colouring, applied only where present, never on notes), so it now runs in **both** modes whenever the profile enables it. The manual de-harsh knobs in Pro Rack keep working on top of it. Classic 3.1 is unchanged: no automatic detection in `pharmakon2`, v1 detection in `pharmakon1`.
+
+GUI note: in `pharmakon1` the whole Pro Rack section (including the Sound Profile and Match Input Loudness strips) is hidden; the request still carries `classic_31: false`, so the Auto mode always uses the full Clean Chain.
+
+Test: `tests/test_antidote_v2.py::test_antidote_v2_runs_in_both_workflow_modes`.
