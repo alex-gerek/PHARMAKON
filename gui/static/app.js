@@ -98,6 +98,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   // Start 60 FPS Dual Render Loop immediately
   requestAnimationFrame(renderLoop);
+  setReportButtonState(lastResult && lastMetrics ? 'ready' : 'none');
 
   // Initialize curated bundled demos and auto-run first demo
   await initBundledDemos();
@@ -1565,6 +1566,7 @@ async function runSplitAndStemMaster() {
     classic_31: classicSound
   };
 
+  setReportButtonState('busy');
   try {
     const res = await fetch('/api/split-and-master', {
       method: 'POST',
@@ -1612,6 +1614,7 @@ async function runSplitAndStemMaster() {
     updateStatus(`System Error: ${err.message}`);
   } finally {
     clearInterval(splitTimer);
+    setReportButtonState(lastResult && lastMetrics ? 'ready' : 'none');
   }
 }
 
@@ -1661,6 +1664,7 @@ async function runPharmakonProcess(isInitial = false) {
     classic_31: classicSound
   };
 
+  setReportButtonState('busy');
   try {
     const startTime = performance.now();
     const res = await fetch('/api/process', {
@@ -1718,6 +1722,7 @@ async function runPharmakonProcess(isInitial = false) {
     updateStatus(`Network/Server error: ${err.message}`);
   } finally {
     clearInterval(procTimer);
+    setReportButtonState(lastResult && lastMetrics ? 'ready' : 'none');
   }
 }
 
@@ -2787,9 +2792,23 @@ function setupKeyboardShortcuts() {
 // ==========================================================================
 // MASTERING REPORT & DIAGNOSTIC CERTIFICATE MODAL
 // ==========================================================================
+// Mastering Report button state: 'none' (no master yet), 'busy' (processing), 'ready'
+function setReportButtonState(state) {
+  const b = document.getElementById('btnMasteringReport');
+  if (!b) return;
+  b.dataset.state = state;
+  b.classList.toggle('btn-report-waiting', state !== 'ready');
+  b.textContent = state === 'busy' ? '⏳ REPORT: PROCESSING…'
+    : (state === 'none' ? '📜 MASTERING REPORT (process a track first)' : '📜 MASTERING REPORT');
+}
+
 function openMasteringReportModal() {
   if (!lastResult || !lastMetrics) {
-    updateStatus("Notice: No audio master rendered yet. Please click 'COMMENCE RE-MASTERING' first!");
+    const b = document.getElementById('btnMasteringReport');
+    const busy = b && b.dataset.state === 'busy';
+    updateStatus(busy ? 'Mastering in progress - the report opens as soon as processing finishes.'
+                      : 'No master rendered yet - process a track first, then open the report.');
+    if (b) { b.classList.remove('btn-report-nudge'); void b.offsetWidth; b.classList.add('btn-report-nudge'); }
     return;
   }
 
