@@ -406,6 +406,25 @@
             <span id="matchLoudnessBadge" class="output-status-badge badge-off">FULL LOUDNESS</span>
           </div>
         </div>
+
+        <!-- SOUND PROFILE STRIP (CLEAN CHAIN 3.2 vs CLASSIC 3.1) -->
+        <div class="output-level-strip">
+          <div class="output-strip-brand">
+            <span class="ribbon-led-dot glow-emerald" id="soundProfileLedDot"></span>
+            <div class="output-strip-labels">
+              <span class="output-strip-title">SOUND PROFILE // CLEAN CHAIN</span>
+              <span class="output-strip-desc" id="soundProfileDesc">Removes measurable listening-fatigue defects (AI resonances, intermodulation, aliasing, added harshness) &bull; keeps the original tonal character</span>
+            </div>
+          </div>
+
+          <div class="output-strip-controls">
+            <div class="ceiling-selector output-toggle-group">
+              <button type="button" class="ceiling-btn active" id="btnSoundClean" onclick="setClassicSound(false)">CLEAN 3.2</button>
+              <button type="button" class="ceiling-btn" id="btnSoundClassic" onclick="setClassicSound(true)">CLASSIC 3.1</button>
+            </div>
+            <span id="soundProfileBadge" class="output-status-badge badge-active">CLEAN CHAIN</span>
+          </div>
+        </div>
       </section>
 
       <!-- BIG ACTION BUTTONS DOCK (STEREO MASTER vs SPLIT & STEM MASTER) -->

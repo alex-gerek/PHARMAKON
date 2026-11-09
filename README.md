@@ -80,6 +80,32 @@ Fusing **Abbey Road 1974** analog tape warmth with **Blade Runner 2049** telemet
 
 ---
 
+## 🌿 Clean Chain — the default sound profile (PHARMAKON 3.2)
+
+**Goal: music you can listen to for hours without fatigue.** PHARMAKON removes the *measurable* defects that make long listening tiring, and leaves matters of taste — tonal balance, character, the author's intent — as close to the original as possible.
+
+We do not claim to measure how tired a particular person gets: thresholds differ from listener to listener. Instead every processing decision follows one rule that holds for **any** listener:
+
+- **Defects** — things that were never part of the music: AI "metallic" resonances, intermodulation distortion, digital aliasing, clicks. PHARMAKON must reduce them and must never increase any of them. If a version has less of every defect, it is better for every listener, whatever their personal threshold (componentwise / Pareto dominance).
+- **Taste** — brightness, tonal balance, density. These belong to the author, so PHARMAKON keeps them within a small tolerance of the original instead of imposing its own "sound".
+
+What the Clean Chain changes compared with Classic 3.1, measured on 14 AI tracks of different genres (techno, trance, pop, acoustic guitar, classical), all loudness-matched:
+
+| | Classic 3.1 | Clean Chain 3.2 |
+|---|---|---|
+| Persistent AI resonances ("metallic" colouring) | left in place; old detector cut **musical notes** by 8–10 dB | removed only where they occur; notes untouched (0/12 false detections) |
+| Added sharpness vs the original | +0.04…+0.08 acum on every track | ≈ 0 (−0.01…+0.01) |
+| Added "air" 10–20 kHz / brilliance 5–10 kHz | +1.5…+2.0 dB / +0.3…+1.7 dB | +0.1…+0.6 dB / −0.3…+0.5 dB |
+| Saturation distortion on music | −30…−38 dB, depending on how hot the source was rendered | −44 dB on every track (calibrated operating level) |
+| Chain intermodulation (SMPTE test) | −24 dB | −33 dB |
+| Dynamics (crest factor) | 11.5 dB | 12.8 dB |
+
+Loudness, the True-Peak ceiling, mono low end and Sub-Sync are unchanged.
+
+**Classic 3.1 switch.** The previous processing remains available bit-for-bit (`SOUND PROFILE → CLASSIC 3.1` in the console, or `classic_31: true` in the parameters). It is brighter and its saturation depends on the source level. Full engineering evidence: `DEV_NOTE_MATH_AUDIT_FIXES.md` (sections 14–19) and `bench/`.
+
+---
+
 ## ⚡ What's New in PHARMAKON 3.0 (Comparison with v2.0)
 
 Compared to PHARMAKON 2.0, version 3.0 represents a major evolutionary leap from static single-track heuristics to **dynamic musical intelligence and transient-guarded mastering**:

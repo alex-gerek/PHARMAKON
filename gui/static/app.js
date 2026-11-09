@@ -1561,7 +1561,8 @@ async function runSplitAndStemMaster() {
     sub_sync_limiter_penalty: parseFloat(document.getElementById('param_sub_sync_limiter_penalty')?.value || 1.20),
     sub_sync_min_gain_db: parseFloat(document.getElementById('param_sub_sync_min_gain_db')?.value || 0.15),
     sub_sync_max_lag_ms: parseFloat(document.getElementById('param_sub_sync_max_lag_ms')?.value || 3.0),
-    match_input_loudness: matchInputLoudness
+    match_input_loudness: matchInputLoudness,
+    classic_31: classicSound
   };
 
   try {
@@ -1656,7 +1657,8 @@ async function runPharmakonProcess(isInitial = false) {
     sub_sync_limiter_penalty: parseFloat(document.getElementById('param_sub_sync_limiter_penalty')?.value || 1.20),
     sub_sync_min_gain_db: parseFloat(document.getElementById('param_sub_sync_min_gain_db')?.value || 0.15),
     sub_sync_max_lag_ms: parseFloat(document.getElementById('param_sub_sync_max_lag_ms')?.value || 3.0),
-    match_input_loudness: matchInputLoudness
+    match_input_loudness: matchInputLoudness,
+    classic_31: classicSound
   };
 
   try {
@@ -2046,6 +2048,32 @@ function setMatchLoudness(enable) {
 
 function toggleMatchLoudness() {
   setMatchLoudness(!matchInputLoudness);
+}
+
+// Sound profile: Clean Chain 3.2 (default) vs Classic 3.1 (exact previous processing)
+let classicSound = false;
+
+function setClassicSound(enable) {
+  classicSound = !!enable;
+  playHardwareClick('toggle');
+  const btnClean = document.getElementById('btnSoundClean');
+  const btnClassic = document.getElementById('btnSoundClassic');
+  const ledDot = document.getElementById('soundProfileLedDot');
+  const badge = document.getElementById('soundProfileBadge');
+  const desc = document.getElementById('soundProfileDesc');
+  if (btnClean) btnClean.classList.toggle('active', !classicSound);
+  if (btnClassic) btnClassic.classList.toggle('active', classicSound);
+  if (ledDot) ledDot.className = 'ribbon-led-dot ' + (classicSound ? 'dot-off' : 'glow-emerald');
+  if (badge) {
+    badge.className = 'output-status-badge ' + (classicSound ? 'badge-off' : 'badge-active');
+    badge.innerText = classicSound ? 'CLASSIC 3.1' : 'CLEAN CHAIN';
+  }
+  if (desc) {
+    desc.innerText = classicSound
+      ? 'Classic 3.1 • exact previous PHARMAKON processing (brighter, source-dependent saturation)'
+      : 'Removes measurable listening-fatigue defects (AI resonances, intermodulation, aliasing, added harshness) • keeps the original tonal character';
+  }
+  updateStatus(`Sound Profile: ${classicSound ? 'CLASSIC 3.1 (previous processing)' : 'CLEAN CHAIN 3.2 (default)'}`);
 }
 
 function toggleSubSyncDrawer() {

@@ -28,7 +28,7 @@ def test_antidote_v2_removes_injected_resonance():
     x = VR.inject(clean, SR, f0, 6.0, q)
     ref, m_ref = _chain(clean, antidote_v2=True)
     assert not m_ref["antidote_v2_corrections"]  # nothing to correct on clean music
-    y1, _ = _chain(x)                       # v1 (default)
+    y1, _ = _chain(x, classic_31=True)      # v1 (Classic 3.1 profile)
     y2, m2 = _chain(x, antidote_v2=True)
     res_v1 = _band_db(y1, f0, q) - _band_db(ref, f0, q)
     res_v2 = _band_db(y2, f0, q) - _band_db(ref, f0, q)

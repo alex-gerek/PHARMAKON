@@ -38,10 +38,29 @@ def test_calibration_makes_distortion_level_independent():
 
 def test_pipeline_param_off_is_bit_identical_and_on_changes_audio():
     x = VR.synth_music(2, seconds=6.0).astype(np.float32)
-    a, _ = re_eng.process_audio_array(x, SR, dict(re_eng.DEFAULT_PARAMS))
-    b, _ = re_eng.process_audio_array(x, SR, {**re_eng.DEFAULT_PARAMS, "tape_ref_peak_dbfs": None})
-    c, _ = re_eng.process_audio_array(x, SR, {**re_eng.DEFAULT_PARAMS, "tape_ref_peak_dbfs": -12.0})
+    classic = {**re_eng.DEFAULT_PARAMS, "classic_31": True}
+    a, _ = re_eng.process_audio_array(x, SR, classic)
+    b, _ = re_eng.process_audio_array(x, SR, {**classic, "tape_ref_peak_dbfs": None})
+    c, _ = re_eng.process_audio_array(x, SR, {**classic, "tape_ref_peak_dbfs": -12.0})
     assert np.array_equal(a, b)
     assert not np.array_equal(a, c)
     # output level is restored after the stage (gain applied before, removed after)
     assert abs(20 * np.log10(np.sqrt(np.mean(c ** 2)) / np.sqrt(np.mean(a ** 2)))) < 1.0
+
+
+def test_sound_profile_defaults_and_override():
+    name, prof = re_eng.resolve_sound_profile({})
+    assert name == "Clean Chain 3.2" and prof == re_eng.CLEAN_CHAIN_DEFAULTS
+    name, prof = re_eng.resolve_sound_profile({"classic_31": True})
+    assert name == "Classic 3.1" and prof == re_eng.CLASSIC_31_DEFAULTS
+    # explicit parameters always win over the profile
+    _, prof = re_eng.resolve_sound_profile({"classic_31": True, "tape_deemphasis": True})
+    assert prof["tape_deemphasis"] is True and prof["antidote_v2"] is False
+
+
+def test_default_equals_explicit_clean_chain():
+    x = VR.synth_music(5, seconds=6.0).astype(np.float32)
+    d, m = re_eng.process_audio_array(x, SR, dict(re_eng.DEFAULT_PARAMS))
+    e, _ = re_eng.process_audio_array(x, SR, {**re_eng.DEFAULT_PARAMS, **re_eng.CLEAN_CHAIN_DEFAULTS})
+    assert np.array_equal(d, e)
+    assert m["sound_profile"] == "Clean Chain 3.2"

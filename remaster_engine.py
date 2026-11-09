@@ -1625,6 +1625,41 @@ EXPERIMENTAL_SUB_SYNC_DEFAULTS = {
 
 DEFAULT_PARAMS.update(EXPERIMENTAL_SUB_SYNC_DEFAULTS)
 
+# -----------------------------------------------------------------------------
+# SOUND PROFILE: "Clean Chain" (default since 3.2) vs "Classic 3.1"
+# -----------------------------------------------------------------------------
+# Goal of the Clean Chain: remove MEASURABLE defects that make long listening tiring
+# (AI resonances, intermodulation, aliasing, added sharpness, squashed dynamics) while
+# keeping matters of taste (tonal balance, character) close to the original.
+# Evidence: DEV_NOTE_MATH_AUDIT_FIXES.md sections 14-18 and bench/results/.
+# 'classic_31': True restores the exact PHARMAKON 3.1 processing (bit-identical).
+# Any parameter given explicitly always overrides the profile.
+
+CLEAN_CHAIN_DEFAULTS = {
+    'antidote_v2': True,          # persistent-resonance detector + time-local matched cut
+    'antidote_v2_local': True,
+    'deharsh_calibrated': True,   # no hidden ~5.5 dB static cut at the de-harsh frequency
+    'tape_deemphasis': True,      # flat linear response of the tape stage
+    'tape_ref_peak_dbfs': -12.0,  # tape operating level calibrated by robust peak
+}
+CLASSIC_31_DEFAULTS = {
+    'antidote_v2': False,
+    'antidote_v2_local': True,
+    'deharsh_calibrated': False,
+    'tape_deemphasis': False,
+    'tape_ref_peak_dbfs': None,
+}
+
+
+def resolve_sound_profile(params=None):
+    """Returns (profile_name, settings) for the Clean Chain / Classic 3.1 switch."""
+    p = params or {}
+    classic = bool(p.get('classic_31', False))
+    base = CLASSIC_31_DEFAULTS if classic else CLEAN_CHAIN_DEFAULTS
+    settings = {k: (p[k] if k in p else v) for k, v in base.items()}
+    return ('Classic 3.1' if classic else 'Clean Chain 3.2'), settings
+
+
 def resolve_sub_sync_config(params=None):
     """
     Validates and resolves Sub-Sync configuration for PHARMAKON 3.0.
@@ -1761,7 +1796,8 @@ def process_audio_array(audio, sr, params=None):
 
     # 1. AUTO SPECTRAL ANTIDOTE (Intelligent resonance scanning)
     detected_freq, detected_q, detected_prom = None, None, None
-    antidote_v2 = bool(params.get('antidote_v2', False))
+    sound_profile, profile = resolve_sound_profile(params)
+    antidote_v2 = bool(profile['antidote_v2'])
     v2_resonances, v2_applied, v2_timeline = [], [], None
     if mode == 'pharmakon1' and antidote_v2:
         # v2: matched static correction of persistent colouring (2-9 kHz); the dynamic
@@ -1769,7 +1805,7 @@ def process_audio_array(audio, sr, params=None):
         v2_det = detect_resonances_v2(audio, sr)
         v2_resonances = v2_det["resonances"]
         v2_timeline = ({"seg_starts": v2_det["_seg_starts"], "seg_n": v2_det["_seg_n"]}
-                       if bool(params.get('antidote_v2_local', True)) else None)
+                       if bool(profile['antidote_v2_local']) else None)
         if v2_resonances:
             detected_freq = v2_resonances[0]["hz"]
             detected_prom = v2_resonances[0]["prominence_db"]
@@ -1806,7 +1842,7 @@ def process_audio_array(audio, sr, params=None):
     # 5. Anti-AI De-Harshing (Dynamic Multi-band Ducker vs Static Notch)
     if dynamic_mode:
         high_deharsh = dynamic_deharsh(high_band, sr, center_freq=deharsh_freq, q=deharsh_q, depth=deharsh_depth,
-                                       calibrated=bool(params.get('deharsh_calibrated', False)))
+                                       calibrated=bool(profile['deharsh_calibrated']))
     else:
         f_harsh = min(deharsh_freq, nyq - 50.0) / nyq
         b_notch, a_notch = signal.iirnotch(f_harsh, deharsh_q)
@@ -1832,7 +1868,7 @@ def process_audio_array(audio, sr, params=None):
     # track-to-track spread of distortion (7.8 -> 11 dB) because high-crest material
     # (acoustic guitar) gets its peaks pushed further into saturation.
     tape_ref_lufs = params.get('tape_ref_lufs', None)
-    tape_ref_peak = params.get('tape_ref_peak_dbfs', None)
+    tape_ref_peak = profile['tape_ref_peak_dbfs']
     tape_stage_gain_db = 0.0
     if tape_ref_peak is not None:
         p999 = float(np.percentile(np.max(np.abs(full_mix), axis=1), 99.9))
@@ -1844,7 +1880,7 @@ def process_audio_array(audio, sr, params=None):
             tape_stage_gain_db = float(np.clip(float(tape_ref_lufs) - lufs_in, -24.0, 12.0))
     g_in = 10.0 ** (tape_stage_gain_db / 20.0)
     full_mix = analog_tape_saturation(full_mix * g_in, sr, drive=tape_drive, ceiling=tape_ceiling, bias=0.035,
-                                      oversample=4, deemphasis=bool(params.get('tape_deemphasis', False))) / g_in
+                                      oversample=4, deemphasis=bool(profile['tape_deemphasis'])) / g_in
 
     # 9. Psychoacoustic Harmonic Air Exciter (>16 kHz silk synthesis)
     air_drive = float(params.get('air_exciter', 0.12))
@@ -1894,6 +1930,8 @@ def process_audio_array(audio, sr, params=None):
     if detected_freq:
         metrics['detected_resonance_hz'] = detected_freq
         metrics['detected_prominence_db'] = detected_prom
+    metrics['sound_profile'] = sound_profile
+    metrics['sound_profile_settings'] = profile
     if antidote_v2:
         metrics['antidote_version'] = 2
         metrics['antidote_v2_resonances'] = [{k: v for k, v in r.items() if not k.startswith('_')}
@@ -3403,7 +3441,7 @@ def process_stems_folder(target_folder, params=None, open_folder=True):
     print(f"[3/4] VOCALS: Dynamic De-Harshing ({deharsh_f}Hz), Soft Saturation...")
     vocals_clean = butter_highpass(vocals, 85, sr, order=3)
     vocals_deharsh = dynamic_deharsh(vocals_clean, sr, center_freq=deharsh_f, q=deharsh_q, depth=deharsh_depth,
-                                     calibrated=bool(params.get('deharsh_calibrated', False)))
+                                     calibrated=bool(resolve_sound_profile(params)[1]['deharsh_calibrated']))
     vocals_proc = saturate_vocal_oversampled(vocals_deharsh, sr, drive=1.08, ceiling=0.96, oversample=4)
 
     # --- OTHER / SYNTHS ---
@@ -3474,6 +3512,7 @@ def process_stems_folder(target_folder, params=None, open_folder=True):
         'raw_sum': verify_wav_export(raw_sum_path, expected_subtype=export_subtype, expected_sr=sr),
     }
     metrics = calc_audio_metrics(raw_sum, master_mix, sr, params)
+    metrics['sound_profile'] = resolve_sound_profile(params)[0]
     metrics['sub_sync_summary'] = sub_sync_summary_result
     metrics['sub_sync_mode'] = sub_sync_mode_result
     metrics['sub_sync_corrected_events'] = sub_sync_corrected_events_result

@@ -21,6 +21,7 @@
 | 12 | Auto Antidote | v1 cuts notes by 8–10 dB and leaves real resonances | v2 behind flag `antidote_v2` (§15), default off | Only when enabled |
 | 13 | Tape stage HF tilt | Pre-emphasis never de-emphasized → +1.3…+1.5 dB above 3.5 kHz, chain sharper | Matched de-emphasis behind flag `tape_deemphasis` (§16), default off | Only when enabled |
 | 14 | Tape operating level | Distortion set by how hot the source was rendered (−30…−38 dB, guitar worst) | Peak-calibrated operating level `tape_ref_peak_dbfs` (§18), default off | Only when enabled |
+| 15 | Default sound | — | **Clean Chain 3.2 is the default**; `classic_31` restores 3.1 bit-exactly (§19) | **Yes — default sound changes** |
 
 ---
 
@@ -295,3 +296,26 @@ At −12 dBFS **every** track has less distortion than the best track today (wor
 **Tests:** `tests/test_tape_calibration.py` (uncalibrated: +9 dB input → > 8 dB more distortion; calibrated: < 0.5 dB difference; parameter off → bit-identical; on → output level restored within 1 dB).
 
 **Proposed default chain (owner decision):** `antidote_v2`, `deharsh_calibrated`, `tape_deemphasis`, `tape_ref_peak_dbfs = -12`.
+
+## 19. Clean Chain 3.2 is the default sound; Classic 3.1 switch
+
+**Owner decision (2026-11-09):** enable the new chain by default and keep a switch back to the previous sound.
+
+**Engine.** `resolve_sound_profile(params)` (placed before `resolve_sub_sync_config`, so `apply_tape_warmth_v2` is still on line 130) returns `('Clean Chain 3.2', CLEAN_CHAIN_DEFAULTS)` or, with `classic_31: True`, `('Classic 3.1', CLASSIC_31_DEFAULTS)`:
+
+| Setting | Clean Chain 3.2 | Classic 3.1 |
+|---|---|---|
+| `antidote_v2` / `antidote_v2_local` | True / True | False |
+| `deharsh_calibrated` | True | False |
+| `tape_deemphasis` | True | False |
+| `tape_ref_peak_dbfs` | −12.0 | None |
+
+Any parameter given explicitly overrides the profile. `process_audio_array` and the stems vocal de-harsher read the profile instead of raw `params.get(...)`. Metrics: `sound_profile`, `sound_profile_settings` (full mix), `sound_profile` (stems). Presets (`suno`, `udio`, `club`, `audiophile`) get the Clean Chain too unless `classic_31` is set.
+
+**GUI.** New strip under "Match Input Loudness": `SOUND PROFILE // CLEAN CHAIN` with `CLEAN 3.2` / `CLASSIC 3.1` buttons (`setClassicSound`, state `classicSound`), sent as `classic_31` with both processing requests. Server passes params through unchanged. Checked in a browser: toggle switches state, badge, LED and description; no console errors.
+
+**Tests.** The Stage-1 SHA-256 regression tests (`test_dsp_bit_identical_regression`, `test_diagnostic_logging_emits_telemetry_without_changing_audio`) now run with `classic_31: True`: they guarantee that **Classic 3.1 is bit-identical to the 3.1 baseline** — the hashes in `baseline.json` are unchanged. New: `test_sound_profile_defaults_and_override`, `test_default_equals_explicit_clean_chain`. Tests that compared against "the default = v1" now ask for `classic_31` explicitly. Bench variants: `CLASSIC_31` vs `CLEAN_32_DEFAULT`.
+
+**Docs.** README (EN) and `articles_ru/README_RU.md` have a new section "Clean Chain — the default sound profile": goal (no fatigue from measurable defects, taste kept), the defects-vs-taste rule (Pareto), measured comparison on 14 AI tracks, the Classic switch. Wording deliberately makes no medical claims.
+
+**Not done (release process, owner decision):** `VERSION.json`, the README title ("PHARMAKON 3.0"), auto-updater release metadata and the portable build still say 3.0/3.1; the profile is labelled "3.2". Bumping the version and building/publishing a release is a separate step.
