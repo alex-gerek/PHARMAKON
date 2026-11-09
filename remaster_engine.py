@@ -507,13 +507,16 @@ def detect_resonances_v2(audio, sr, f_lo=2000.0, f_hi=9000.0):
             "prominence_db": round(float(height[i]), 2),
             "width_oct": round(float(width[i]), 3),
             "q_est": round(_rv2_q_from_width(width[i]), 1) if width[i] > 0 else None,
-            "score": round(float(score[i]), 3)} for i in cand]
+            "score": round(float(score[i]), 3),
+            # per active segment: is this resonance present there (drives local correction)
+            "_presence": [bool(v) for v in P[:, i]]} for i in cand]
     res.sort(key=lambda d: -d["score"])
     lpers = L.mean(axis=0)
     lc, _ = signal.find_peaks(np.where(band & (lpers >= 0.8), lpers, 0.0), distance=8)
     tonal = sorted([{"hz": round(float(grid[i]), 1), "persistence": round(float(lpers[i]), 3)} for i in lc],
                    key=lambda d: -d["persistence"])[:10]
-    return {"resonances": res, "tonal_lines": tonal, "segments": int(len(P))}
+    return {"resonances": res, "tonal_lines": tonal, "segments": int(len(P)),
+            "_seg_starts": [int(s) for s in active], "_seg_n": int(seg_n)}
 
 
 def _peaking_sos(f0, gain_db, q, sr):
@@ -526,13 +529,36 @@ def _peaking_sos(f0, gain_db, q, sr):
     return np.concatenate([b / a[0], a / a[0]])[np.newaxis, :]
 
 
+def _presence_weight(n_samples, sr, seg_starts, seg_n, presence, fade_s=0.5):
+    """Per-sample weight 0..1: 1 inside segments where the resonance is present, raised-cosine
+    smoothed over fade_s; 0 elsewhere (audio there stays bit-exact)."""
+    w = np.zeros(n_samples)
+    for st, on in zip(seg_starts, presence):
+        if on:
+            w[st:st + seg_n] = 1.0
+    k = max(3, int(fade_s * sr) | 1)
+    win = np.hanning(k)
+    w = signal.fftconvolve(w, win / win.sum(), mode="same")
+    w = np.clip(w, 0.0, 1.0)
+    w[w < 1e-4] = 0.0
+    w[w > 1.0 - 1e-4] = 1.0
+    return w
+
+
 def apply_resonance_correction(audio, sr, resonances, depth=1.0, max_cut_db=8.0, max_bands=3,
-                               q_min=2.0, q_max=16.0):
+                               q_min=2.0, q_max=16.0, timeline=None):
     """
-    Matched static correction for PERSISTENT colouring: a zero-phase peaking cut at each
-    detected resonance with gain = -depth * measured height (capped), Q from the measured
-    width. Zero-phase via sosfiltfilt with half the gain per pass (magnitudes multiply,
-    so the total cut equals the target). Returns (audio, applied_bands).
+    Matched correction of resonant colouring: a zero-phase peaking cut at each detected
+    resonance with gain = -depth * measured height (capped), Q from the measured width.
+    Zero-phase via sosfiltfilt with half the gain per pass (magnitudes multiply, so the
+    total cut equals the target).
+
+    timeline = {'seg_starts': [...], 'seg_n': n} (from detect_resonances_v2) makes the
+    correction LOCAL in time: y = x + w(t) * (cut(x) - x), w = 1 only in segments where
+    that resonance was detected (its '_presence'), 0.5 s raised-cosine transitions.
+    Because cut(x) is zero-phase, the blend is a smooth time-varying cut depth (no comb
+    filtering), and audio where w = 0 is untouched. Without timeline: static, whole track.
+    Returns (audio, applied_bands).
     """
     out = np.asarray(audio, dtype=np.float64)
     applied = []
@@ -542,8 +568,16 @@ def apply_resonance_correction(audio, sr, resonances, depth=1.0, max_cut_db=8.0,
             continue
         q = float(np.clip(r.get("q_est") or 6.0, q_min, q_max))
         f0 = float(min(r["hz"], 0.45 * sr))
-        out = signal.sosfiltfilt(_peaking_sos(f0, -cut / 2.0, q, sr), out, axis=0)
-        applied.append({"hz": round(f0, 1), "cut_db": round(cut, 2), "q": round(q, 2)})
+        cut_sig = signal.sosfiltfilt(_peaking_sos(f0, -cut / 2.0, q, sr), out, axis=0)
+        coverage = 1.0
+        if timeline is not None and r.get("_presence") is not None:
+            w = _presence_weight(len(out), sr, timeline["seg_starts"], timeline["seg_n"], r["_presence"])
+            out = out + w[:, None] * (cut_sig - out) if out.ndim == 2 else out + w * (cut_sig - out)
+            coverage = float(np.mean(w))
+        else:
+            out = cut_sig
+        applied.append({"hz": round(f0, 1), "cut_db": round(cut, 2), "q": round(q, 2),
+                        "time_coverage": round(coverage, 3)})
     return out.astype(np.float32), applied
 
 # -----------------------------------------------------------------------------
@@ -1728,11 +1762,14 @@ def process_audio_array(audio, sr, params=None):
     # 1. AUTO SPECTRAL ANTIDOTE (Intelligent resonance scanning)
     detected_freq, detected_q, detected_prom = None, None, None
     antidote_v2 = bool(params.get('antidote_v2', False))
-    v2_resonances, v2_applied = [], []
+    v2_resonances, v2_applied, v2_timeline = [], [], None
     if mode == 'pharmakon1' and antidote_v2:
         # v2: matched static correction of persistent colouring (2-9 kHz); the dynamic
         # de-harsher keeps its preset frequency for transient harshness.
-        v2_resonances = detect_resonances_v2(audio, sr)["resonances"]
+        v2_det = detect_resonances_v2(audio, sr)
+        v2_resonances = v2_det["resonances"]
+        v2_timeline = ({"seg_starts": v2_det["_seg_starts"], "seg_n": v2_det["_seg_n"]}
+                       if bool(params.get('antidote_v2_local', True)) else None)
         if v2_resonances:
             detected_freq = v2_resonances[0]["hz"]
             detected_prom = v2_resonances[0]["prominence_db"]
@@ -1763,6 +1800,7 @@ def process_audio_array(audio, sr, params=None):
             high_band, sr, v2_resonances,
             depth=float(params.get('antidote_v2_depth', 1.0)),
             max_cut_db=float(params.get('antidote_v2_max_cut_db', 8.0)),
+            timeline=v2_timeline,
         )
 
     # 5. Anti-AI De-Harshing (Dynamic Multi-band Ducker vs Static Notch)
@@ -1838,7 +1876,8 @@ def process_audio_array(audio, sr, params=None):
         metrics['detected_prominence_db'] = detected_prom
     if antidote_v2:
         metrics['antidote_version'] = 2
-        metrics['antidote_v2_resonances'] = v2_resonances[:5]
+        metrics['antidote_v2_resonances'] = [{k: v for k, v in r.items() if not k.startswith('_')}
+                                             for r in v2_resonances[:5]]
         metrics['antidote_v2_corrections'] = v2_applied
 
     logger.info(

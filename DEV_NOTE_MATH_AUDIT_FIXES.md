@@ -250,3 +250,21 @@ Pass rate on DRAFT targets: V2 + cal. + de-emphasis passes resonance, presence, 
 **Decision needed (owner):** default chain. Proposed: `antidote_v2 + deharsh_calibrated + tape_deemphasis` — every stage mathematically correct, no stage creating colouring another one fights, sharpness neutral instead of +0.06. If a net "softer than original" result is wanted, it should be an explicit, documented tilt / presence parameter measured by the bench, not the legacy de-harsh bug. Targets "≤ 0" for sharpness and presence flux need a tolerance agreed against measurement repeatability.
 
 **Tests:** `tests/test_tape_deemphasis.py` (flat response with flag within 0.1 dB, legacy tilt > 1 dB documented, H2/H3 within 1 dB).
+
+## 17. Auto Antidote v2 is local in time — `antidote_v2_local` (default **True** inside v2)
+
+**Why.** Processing should act only where a defect is present. The v2 detector already knows, per 2 s segment (hop 1 s), whether each resonance is present (`_presence`), so a static whole-track cut also attenuated healthy audio in segments without the resonance.
+
+**How.** `detect_resonances_v2` now also returns `_seg_starts`, `_seg_n` and, per resonance, `_presence` (private keys, stripped from report metrics). `apply_resonance_correction(..., timeline=...)` computes the zero-phase cut `cut(x)` and blends `y = x + w(t)·(cut(x) − x)`, where `w = 1` in segments with the resonance, 0 elsewhere, 0.5 s raised-cosine transitions. Because `cut(x)` is zero-phase, the blend is a smooth time-varying cut depth (no comb filtering); where `w = 0` the audio is untouched. Each correction reports `time_coverage`. `antidote_v2_local=False` restores the static whole-track cut.
+
+**Ground truth (6 dB / Q 10 resonance at 5.2 kHz injected into part of a synthetic song):**
+
+| Resonance present in | Residual where present (local / global) | Clean part of the song (local / global) | Coverage |
+|---|---|---|---|
+| 70 % of song | +1.15 / +1.15 dB | **−0.08** / −1.25 dB | 0.87 |
+| 100 % of song | +1.29 / +1.11 dB | — | 0.96 |
+| 50 % of song | not detected | untouched | — |
+
+**Known limitation.** Detection still requires persistence ≥ 0.6 over the whole track, so a resonance present in < 60 % of it (e.g. only in the chorus) is not detected. Regional detection (e.g. ≥ N consecutive segments) is the next improvement and must be re-validated for false positives on clean music (currently 0/12).
+
+**Tests:** `tests/test_antidote_v2.py::test_local_correction_only_where_resonance_present` (coverage 0.5–0.95; clean region within ±0.5 dB locally vs < −1 dB globally; resonance region residual < 2.5 dB). The correction-filter test now also checks `time_coverage`.
