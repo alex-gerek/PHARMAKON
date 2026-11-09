@@ -19,6 +19,7 @@
 | 10 | Stems: bass / drum `soft_clip` | Saturation at 1X → aliasing -31 / -33 dB | Yes, 4X oversampled (§13) | Yes — removes aliasing only (stems mode) |
 | 11 | Resonance detection | v1 (product Auto Antidote) flags notes, misses real resonances | Detector v2 (§14) | — |
 | 12 | Auto Antidote | v1 cuts notes by 8–10 dB and leaves real resonances | v2 behind flag `antidote_v2` (§15), default off | Only when enabled |
+| 13 | Tape stage HF tilt | Pre-emphasis never de-emphasized → +1.3…+1.5 dB above 3.5 kHz, chain sharper | Matched de-emphasis behind flag `tape_deemphasis` (§16), default off | Only when enabled |
 
 ---
 
@@ -222,3 +223,30 @@ The ~1.2 dB systematic residual: the detector's envelope smoothing underestimate
 - **Sharpness still rises on every variant** and brilliance/air stay +1.1…+1.9 dB: the remaining brightener is the tape pre-emphasis (§12). That is the next target.
 
 **Tests:** `tests/test_antidote_v2.py` (injected 6 dB resonance: v1 residual > 4 dB, v2 < 2.5 dB and corrected within ±3 %; clean music → no correction; correction filter: exact −6 dB, zero phase). Totals: see §10 / final run.
+
+## 16. Tape stage matched de-emphasis — flag `tape_deemphasis` (default **False**)
+
+**Problem.** `apply_tape_warmth_v2` adds `0.2 × HP1(3.5 kHz)` before the saturator and never removes it: small-signal response +0.74 dB @ 3.5 kHz, +1.34 @ 10 kHz, +1.46 @ 19 kHz. The bench identified it as the main reason the chain makes every track sharper (air +1.8 dB; removing the air exciter changed air by only 0.04 dB).
+
+**Fix.** New argument `deemphasis` (signature still starts on line 130). After decimation the exact inverse filter is applied: with HP = (b0 + b1 z⁻¹)/(1 + a1 z⁻¹), H = 1 + 0.2·HP and 1/H = (1 + a1 z⁻¹)/((1 + 0.2 b0) + (a1 + 0.2 b1) z⁻¹). H is minimum-phase, so the inverse is stable and cancels magnitude and phase. HF still drives the saturator harder (tape-style), but the linear response is flat. `process_audio_array` passes `params['tape_deemphasis']`.
+
+**Verified:** small-signal response −0.11…−0.13 dB from 1 kHz to 19 kHz (flat within ±0.03 dB; constant −0.13 dB is the stage's own small-signal gain); H2/H3 change ≤ 0.6 dB at 0 / −6 / −18 dBFS; THD 1 kHz −32.6 → −33.2 dB; aliasing unchanged (−61 dB). SMPTE IMD stays −24.2 dB — it comes from the drive itself, not from the tilt (open item).
+
+**Bench (6 AI tracks, `bench/results/20261109_deemph/`), median Δ vs original [range]:**
+
+| Metric | P31_DEFAULT | V2 + cal. de-harsh | **V2 + cal. de-harsh + de-emphasis** | V2 + legacy de-harsh + de-emphasis |
+|---|---|---|---|---|
+| `res_v2_max_db` (absolute) | 4.06 [0…6.53] | 0 [0…2.27] | **0 [0…2.19]** | 0 [0…2.78] |
+| Sharpness (acum) | +0.06 | +0.07 | **+0.01 [−0.01…+0.01]** | −0.01 |
+| Presence 2–5 kHz | +0.80 | +0.14 | **−0.55** | −0.74 |
+| Brilliance 5–10 kHz | +1.02 | +1.43 | **+0.20** | −0.30 |
+| Air 10–20 kHz | +1.83 | +1.83 | **+0.34** (air exciter, intended) | +0.35 |
+| Tilt (dB/oct) | +0.12 | −0.04 | −0.15 | −0.15 |
+| Presence flux | −0.10 | −0.02 | +0.12 | +0.08 |
+| PLR (absolute) | 9.40 | 9.48 | 9.50 | 9.58 |
+
+Pass rate on DRAFT targets: V2 + cal. + de-emphasis passes resonance, presence, brilliance, tilt, PLR on 6/6; sharpness 1/6 (median +0.01 acum vs the strict "≤ 0" rule) and presence flux 2/6 (+0.12 dB median). The legacy-de-harsh variant passes sharpness 6/6 only because the legacy ~5.5 dB fixed cut at 5 kHz acts as a hidden presence/brilliance EQ.
+
+**Decision needed (owner):** default chain. Proposed: `antidote_v2 + deharsh_calibrated + tape_deemphasis` — every stage mathematically correct, no stage creating colouring another one fights, sharpness neutral instead of +0.06. If a net "softer than original" result is wanted, it should be an explicit, documented tilt / presence parameter measured by the bench, not the legacy de-harsh bug. Targets "≤ 0" for sharpness and presence flux need a tolerance agreed against measurement repeatability.
+
+**Tests:** `tests/test_tape_deemphasis.py` (flat response with flag within 0.1 dB, legacy tilt > 1 dB documented, H2/H3 within 1 dB).

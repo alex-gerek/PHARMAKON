@@ -132,11 +132,15 @@ def apply_tape_warmth_v2(audio: np.ndarray,
                          drive: float = 1.05, 
                          bias: float = 0.035, 
                          ceiling: float = 0.98, 
-                         oversample: int = 4) -> np.ndarray:
+                         oversample: int = 4,
+                         deemphasis: bool = False) -> np.ndarray:
     """
     Tape-Inspired Asymmetric Saturation Processor (v2.4).
-    - 3.5 kHz HF pre-emphasis (+1.58 dB asymptotic shelf, ~+1.3 dB at 10 kHz). There is no
-      matching de-emphasis, so this is a permanent HF tilt of the stage, not a tape-style pre/de pair.
+    - 3.5 kHz HF pre-emphasis (+1.58 dB asymptotic shelf, ~+1.3 dB at 10 kHz).
+      deemphasis=False (legacy default): no de-emphasis - a permanent HF tilt of the stage.
+      deemphasis=True: the exact inverse filter is applied after saturation (tape-style
+      pre/de pair): the HF still drives the saturator harder, but the linear response of
+      the stage is flat.
     - 4X Polyphase oversampling anti-aliasing.
     - Global-asymptote scaled asymmetric tanh waveshaping. 1 kHz, drive 1.05: H2 = -38.0 dBc / H3 = -22.6 dBc
       at 0 dBFS; H2 = -52.6 dBc / H3 = -56.5 dBc at -18 dBFS (odd H3 dominates at high level,
@@ -176,6 +180,16 @@ def apply_tape_warmth_v2(audio: np.ndarray,
         pad_len = n_samples - len(audio_down)
         pad = np.zeros((pad_len, n_channels), dtype=audio_down.dtype)
         audio_down = np.vstack([audio_down, pad])
+
+    # 4b. Matched de-emphasis: exact inverse of H(z) = 1 + 0.2 * HP(z).
+    #     HP = (b0 + b1 z^-1) / (1 + a1 z^-1)  ->  1/H = (1 + a1 z^-1) / ((1 + 0.2 b0) + (a1 + 0.2 b1) z^-1)
+    #     The zero of H lies inside the unit circle (minimum phase), so the inverse is stable
+    #     and cancels both magnitude and phase of the pre-emphasis.
+    if deemphasis:
+        b0, b1, _, _, a1, _ = sos_hp[0]
+        den = np.array([1.0 + 0.2 * b0, a1 + 0.2 * b1])
+        num = np.array([1.0, a1])
+        audio_down = signal.lfilter(num / den[0], den / den[0], audio_down, axis=0)
 
     # 5. One-Pole DC Blocker (10 Hz High-Pass)
     R = 1.0 - (2.0 * np.pi * 10.0 / sr)
@@ -1771,7 +1785,8 @@ def process_audio_array(audio, sr, params=None):
     full_mix = mono_low_stereo + high_proc
 
     # 8. Analog tape saturation warmth (Oversampled Asymmetric Saturation with NAB Pre-Emphasis)
-    full_mix = analog_tape_saturation(full_mix, sr, drive=tape_drive, ceiling=tape_ceiling, bias=0.035, oversample=4)
+    full_mix = analog_tape_saturation(full_mix, sr, drive=tape_drive, ceiling=tape_ceiling, bias=0.035, oversample=4,
+                                      deemphasis=bool(params.get('tape_deemphasis', False)))
 
     # 9. Psychoacoustic Harmonic Air Exciter (>16 kHz silk synthesis)
     air_drive = float(params.get('air_exciter', 0.12))
