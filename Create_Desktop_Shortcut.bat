@@ -1,10 +1,10 @@
 @echo off
 chcp 65001 >nul
-title PHARMAKON 2.0 - Create Desktop Shortcut
+title PHARMAKON 3.0 - Create Desktop Shortcut
 cd /d "%~dp0"
 
 echo =================================================================
-echo   PHARMAKON 2.0 // DESKTOP SHORTCUT CREATOR
+echo   PHARMAKON 3.0 // DESKTOP SHORTCUT CREATOR
 echo =================================================================
 echo.
 echo Current folder: %~dp0
@@ -14,21 +14,20 @@ echo Creating shortcut on your Windows Desktop...
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "$ws = New-Object -ComObject WScript.Shell; " ^
   "$desktop = [System.Environment]::GetFolderPath('Desktop'); " ^
-  "$shortcut = $ws.CreateShortcut((Join-Path $desktop 'PHARMAKON 2.0.lnk')); " ^
+  "$shortcut = $ws.CreateShortcut((Join-Path $desktop 'PHARMAKON 3.0.lnk')); " ^
   "$currentDir = '%~dp0'.TrimEnd('\'); " ^
   "$target = Join-Path $currentDir 'Start_Pharmakon.bat'; " ^
-  "if (-not (Test-Path $target)) { $target = Join-Path $currentDir 'Pharmakon.exe' }; " ^
+  "if (-not (Test-Path $target)) { $target = Join-Path $currentDir 'Pharmakon_GUI.bat' }; " ^
   "$shortcut.TargetPath = $target; " ^
   "$shortcut.WorkingDirectory = $currentDir; " ^
-  "$shortcut.Description = 'PHARMAKON 2.0 Studio Console // Neural Audio Antidote & Stem Mastering'; " ^
+  "$shortcut.Description = 'PHARMAKON 3.0 Studio Console // Neural Audio Antidote & Track Intelligence Map'; " ^
   "$ico = Join-Path $currentDir 'pharmakon_hd_256.ico'; " ^
-  "if (-not (Test-Path $ico)) { $ico = Join-Path $currentDir '_internal\pharmakon_hd_256.ico' }; " ^
   "if (Test-Path $ico) { $shortcut.IconLocation = \"$ico,0\" }; " ^
   "$shortcut.Save(); " ^
-  "Write-Host '[SUCCESS] PHARMAKON 2.0 shortcut created on your Desktop!' -ForegroundColor Green"
+  "Write-Host '[SUCCESS] PHARMAKON 3.0 shortcut created on your Desktop!' -ForegroundColor Green"
 
 echo.
-echo Done. You can now launch PHARMAKON 2.0 directly from your Desktop icon.
+echo Done. You can now launch PHARMAKON 3.0 directly from your Desktop icon.
 echo.
 timeout /t 3 >nul
 exit /b 0
