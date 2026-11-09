@@ -3417,7 +3417,7 @@ function renderAutoSyncBadge(st) {
   const txt = document.getElementById('autoSyncText');
   if (!badge || !txt || !st) return;
 
-  const ver = st.local_version || '3.1.0';
+  const ver = st.local_version || '3.2.0';
   badge.classList.remove('offline', 'update-ready', 'signature-invalid');
 
   if (st.state === 'updated') {

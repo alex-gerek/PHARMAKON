@@ -3045,7 +3045,7 @@ def generate_mastering_report_html(track_name, metrics, output_dir, params=None)
   <div class="certificate-card">
     <div class="cert-header">
       <div class="cert-title">
-        <h1>PHARMAKON 3.0 PRO</h1>
+        <h1>PHARMAKON 3.2 PRO</h1>
         <div class="subtitle">MASTERING &amp; SPECTRAL DIAGNOSIS CERTIFICATE</div>
       </div>
       <div class="cert-meta">

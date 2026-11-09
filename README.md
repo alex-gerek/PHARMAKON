@@ -2,7 +2,7 @@
   <img src="gui/static/studio_icon.png" width="130" height="130" alt="PHARMAKON Logo">
 </p>
 
-# PHARMAKON 3.0
+# PHARMAKON 3.2
 ## Studio-Grade Audio Antidote, AI De-Harshing, Limiter-Aware Sub-Sync & True-Peak Mastering Console
 ### Created by Lex Gerek // Abbey Road 1974 × Blade Runner 2049
 

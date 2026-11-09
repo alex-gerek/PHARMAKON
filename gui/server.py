@@ -53,7 +53,7 @@ ALLOWED_AUDIO_EXTENSIONS = {".wav", ".mp3", ".flac", ".ogg", ".aiff", ".aif"}
 ALLOWED_UPLOAD_EXTS = {".wav", ".mp3", ".flac", ".ogg", ".zip", ".aiff", ".aif"}
 MAX_UPLOAD_SIZE = 250 * 1024 * 1024  # 250 MB
 
-app = FastAPI(title="PHARMAKON 3.1 Studio Console", version="3.1.0")
+app = FastAPI(title="PHARMAKON 3.2 Studio Console", version="3.2.0")
 
 # Strict CORS: Only local loopback origins
 app.add_middleware(
@@ -178,14 +178,14 @@ def browse_native(mode: str = "file"):
 @app.get("/api/system-info")
 def get_system_info():
     demos = [d for d in DEMO_TRACKS if os.path.exists(d["path"])]
-    ver = "3.1.0"
+    ver = "3.2.0"
     if auto_updater is not None:
         try:
             ver = auto_updater.get_active_version_info().get("version", ver)
         except Exception:
             pass
     return {
-        "engine": "PHARMAKON 3.1 PRO DSP (Hardened Security Release)",
+        "engine": "PHARMAKON 3.2 PRO DSP (Clean Chain)",
         "version": ver,
         "auto_update": True,
         "author": "Lex Gerek",
@@ -199,7 +199,7 @@ def get_system_info():
 @app.get("/api/update-status")
 async def get_update_status():
     if auto_updater is None:
-        return {"state": "offline", "local_version": "3.1.0", "signature_verified": False}
+        return {"state": "offline", "local_version": "3.2.0", "signature_verified": False}
     cached = auto_updater.get_cached_status()
     if cached.get("state") == "idle":
         return await asyncio.to_thread(auto_updater.check_online_updates, 2.5)
@@ -210,7 +210,7 @@ async def get_update_status():
 async def check_update():
     """Checks for signed release updates without silent modification."""
     if auto_updater is None:
-        return {"state": "offline", "local_version": "3.1.0", "signature_verified": False}
+        return {"state": "offline", "local_version": "3.2.0", "signature_verified": False}
     return await asyncio.to_thread(auto_updater.check_online_updates, 4.0)
 
 

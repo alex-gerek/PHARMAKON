@@ -28,8 +28,8 @@ UPDATE_PUBLIC_KEY_B64 = "xGVv4GtJMLb5ozFQabRgKGbGQ+4f6GXjmgMXMcKbV4Q="
 
 RAW_BASE_URL = "https://raw.githubusercontent.com/alex-gerek/PHARMAKON/master"
 TAG_BASE_URL = "https://raw.githubusercontent.com/alex-gerek/PHARMAKON/v{version}"
-RELEASE_PAGE_URL = "https://github.com/alex-gerek/PHARMAKON/releases/tag/v3.1.0"
-FALLBACK_VERSION = "3.1.0"
+RELEASE_PAGE_URL = "https://github.com/alex-gerek/PHARMAKON/releases/tag/v3.2.0"
+FALLBACK_VERSION = "3.2.0"
 
 _LAST_UPDATE_STATUS = {
     "state": "idle",

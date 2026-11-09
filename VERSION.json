@@ -1,10 +1,10 @@
 {
   "app": "PHARMAKON",
-  "version": "3.0.0",
-  "build_date": "2026-11-07",
+  "version": "3.2.0",
+  "build_date": "2026-11-09",
   "channel": "production",
-  "release_url": "https://github.com/alex-gerek/PHARMAKON/releases/tag/v3.0.0",
-  "notes": "PHARMAKON 3.0: Limiter-Aware Transient-Guarded Sub-Sync Phase Alignment Engine, Virtual Micro-Limiter Cost Function, True-Peak Headroom Guard, Autonomous Acoustic Safe-Bypass & Production Multi-Tier Mode Dispatcher",
+  "release_url": "https://github.com/alex-gerek/PHARMAKON/releases/tag/v3.2.0",
+  "notes": "PHARMAKON 3.2: Clean Chain default sound profile - removes measurable listening-fatigue defects (AI resonances via Auto Antidote v2, intermodulation via calibrated tape operating level, aliasing, added harshness) while keeping the original tonal character; Classic 3.1 switch; ITU-R BS.1770-4 LUFS meter verified against EBU Tech 3341; Sub-Sync and BPM fixes.",
   "patch_files": [
     "remaster_engine.py",
     "gui/server.py",
