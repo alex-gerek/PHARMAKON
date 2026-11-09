@@ -20,6 +20,7 @@
 | 11 | Resonance detection | v1 (product Auto Antidote) flags notes, misses real resonances | Detector v2 (§14) | — |
 | 12 | Auto Antidote | v1 cuts notes by 8–10 dB and leaves real resonances | v2 behind flag `antidote_v2` (§15), default off | Only when enabled |
 | 13 | Tape stage HF tilt | Pre-emphasis never de-emphasized → +1.3…+1.5 dB above 3.5 kHz, chain sharper | Matched de-emphasis behind flag `tape_deemphasis` (§16), default off | Only when enabled |
+| 14 | Tape operating level | Distortion set by how hot the source was rendered (−30…−38 dB, guitar worst) | Peak-calibrated operating level `tape_ref_peak_dbfs` (§18), default off | Only when enabled |
 
 ---
 
@@ -268,3 +269,29 @@ Pass rate on DRAFT targets: V2 + cal. + de-emphasis passes resonance, presence, 
 **Known limitation.** Detection still requires persistence ≥ 0.6 over the whole track, so a resonance present in < 60 % of it (e.g. only in the chorus) is not detected. Regional detection (e.g. ≥ N consecutive segments) is the next improvement and must be re-validated for false positives on clean music (currently 0/12).
 
 **Tests:** `tests/test_antidote_v2.py::test_local_correction_only_where_resonance_present` (coverage 0.5–0.95; clean region within ±0.5 dB locally vs < −1 dB globally; resonance region residual < 2.5 dB). The correction-filter test now also checks `time_coverage`.
+
+## 18. Tape stage calibrated operating level — `tape_ref_peak_dbfs` (default **None** = legacy)
+
+**Problem (measured on 8 real tracks).** The tape stage's nonlinear residual on music (= tape(x) − its linear small-signal response, i.e. intermodulation + harmonics; measured with `tape(εx)/ε` as the linear reference) is −30…−38 dB (1.3–3 %) and is set by the source level, not by any PHARMAKON setting: each −6 dB of input → ≈ −10 dB residual. The worst case is the acoustic guitar track (Neon waltz, peak 0.1 dBFS: −30 dB, 3 %) — exactly the material where dirt is most audible.
+
+**First attempt rejected by measurement.** Aligning the mix to a reference *loudness* before the saturator (`tape_ref_lufs`, kept as an option) widened the track-to-track spread of distortion from 7.8 to ~11 dB: the saturator reacts to instantaneous amplitude, and high-crest material gets its peaks pushed further into saturation.
+
+**Fix.** Align a robust *peak* — the 99.9th percentile of `max(|L|,|R|)` — to `tape_ref_peak_dbfs` before the saturator and restore the gain after it (like aligning a tape machine to 0 VU). Gain clipped to −24…+12 dB. With the parameter absent the stage is bit-identical to before (asserted).
+
+**Sweep (8 tracks, `bench/results/tape_ref_peak_sweep.json`; LUFS sweep: `tape_ref_sweep.json`):**
+
+| Reference peak | Residual median [range] | Track-to-track spread | PLR median |
+|---|---|---|---|
+| none (current) | −35.5 [−37.8…−30.0] dB | 7.8 dB | 9.67 |
+| −3 dBFS | −28.8 dB | 1.3 dB | 8.67 |
+| −6 dBFS | −34.0 dB | 1.5 dB | 9.43 |
+| −9 dBFS | −39.2 dB | 1.6 dB | 9.89 |
+| **−12 dBFS** | **−44.2 [−44.5…−43.1] dB** | **1.4 dB** | **10.16** |
+
+At −12 dBFS **every** track has less distortion than the best track today (worst −43.1 vs best −37.8 dB) **and** more dynamics (PLR higher on 8/8) — strict improvement on both defects (Pareto). The amount of saturation is now controlled by `tape_drive`, not by the source.
+
+**Full bench (`bench/results/20261109_tape_pk12/`), V2_CAL_DEEMPH vs + `tape_ref_peak_dbfs=-12`:** chain THD −33.2 → −43.2 dB, SMPTE IMD −24.2 → −33.3 dB, aliasing −59.4 → −66.8 dB, PLR median 9.52 → 10.37, crest 11.19 → 12.80 dB; resonances, sharpness (+0.01), presence/brilliance/air unchanged (air +0.34 → +0.24 dB).
+
+**Tests:** `tests/test_tape_calibration.py` (uncalibrated: +9 dB input → > 8 dB more distortion; calibrated: < 0.5 dB difference; parameter off → bit-identical; on → output level restored within 1 dB).
+
+**Proposed default chain (owner decision):** `antidote_v2`, `deharsh_calibrated`, `tape_deemphasis`, `tape_ref_peak_dbfs = -12`.

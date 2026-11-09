@@ -1823,8 +1823,28 @@ def process_audio_array(audio, sr, params=None):
     full_mix = mono_low_stereo + high_proc
 
     # 8. Analog tape saturation warmth (Oversampled Asymmetric Saturation with NAB Pre-Emphasis)
-    full_mix = analog_tape_saturation(full_mix, sr, drive=tape_drive, ceiling=tape_ceiling, bias=0.035, oversample=4,
-                                      deemphasis=bool(params.get('tape_deemphasis', False)))
+    # Calibrated operating level (optional): like aligning a tape machine to 0 VU, the mix
+    # is brought to a fixed reference loudness before the saturator and restored after it,
+    # so the amount of distortion no longer depends on how hot the source was rendered
+    # (measured: each +6 dB of input adds ~+10 dB of nonlinear residual).
+    # The saturator reacts to instantaneous amplitude, so the reference is a robust PEAK
+    # (99.9th percentile of |x|), not loudness: LUFS alignment was measured to widen the
+    # track-to-track spread of distortion (7.8 -> 11 dB) because high-crest material
+    # (acoustic guitar) gets its peaks pushed further into saturation.
+    tape_ref_lufs = params.get('tape_ref_lufs', None)
+    tape_ref_peak = params.get('tape_ref_peak_dbfs', None)
+    tape_stage_gain_db = 0.0
+    if tape_ref_peak is not None:
+        p999 = float(np.percentile(np.max(np.abs(full_mix), axis=1), 99.9))
+        if p999 > 1e-6:
+            tape_stage_gain_db = float(np.clip(float(tape_ref_peak) - 20.0 * np.log10(p999), -24.0, 12.0))
+    elif tape_ref_lufs is not None:
+        lufs_in = calc_integrated_lufs(full_mix, sr)
+        if lufs_in > -70.0:
+            tape_stage_gain_db = float(np.clip(float(tape_ref_lufs) - lufs_in, -24.0, 12.0))
+    g_in = 10.0 ** (tape_stage_gain_db / 20.0)
+    full_mix = analog_tape_saturation(full_mix * g_in, sr, drive=tape_drive, ceiling=tape_ceiling, bias=0.035,
+                                      oversample=4, deemphasis=bool(params.get('tape_deemphasis', False))) / g_in
 
     # 9. Psychoacoustic Harmonic Air Exciter (>16 kHz silk synthesis)
     air_drive = float(params.get('air_exciter', 0.12))

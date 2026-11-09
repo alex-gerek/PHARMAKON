@@ -40,9 +40,9 @@ DEFAULT_CORPUS = [
 
 VARIANTS = {
     "P31_DEFAULT": {},
-    "ANTIDOTE_V2_CAL": {"antidote_v2": True, "deharsh_calibrated": True},
     "V2_CAL_DEEMPH": {"antidote_v2": True, "deharsh_calibrated": True, "tape_deemphasis": True},
-    "V2_LEGACYDH_DEEMPH": {"antidote_v2": True, "tape_deemphasis": True},
+    "V2_CAL_DEEMPH_PK12": {"antidote_v2": True, "deharsh_calibrated": True, "tape_deemphasis": True,
+                           "tape_ref_peak_dbfs": -12.0},
 }
 
 # DRAFT targets - to be agreed; every one maps to a listening complaint.

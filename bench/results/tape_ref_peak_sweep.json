@@ -1,0 +1,314 @@
+[
+ {
+  "track": "!!!Vector Pulse_V000.wav",
+  "lufs_in": -14.74,
+  "None": {
+   "tape_residual_db": -37.8,
+   "plr_db": 8.73,
+   "crest_db": 9.77,
+   "lufs_out": -15.19,
+   "tp_out": -6.46
+  },
+  "-3.0": {
+   "tape_residual_db": -29.0,
+   "plr_db": 7.62,
+   "crest_db": 8.65,
+   "lufs_out": -15.57,
+   "tp_out": -7.95
+  },
+  "-6.0": {
+   "tape_residual_db": -34.2,
+   "plr_db": 8.32,
+   "crest_db": 9.36,
+   "lufs_out": -15.29,
+   "tp_out": -6.97
+  },
+  "-9.0": {
+   "tape_residual_db": -39.5,
+   "plr_db": 8.9,
+   "crest_db": 9.94,
+   "lufs_out": -15.15,
+   "tp_out": -6.25
+  },
+  "-12.0": {
+   "tape_residual_db": -44.5,
+   "plr_db": 9.23,
+   "crest_db": 10.27,
+   "lufs_out": -15.07,
+   "tp_out": -5.84
+  }
+ },
+ {
+  "track": "Pure voltage.wav",
+  "lufs_in": -16.09,
+  "None": {
+   "tape_residual_db": -36.9,
+   "plr_db": 9.99,
+   "crest_db": 11.74,
+   "lufs_out": -16.35,
+   "tp_out": -6.36
+  },
+  "-3.0": {
+   "tape_residual_db": -29.0,
+   "plr_db": 9.04,
+   "crest_db": 10.78,
+   "lufs_out": -16.62,
+   "tp_out": -7.58
+  },
+  "-6.0": {
+   "tape_residual_db": -34.2,
+   "plr_db": 9.75,
+   "crest_db": 11.49,
+   "lufs_out": -16.42,
+   "tp_out": -6.67
+  },
+  "-9.0": {
+   "tape_residual_db": -39.4,
+   "plr_db": 10.14,
+   "crest_db": 11.89,
+   "lufs_out": -16.31,
+   "tp_out": -6.17
+  },
+  "-12.0": {
+   "tape_residual_db": -44.4,
+   "plr_db": 10.36,
+   "crest_db": 12.1,
+   "lufs_out": -16.26,
+   "tp_out": -5.9
+  }
+ },
+ {
+  "track": "Data Corruption-3.mp3",
+  "lufs_in": -12.36,
+  "None": {
+   "tape_residual_db": -32.1,
+   "plr_db": 8.92,
+   "crest_db": 10.44,
+   "lufs_out": -12.97,
+   "tp_out": -4.05
+  },
+  "-3.0": {
+   "tape_residual_db": -28.8,
+   "plr_db": 8.19,
+   "crest_db": 9.73,
+   "lufs_out": -13.16,
+   "tp_out": -4.97
+  },
+  "-6.0": {
+   "tape_residual_db": -34.0,
+   "plr_db": 9.09,
+   "crest_db": 10.61,
+   "lufs_out": -12.93,
+   "tp_out": -3.84
+  },
+  "-9.0": {
+   "tape_residual_db": -39.1,
+   "plr_db": 9.65,
+   "crest_db": 11.16,
+   "lufs_out": -12.81,
+   "tp_out": -3.16
+  },
+  "-12.0": {
+   "tape_residual_db": -43.9,
+   "plr_db": 9.96,
+   "crest_db": 11.48,
+   "lufs_out": -12.74,
+   "tp_out": -2.78
+  }
+ },
+ {
+  "track": "Neon waltz.mp3",
+  "lufs_in": -16.89,
+  "None": {
+   "tape_residual_db": -30.0,
+   "plr_db": 14.49,
+   "crest_db": 17.15,
+   "lufs_out": -16.85,
+   "tp_out": -2.36
+  },
+  "-3.0": {
+   "tape_residual_db": -27.7,
+   "plr_db": 14.09,
+   "crest_db": 16.76,
+   "lufs_out": -16.89,
+   "tp_out": -2.8
+  },
+  "-6.0": {
+   "tape_residual_db": -32.7,
+   "plr_db": 15.29,
+   "crest_db": 17.95,
+   "lufs_out": -16.76,
+   "tp_out": -1.47
+  },
+  "-9.0": {
+   "tape_residual_db": -37.9,
+   "plr_db": 16.0,
+   "crest_db": 18.67,
+   "lufs_out": -16.68,
+   "tp_out": -0.68
+  },
+  "-12.0": {
+   "tape_residual_db": -43.1,
+   "plr_db": 16.14,
+   "crest_db": 18.82,
+   "lufs_out": -16.64,
+   "tp_out": -0.5
+  }
+ },
+ {
+  "track": "Mozarts_Elegance.wav",
+  "lufs_in": -13.41,
+  "None": {
+   "tape_residual_db": -33.3,
+   "plr_db": 8.93,
+   "crest_db": 11.03,
+   "lufs_out": -13.75,
+   "tp_out": -4.82
+  },
+  "-3.0": {
+   "tape_residual_db": -28.7,
+   "plr_db": 8.3,
+   "crest_db": 10.41,
+   "lufs_out": -13.93,
+   "tp_out": -5.63
+  },
+  "-6.0": {
+   "tape_residual_db": -33.9,
+   "plr_db": 9.0,
+   "crest_db": 11.11,
+   "lufs_out": -13.72,
+   "tp_out": -4.72
+  },
+  "-9.0": {
+   "tape_residual_db": -39.1,
+   "plr_db": 9.4,
+   "crest_db": 11.51,
+   "lufs_out": -13.61,
+   "tp_out": -4.21
+  },
+  "-12.0": {
+   "tape_residual_db": -44.1,
+   "plr_db": 9.6,
+   "crest_db": 11.71,
+   "lufs_out": -13.55,
+   "tp_out": -3.95
+  }
+ },
+ {
+  "track": "Everythings_Alright.wav",
+  "lufs_in": -15.02,
+  "None": {
+   "tape_residual_db": -35.7,
+   "plr_db": 10.5,
+   "crest_db": 11.73,
+   "lufs_out": -15.36,
+   "tp_out": -4.86
+  },
+  "-3.0": {
+   "tape_residual_db": -28.5,
+   "plr_db": 9.34,
+   "crest_db": 10.57,
+   "lufs_out": -15.66,
+   "tp_out": -6.32
+  },
+  "-6.0": {
+   "tape_residual_db": -33.7,
+   "plr_db": 10.28,
+   "crest_db": 11.51,
+   "lufs_out": -15.42,
+   "tp_out": -5.14
+  },
+  "-9.0": {
+   "tape_residual_db": -39.0,
+   "plr_db": 10.83,
+   "crest_db": 12.06,
+   "lufs_out": -15.29,
+   "tp_out": -4.46
+  },
+  "-12.0": {
+   "tape_residual_db": -44.1,
+   "plr_db": 11.12,
+   "crest_db": 12.35,
+   "lufs_out": -15.22,
+   "tp_out": -4.1
+  }
+ },
+ {
+  "track": "Il Fuoco del Cuore.wav",
+  "lufs_in": -15.06,
+  "None": {
+   "tape_residual_db": -35.3,
+   "plr_db": 9.96,
+   "crest_db": 13.33,
+   "lufs_out": -15.39,
+   "tp_out": -5.43
+  },
+  "-3.0": {
+   "tape_residual_db": -28.8,
+   "plr_db": 9.14,
+   "crest_db": 12.5,
+   "lufs_out": -15.61,
+   "tp_out": -6.47
+  },
+  "-6.0": {
+   "tape_residual_db": -34.0,
+   "plr_db": 9.83,
+   "crest_db": 13.2,
+   "lufs_out": -15.42,
+   "tp_out": -5.59
+  },
+  "-9.0": {
+   "tape_residual_db": -39.3,
+   "plr_db": 10.21,
+   "crest_db": 13.59,
+   "lufs_out": -15.32,
+   "tp_out": -5.11
+  },
+  "-12.0": {
+   "tape_residual_db": -44.3,
+   "plr_db": 10.42,
+   "crest_db": 13.78,
+   "lufs_out": -15.28,
+   "tp_out": -4.86
+  }
+ },
+ {
+  "track": "Miami Summer.wav",
+  "lufs_in": -14.53,
+  "None": {
+   "tape_residual_db": -36.3,
+   "plr_db": 9.38,
+   "crest_db": 12.49,
+   "lufs_out": -14.99,
+   "tp_out": -5.61
+  },
+  "-3.0": {
+   "tape_residual_db": -28.8,
+   "plr_db": 8.22,
+   "crest_db": 11.34,
+   "lufs_out": -15.24,
+   "tp_out": -7.02
+  },
+  "-6.0": {
+   "tape_residual_db": -34.0,
+   "plr_db": 9.11,
+   "crest_db": 12.22,
+   "lufs_out": -15.05,
+   "tp_out": -5.94
+  },
+  "-9.0": {
+   "tape_residual_db": -39.3,
+   "plr_db": 9.62,
+   "crest_db": 12.73,
+   "lufs_out": -14.94,
+   "tp_out": -5.32
+  },
+  "-12.0": {
+   "tape_residual_db": -44.3,
+   "plr_db": 9.89,
+   "crest_db": 13.0,
+   "lufs_out": -14.89,
+   "tp_out": -5.0
+  }
+ }
+]
