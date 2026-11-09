@@ -327,3 +327,17 @@ In 3.1 the automatic resonance detection ran only in `pharmakon1` (Auto Antidote
 GUI note: in `pharmakon1` the whole Pro Rack section (including the Sound Profile and Match Input Loudness strips) is hidden; the request still carries `classic_31: false`, so the Auto mode always uses the full Clean Chain.
 
 Test: `tests/test_antidote_v2.py::test_antidote_v2_runs_in_both_workflow_modes`.
+
+## 21. Measured Spectral Diagnosis — console panels and Mastering Certificate show only measured facts
+
+**Problem.** The console's "SOURCE DEFECT DIAGNOSIS" panel was static HTML (clipping at 0.00 dBFS, 5 kHz resonance, sub-bass phase cancellation, infrasonic mud — shown for every track). The treatment panel mixed the Antidote v2 frequency with an unrelated de-harsh band number. HUD tags ("CLIPPING RISK: HIGH", "TRUE-PEAK: -0.3 dBFS"), evaluative captions ("Healthy Punch", "Mono Lock", "Warm Density Boost") and invented fallback numbers (PLR 11.2, crest 10.8/12.0, correlation +0.84/+0.99, 5000 Hz) appeared in the console, the in-app certificate modal, the PNG export and the HTML certificate. The HTML certificate always printed "VERIFIED STREAMING COMPLIANT • ZERO INTER-SAMPLE PEAKS". The modal also added a second hidden +22 dB to parts of the delta curve.
+
+**Fix.** `build_spectral_diagnosis(orig, proc, sr, metrics, params, extra)` (engine, after `calc_audio_metrics`) is the single source of truth, stored as `metrics['diagnosis']` for full-mix and stems modes:
+- **Source (measured on the original):** true-peak + clipped plateaus (≥ 3 consecutive full-scale samples); persistent resonances (detector v2: frequency, height, share of track); low-band L/R correlation; energy below the sub cutoff; dynamics (info).
+- **Treatment (before → after):** true-peak vs ceiling; loudness; Antidote v2 corrections (frequency, cut, Q, time coverage) **plus the strongest resonance remaining after processing**; de-harsh band change relative to overall level (signed); low-end correlation; infrasonic energy after; tape operating-level gain; tonal balance per band relative to overall level; dynamics.
+- **Seal:** only statements true for this file (ceiling held/exceeded with the measured value; −1 dBTP streaming recommendation met or not; meter verification).
+- Status per line: issue / warn / ok / info, with thresholds as named constants (`DIAG_*`) and their rationale in the code.
+
+Console (`renderDiagnosis`, HUD tags), in-app certificate modal (new diagnosis block, Antidote v2 tile), PNG export tiles and the HTML certificate (diagnosis block, Antidote v2 tile, band summary relative to overall level, real export format, measured seal) all render from it. No invented fallbacks: missing values show "—".
+
+**Tests:** `tests/test_spectral_diagnosis.py` — clean music → no resonance / clipping reported, "no correction needed"; injected resonance → reported at its frequency, corrected, nothing ≥ 3 dB remains; hard-clipped source → "clipped"; anti-phase low end → issue, and after processing the honest status (anti-phase content above the 120 Hz crossover stays stereo → warn, not ok); certificate contains none of the canned phrases and does contain the measured true-peak. Browser check: real Bronze Psalter diagnosis renders in the console lists and HUD with no console errors.

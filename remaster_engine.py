@@ -1201,6 +1201,200 @@ def calc_audio_metrics(orig, proc, sr, params=None):
     }
 
 # -----------------------------------------------------------------------------
+# 6b. MEASURED SPECTRAL DIAGNOSIS (single source of truth for console + certificate)
+# -----------------------------------------------------------------------------
+# Every line shown to the user is computed from THIS track's audio. Nothing is a
+# canned claim: a defect is reported only if measured, and "fixed" only if the
+# measurement after processing shows it. Status: 'issue' | 'warn' | 'ok' | 'info'.
+# Thresholds (engineering conventions, documented here, not taste):
+DIAG_TP_STREAMING_DBTP = -1.0     # streaming / EBU R128 max true-peak recommendation
+DIAG_CLIP_LEVEL = 0.9999          # |x| at or above this counts as a full-scale sample
+DIAG_CLIP_RUN = 3                 # >= 3 consecutive full-scale samples = clipped plateau
+DIAG_SUBCORR_WARN = 0.9           # low-band L/R correlation below this = wide / smeared low end
+DIAG_SUBCORR_ISSUE = 0.5          # below this = strong decorrelation; < 0 = anti-phase
+DIAG_INFRA_WARN_DB = -35.0        # energy below sub cutoff relative to total
+DIAG_INFRA_ISSUE_DB = -25.0
+DIAG_RES_ISSUE_DB = 3.0           # persistent resonance height (detector v2)
+
+
+def _diag_item(key, label, status, text, value=None):
+    return {"key": key, "label": label, "status": status, "text": text, "value": value}
+
+
+def _clipped_runs(x):
+    a = np.max(np.abs(ensure_stereo(np.asarray(x))), axis=1) >= DIAG_CLIP_LEVEL
+    if not a.any():
+        return 0
+    edges = np.diff(np.concatenate([[0], a.astype(np.int8), [0]]))
+    starts, ends = np.nonzero(edges == 1)[0], np.nonzero(edges == -1)[0]
+    return int(np.sum((ends - starts) >= DIAG_CLIP_RUN))
+
+
+def _band_rel_change_db(orig, proc, sr, f_lo, f_hi):
+    """Band level change relative to the overall level change (so limiter / loudness gain
+    is not mistaken for an EQ change)."""
+    nyq = 0.5 * sr
+    f_hi = min(f_hi, nyq * 0.98)
+    if f_lo >= f_hi:
+        return 0.0
+    sos = signal.butter(2, [f_lo, f_hi], btype='band', fs=sr, output='sos')
+    mo, mp = np.mean(orig, axis=1), np.mean(proc, axis=1)
+    bo = np.sqrt(np.mean(signal.sosfiltfilt(sos, mo) ** 2)) + 1e-12
+    bp = np.sqrt(np.mean(signal.sosfiltfilt(sos, mp) ** 2)) + 1e-12
+    ro, rp = np.sqrt(np.mean(mo ** 2)) + 1e-12, np.sqrt(np.mean(mp ** 2)) + 1e-12
+    return float(20 * np.log10(bp / bo) - 20 * np.log10(rp / ro))
+
+
+def build_spectral_diagnosis(orig, proc, sr, metrics, params=None, extra=None):
+    """
+    Measured Mastering & Spectral Diagnosis for one track.
+    orig / proc: audio before / after processing. metrics: calc_audio_metrics output.
+    extra: pipeline facts - sound_profile, antidote_v2_corrections (or None if not run),
+    deharsh_freq_used, tape_stage_gain_db, target_ceiling_db, mode ('full' | 'stems').
+    """
+    p = params or {}
+    e = extra or {}
+    orig = ensure_stereo(np.asarray(orig, dtype=np.float64))
+    proc = ensure_stereo(np.asarray(proc, dtype=np.float64))
+    n = min(len(orig), len(proc))
+    orig, proc = orig[:n], proc[:n]
+    ceiling = float(e.get('target_ceiling_db', p.get('target_ceiling_db', -0.3)))
+    src, trt, seal = [], [], []
+
+    # --- SOURCE: peaks / clipping
+    tp_o = float(metrics.get('true_peak_orig_db', 0.0))
+    runs = _clipped_runs(orig)
+    if runs > 0 or tp_o > 0.0:
+        st = 'issue'
+        txt = f"True-Peak {tp_o:+.2f} dBTP" + (f", {runs} clipped run(s) at full scale" if runs else ", inter-sample overs above 0 dBFS")
+    elif tp_o > DIAG_TP_STREAMING_DBTP:
+        st, txt = 'warn', f"True-Peak {tp_o:+.2f} dBTP - above the {DIAG_TP_STREAMING_DBTP:.0f} dBTP streaming recommendation; no clipped samples"
+    else:
+        st, txt = 'ok', f"True-Peak {tp_o:+.2f} dBTP - headroom OK, no clipping"
+    src.append(_diag_item('peak', 'Peak / Clipping', st, txt, tp_o))
+
+    # --- SOURCE: persistent resonances (detector v2, measured on the original)
+    res_src = detect_resonances_v2(orig, sr)["resonances"]
+    if res_src:
+        top = res_src[:3]
+        st = 'issue' if top[0]['prominence_db'] >= DIAG_RES_ISSUE_DB else 'warn'
+        txt = "; ".join(f"{r['hz']:.0f} Hz +{r['prominence_db']:.1f} dB ({r['persistence']:.0%} of track)" for r in top)
+    else:
+        st, txt = 'ok', "No persistent resonant colouring found (2-9 kHz)"
+    src.append(_diag_item('resonance', 'AI Resonance', st, txt,
+                          [{k: v for k, v in r.items() if not k.startswith('_')} for r in res_src[:5]]))
+
+    # --- SOURCE: low-end stereo phase
+    c_o = metrics.get('sub_phase_corr_orig')
+    if c_o is None:
+        src.append(_diag_item('sub_phase', 'Sub-Bass Phase', 'info', 'not measured'))
+    else:
+        c_o = float(c_o)
+        if c_o < 0:
+            st, txt = 'issue', f"Low-band L/R correlation {c_o:+.2f} - anti-phase (cancels in mono / club systems)"
+        elif c_o < DIAG_SUBCORR_ISSUE:
+            st, txt = 'issue', f"Low-band L/R correlation {c_o:+.2f} - strongly decorrelated low end"
+        elif c_o < DIAG_SUBCORR_WARN:
+            st, txt = 'warn', f"Low-band L/R correlation {c_o:+.2f} - partly wide low end"
+        else:
+            st, txt = 'ok', f"Low-band L/R correlation {c_o:+.2f} - coherent"
+        src.append(_diag_item('sub_phase', 'Sub-Bass Phase', st, txt, c_o))
+
+    # --- SOURCE: infrasonic energy
+    sub_cut = float(p.get('sub_cutoff', 32.0))
+    mo = np.mean(orig, axis=1)
+    sos_lo = signal.butter(4, min(sub_cut, 0.45 * sr), btype='low', fs=sr, output='sos')
+    infra_db = float(10 * np.log10((np.mean(signal.sosfiltfilt(sos_lo, mo) ** 2) + 1e-20) / (np.mean(mo ** 2) + 1e-20)))
+    if infra_db > DIAG_INFRA_ISSUE_DB:
+        st = 'issue'
+    elif infra_db > DIAG_INFRA_WARN_DB:
+        st = 'warn'
+    else:
+        st = 'ok'
+    src.append(_diag_item('infrasonic', 'Infrasonic Energy', st,
+                          f"Energy below {sub_cut:.0f} Hz: {infra_db:.1f} dB of total", infra_db))
+
+    # --- SOURCE: dynamics (information, not a defect by itself)
+    src.append(_diag_item('dynamics', 'Dynamics', 'info',
+                          f"Crest factor {metrics.get('crest_factor_orig_db')} dB, PLR {metrics.get('plr_orig_db')} dB"))
+
+    # --- TREATMENT: true-peak ceiling
+    tp_p = float(metrics.get('true_peak_proc_db', 0.0))
+    held = tp_p <= ceiling + 0.05
+    trt.append(_diag_item('true_peak', '4x True-Peak', 'ok' if held else 'issue',
+                          f"Output {tp_p:+.2f} dBTP (ceiling {ceiling:+.1f} dBTP {'held' if held else 'EXCEEDED'})", tp_p))
+    trt.append(_diag_item('loudness', 'Integrated Loudness', 'info',
+                          f"{metrics.get('lufs_orig')} -> {metrics.get('lufs_proc')} LUFS (ITU-R BS.1770-4)",
+                          metrics.get('lufs_proc')))
+
+    # --- TREATMENT: Antidote v2 (what was cut) + what remains after processing
+    cors = e.get('antidote_v2_corrections')
+    res_after = detect_resonances_v2(proc, sr)["resonances"]
+    max_after = res_after[0]['prominence_db'] if res_after else 0.0
+    if cors is None:
+        txt = "Not run in this mode (Classic 3.1 or stems)"
+        st = 'info'
+    elif cors:
+        txt = "; ".join(f"{c['hz']:.0f} Hz cut {c['cut_db']:.1f} dB, Q {c['q']:.1f}, "
+                        f"{c.get('time_coverage', 1.0):.0%} of track" for c in cors)
+        st = 'ok'
+    else:
+        txt, st = "No correction needed (no persistent resonance)", 'ok'
+    txt += (f" | after: strongest remaining {res_after[0]['hz']:.0f} Hz +{max_after:.1f} dB" if res_after
+            else " | after: no persistent resonance")
+    if res_after and max_after >= DIAG_RES_ISSUE_DB:
+        st = 'warn'
+    trt.append(_diag_item('antidote', 'Auto Antidote v2', st, txt,
+                          {"corrections": cors, "after_max_db": round(float(max_after), 2)}))
+
+    # --- TREATMENT: de-harsher band (signed, relative to overall level)
+    fdh = float(e.get('deharsh_freq_used', p.get('deharsh_freq', 5000.0)))
+    dh = _band_rel_change_db(orig, proc, sr, fdh * 0.9, fdh * 1.1)
+    trt.append(_diag_item('deharsh', 'Dynamic De-Harshing', 'info',
+                          f"{fdh:.0f} Hz band {dh:+.2f} dB relative to overall level", round(dh, 2)))
+
+    # --- TREATMENT: low end
+    c_p = metrics.get('sub_phase_corr_proc')
+    if c_p is not None and c_o is not None:
+        trt.append(_diag_item('sub_phase', 'Low-End Mono', 'ok' if float(c_p) >= DIAG_SUBCORR_WARN else 'warn',
+                              f"Low-band correlation {float(c_o):+.2f} -> {float(c_p):+.2f} "
+                              f"(mono below {float(p.get('mono_crossover', 120.0)):.0f} Hz)", float(c_p)))
+
+    # --- TREATMENT: infrasonic cut
+    mp = np.mean(proc, axis=1)
+    infra_after = float(10 * np.log10((np.mean(signal.sosfiltfilt(sos_lo, mp) ** 2) + 1e-20) / (np.mean(mp ** 2) + 1e-20)))
+    trt.append(_diag_item('infrasonic', 'Infrasonic Cut', 'ok' if infra_after <= DIAG_INFRA_WARN_DB else 'warn',
+                          f"Energy below {sub_cut:.0f} Hz: {infra_db:.1f} -> {infra_after:.1f} dB of total", infra_after))
+
+    # --- TREATMENT: saturation operating level
+    prof = e.get('sound_profile', 'Clean Chain 3.2')
+    tg = e.get('tape_stage_gain_db')
+    if tg is None:
+        sat_txt = "Not applied in this mode" if e.get('mode') == 'stems' else "Source-dependent operating level (Classic 3.1)"
+    else:
+        sat_txt = f"Calibrated operating level (input aligned by {tg:+.1f} dB, restored after)"
+    trt.append(_diag_item('saturation', 'Tape Saturation', 'info', sat_txt, tg))
+
+    # --- TREATMENT: tonal balance (relative to overall level) and dynamics
+    tb = {name: round(_band_rel_change_db(orig, proc, sr, lo, hi), 2)
+          for name, lo, hi in (('sub', 20, 120), ('body', 120, 2000), ('presence', 2000, 5000),
+                               ('brilliance', 5000, 10000), ('air', 10000, 20000))}
+    trt.append(_diag_item('tonal_balance', 'Tonal Balance', 'info',
+                          ", ".join(f"{k} {v:+.1f} dB" for k, v in tb.items()) + " (relative to overall level)", tb))
+    trt.append(_diag_item('dynamics', 'Dynamics', 'info',
+                          f"Crest factor {metrics.get('crest_factor_orig_db')} -> {metrics.get('crest_factor_proc_db')} dB, "
+                          f"PLR {metrics.get('plr_orig_db')} -> {metrics.get('plr_proc_db')} dB"))
+
+    # --- SEAL: only statements that are true for this file
+    seal.append(f"True-Peak {tp_p:+.2f} dBTP measured with 4x oversampling" +
+                (" - ceiling held" if held else " - CEILING EXCEEDED"))
+    seal.append(("Meets the -1 dBTP streaming recommendation" if tp_p <= DIAG_TP_STREAMING_DBTP
+                 else "For streaming / EBU R128 delivery export with a -1.0 dBTP ceiling"))
+    seal.append("Loudness: ITU-R BS.1770-4 meter verified against EBU Tech 3341 cases 1-5")
+    return {"profile": prof, "mode": e.get('mode', 'full'), "source": src, "treatment": trt, "seal": seal,
+            "tonal_balance_rel_db": tb}
+
+# -----------------------------------------------------------------------------
 # 7. MAIN MASTERING DSP PIPELINE
 # -----------------------------------------------------------------------------
 
@@ -1939,6 +2133,16 @@ def process_audio_array(audio, sr, params=None):
         metrics['antidote_v2_resonances'] = [{k: v for k, v in r.items() if not k.startswith('_')}
                                              for r in v2_resonances[:5]]
         metrics['antidote_v2_corrections'] = v2_applied
+    tape_calibrated = (profile['tape_ref_peak_dbfs'] is not None) or (params.get('tape_ref_lufs') is not None)
+    metrics['tape_stage_gain_db'] = round(tape_stage_gain_db, 2) if tape_calibrated else None
+    metrics['diagnosis'] = build_spectral_diagnosis(audio, full_mix, sr, metrics, params, extra={
+        'sound_profile': sound_profile,
+        'antidote_v2_corrections': v2_applied if antidote_v2 else None,
+        'deharsh_freq_used': float(deharsh_freq),
+        'tape_stage_gain_db': metrics['tape_stage_gain_db'],
+        'target_ceiling_db': target_ceiling_db,
+        'mode': 'full',
+    })
 
     logger.info(
         "DSP pipeline complete: mode=%s true_peak_proc_db=%.2f lufs_proc=%.2f detected_resonance_hz=%s",
@@ -2488,29 +2692,76 @@ def generate_mastering_report_html(track_name, metrics, output_dir, params=None)
     timestamp = time.strftime("%Y-%m-%d %H:%M:%S UTC")
     serial_no = f"PH-{abs(hash(track_name + timestamp)) % 900000 + 100000}"
     
-    tp_orig = metrics.get('true_peak_orig_db', metrics.get('peak_orig_db', 0.0))
-    tp_proc = metrics.get('true_peak_proc_db', metrics.get('peak_proc_db', -0.3))
-    lufs_orig = metrics.get('lufs_orig', -14.0)
-    lufs_proc = metrics.get('lufs_proc', -14.0)
-    lufs_diff = round(lufs_proc - lufs_orig, 2)
-    lufs_sign = "+" if lufs_diff >= 0 else ""
+    def _v(key, fmt="{}"):
+        val = metrics.get(key)
+        return fmt.format(val) if isinstance(val, (int, float)) else "&mdash;"
+
+    tp_orig = _v('true_peak_orig_db')
+    tp_proc = _v('true_peak_proc_db')
+    lufs_orig = _v('lufs_orig')
+    lufs_proc = _v('lufs_proc')
+    if isinstance(metrics.get('lufs_proc'), (int, float)) and isinstance(metrics.get('lufs_orig'), (int, float)):
+        lufs_diff = round(metrics['lufs_proc'] - metrics['lufs_orig'], 2)
+        lufs_sign = "+" if lufs_diff >= 0 else ""
+    else:
+        lufs_diff, lufs_sign = "&mdash;", ""
     
     rms_diff = round(metrics.get('rms_proc_db', 0.0) - metrics.get('rms_orig_db', 0.0), 2)
     rms_sign = "+" if rms_diff >= 0 else ""
 
-    res_hz = metrics.get('detected_resonance_hz', 5000.0)
-    res_prom = metrics.get('detected_prominence_db', 0.0)
-    harsh_red = metrics.get('harsh_reduction_db', 0.0)
-    
-    sub_corr_o = metrics.get('sub_phase_corr_orig', 0.84)
-    sub_corr_p = metrics.get('sub_phase_corr_proc', 0.99)
-    crest_orig = metrics.get('crest_factor_orig_db', 12.0)
-    crest_proc = metrics.get('crest_factor_proc_db', 10.8)
-    plr_proc = metrics.get('plr_proc_db', 11.2)
-    shift_sub = metrics.get('energy_shift_sub_db', -0.9)
-    shift_body = metrics.get('energy_shift_body_db', 0.2)
-    shift_pres = metrics.get('energy_shift_presence_db', -1.2)
-    shift_air = metrics.get('energy_shift_air_db', 1.3)
+    sub_corr_o = _v('sub_phase_corr_orig', "{:+.2f}")
+    sub_corr_p = _v('sub_phase_corr_proc', "{:+.2f}")
+    crest_orig = _v('crest_factor_orig_db')
+    crest_proc = _v('crest_factor_proc_db')
+    plr_proc = _v('plr_proc_db')
+
+    # Antidote v2 tile: measured corrections only
+    cors = metrics.get('antidote_v2_corrections')
+    if isinstance(cors, list) and cors:
+        anti_val = f"{len(cors)} band{'s' if len(cors) > 1 else ''} cut"
+        anti_sub = ", ".join(f"{c['hz']:.0f} Hz -{c['cut_db']:.1f} dB ({c.get('time_coverage', 1.0):.0%})" for c in cors)
+    elif isinstance(cors, list):
+        anti_val, anti_sub = "none needed", "no persistent resonance measured"
+    else:
+        anti_val = "off"
+        anti_sub = (f"Classic 3.1 v1 target: {metrics['detected_resonance_hz']:.0f} Hz"
+                    if metrics.get('detected_resonance_hz') else "Classic 3.1 / stems mode")
+
+    # Measured diagnosis + tonal balance relative to overall level
+    diag = metrics.get('diagnosis') or {}
+    tb = diag.get('tonal_balance_rel_db') or {}
+
+    def _tb(k):
+        return f"{tb[k]:+.2f} dB" if isinstance(tb.get(k), (int, float)) else "&mdash;"
+
+    def _esc(t):
+        return str(t).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+
+    _col = {'issue': '#f43f5e', 'warn': '#f59e0b', 'ok': '#10b981', 'info': '#94a3b8'}
+    _ico = {'issue': '&#9888;', 'warn': '&#9888;', 'ok': '&#10003;', 'info': '&bull;'}
+
+    def _diag_list(items):
+        return "".join(
+            f'<div style="font-size:11.5px; margin-bottom:6px; line-height:1.4;">'
+            f'<span style="color:{_col.get(i.get("status"), "#94a3b8")};">{_ico.get(i.get("status"), "&bull;")}</span> '
+            f'<b style="color:#e2e8f0;">{_esc(i.get("label", ""))}:</b> <span style="color:#cbd5e1;">{_esc(i.get("text", ""))}</span></div>'
+            for i in (items or []))
+
+    diagnosis_html = ""
+    if diag:
+        diagnosis_html = f'''
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:20px; font-family:monospace;">
+      <div style="background:#0d0a0d; border:1px solid #3b1d24; border-radius:8px; padding:14px 16px;">
+        <div style="font-size:11px; font-weight:700; letter-spacing:1.5px; color:#f43f5e; margin-bottom:10px;">SOURCE DIAGNOSIS (MEASURED ON THE ORIGINAL)</div>
+        {_diag_list(diag.get('source'))}
+      </div>
+      <div style="background:#080e0c; border:1px solid #14342a; border-radius:8px; padding:14px 16px;">
+        <div style="font-size:11px; font-weight:700; letter-spacing:1.5px; color:#10b981; margin-bottom:10px;">TREATMENT (MEASURED BEFORE &rarr; AFTER) &bull; {_esc(diag.get('profile', ''))}</div>
+        {_diag_list(diag.get('treatment'))}
+      </div>
+    </div>'''
+    seal_html = " &bull; ".join(_esc(x) for x in (diag.get('seal') or [])) or "Measurements: see telemetry above"
+    export_fmt = _esc((params or {}).get('export_subtype', 'PCM_24')) if isinstance(params, dict) else 'PCM_24'
 
     freqs = metrics.get('fft_freqs', [])
     orig_db = metrics.get('fft_orig_db', [])
@@ -3063,7 +3314,7 @@ def generate_mastering_report_html(track_name, metrics, output_dir, params=None)
         <div class="track-name">{track_name}</div>
       </div>
       <div class="track-specs">
-        {metrics.get('sample_rate', 44100)} Hz &bull; 24-bit Lossless WAV &bull; {metrics.get('duration_sec', 0.0)}s
+        {metrics.get('sample_rate', '&mdash;')} Hz &bull; WAV {export_fmt} &bull; {metrics.get('duration_sec', '&mdash;')}s
       </div>
     </div>
 
@@ -3081,48 +3332,49 @@ def generate_mastering_report_html(track_name, metrics, output_dir, params=None)
       <div class="t-card">
         <div class="t-label">TRANSIENT CREST FACTOR</div>
         <div class="t-val">{crest_proc} <span>dB</span></div>
-        <div class="t-sub">Healthy Punch (Raw: {crest_orig} dB)</div>
+        <div class="t-sub">Raw: {crest_orig} dB</div>
       </div>
       <div class="t-card">
-        <div class="t-label">DYNAMIC DE-HARSH ATTENUATION</div>
-        <div class="t-val">-{harsh_red} <span>dB</span></div>
-        <div class="t-sub">Resonance: {res_hz:.0f} Hz ({res_prom:+.1f} dB)</div>
+        <div class="t-label">AUTO ANTIDOTE v2</div>
+        <div class="t-val">{anti_val}</div>
+        <div class="t-sub">{anti_sub}</div>
       </div>
       <div class="t-card">
         <div class="t-label">SUB-BASS SOLIDIFICATION &amp; PHASE</div>
-        <div class="t-val">{sub_corr_p:+.2f} <span>Corr</span></div>
-        <div class="t-sub">Phase: {sub_corr_o:+.2f} &rarr; {sub_corr_p:+.2f} (Mono &lt; 120Hz)</div>
+        <div class="t-val">{sub_corr_p} <span>Corr</span></div>
+        <div class="t-sub">Phase: {sub_corr_o} &rarr; {sub_corr_p} (Mono below crossover)</div>
       </div>
       <div class="t-card">
         <div class="t-label">3D STEREO WIDTH (MID-SIDE)</div>
         <div class="t-val">+{metrics.get('stereo_expansion_db', 0.0)} <span>dB</span></div>
-        <div class="t-sub">High-Frequency Air Expansion</div>
+        <div class="t-sub">Mid-side side level (measured)</div>
       </div>
     </div>
 
+    {diagnosis_html}
     {match_card_html}
     {track_map_html}
     <!-- 4-Band Energy Shift Summary -->
     <div class="energy-bar-grid">
       <div class="e-band">
-        <div class="e-band-title">SUB (&lt;120 Hz)</div>
-        <div class="e-band-val" style="color:#fde047;">{shift_sub:+.2f} dB</div>
-        <div class="e-band-desc">Mono Solidification</div>
+        <div class="e-band-title">SUB (20-120 Hz)</div>
+        <div class="e-band-val" style="color:#fde047;">{_tb('sub')}</div>
+        <div class="e-band-desc">vs overall level</div>
       </div>
       <div class="e-band">
-        <div class="e-band-title">BODY (120Hz-2kHz)</div>
-        <div class="e-band-val" style="color:#93c5fd;">{shift_body:+.2f} dB</div>
-        <div class="e-band-desc">Tape Warmth (tanh)</div>
+        <div class="e-band-title">BODY (120 Hz-2 kHz)</div>
+        <div class="e-band-val" style="color:#93c5fd;">{_tb('body')}</div>
+        <div class="e-band-desc">vs overall level</div>
       </div>
       <div class="e-band">
-        <div class="e-band-title">PRESENCE (2-8kHz)</div>
-        <div class="e-band-val" style="color:#f43f5e;">{shift_pres:+.2f} dB</div>
-        <div class="e-band-desc">De-Harsh Notch Cut</div>
+        <div class="e-band-title">PRESENCE (2-5 kHz)</div>
+        <div class="e-band-val" style="color:#f43f5e;">{_tb('presence')}</div>
+        <div class="e-band-desc">vs overall level</div>
       </div>
       <div class="e-band">
-        <div class="e-band-title">AIR (&gt;8kHz)</div>
-        <div class="e-band-val" style="color:#10b981;">{shift_air:+.2f} dB</div>
-        <div class="e-band-desc">Harmonic Silk Exciter</div>
+        <div class="e-band-title">BRILLIANCE / AIR (5-20 kHz)</div>
+        <div class="e-band-val" style="color:#10b981;">{_tb('brilliance')} / {_tb('air')}</div>
+        <div class="e-band-desc">vs overall level</div>
       </div>
     </div>
 
@@ -3144,7 +3396,7 @@ def generate_mastering_report_html(track_name, metrics, output_dir, params=None)
 
     <div class="cert-footer">
       <div>PHARMAKON DSP ARCHITECTURE &bull; OPEN-SOURCE MIT LICENSE &copy; 2026 LEX GEREK</div>
-      <div class="cert-seal">&#10003; VERIFIED STREAMING COMPLIANT &bull; ZERO INTER-SAMPLE PEAKS</div>
+      <div class="cert-seal">{seal_html}</div>
     </div>
   </div>
 
@@ -3514,6 +3766,14 @@ def process_stems_folder(target_folder, params=None, open_folder=True):
         'raw_sum': verify_wav_export(raw_sum_path, expected_subtype=export_subtype, expected_sr=sr),
     }
     metrics = calc_audio_metrics(raw_sum, master_mix, sr, params)
+    metrics['diagnosis'] = build_spectral_diagnosis(raw_sum, master_mix, sr, metrics, params, extra={
+        'sound_profile': resolve_sound_profile(params)[0],
+        'antidote_v2_corrections': None,
+        'deharsh_freq_used': float(deharsh_f),
+        'tape_stage_gain_db': None,
+        'target_ceiling_db': target_ceiling_db,
+        'mode': 'stems',
+    })
     metrics['sound_profile'] = resolve_sound_profile(params)[0]
     metrics['sub_sync_summary'] = sub_sync_summary_result
     metrics['sub_sync_mode'] = sub_sync_mode_result

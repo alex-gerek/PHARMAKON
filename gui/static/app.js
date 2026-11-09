@@ -1865,23 +1865,23 @@ function updateTelemetry(m) {
   const rmsEl = document.getElementById('m_rms');
   if (rmsEl) rmsEl.innerHTML = `${m.rms_proc_db} <span class="unit">dBFS</span>`;
   const rmsDelta = document.getElementById('m_rms_delta');
-  if (rmsDelta) rmsDelta.innerText = `${sign}${rmsDiff} dB Warm Density Boost`;
+  if (rmsDelta) rmsDelta.innerText = `${sign}${rmsDiff} dB vs raw`;
 
   // Dynamic Crest Factor
   const crestEl = document.getElementById('m_crest');
-  const crestVal = m.crest_factor_proc_db !== undefined ? m.crest_factor_proc_db : 10.8;
-  const crestOrig = m.crest_factor_orig_db !== undefined ? m.crest_factor_orig_db : 12.0;
+  const crestVal = m.crest_factor_proc_db !== undefined ? m.crest_factor_proc_db : '--';
+  const crestOrig = m.crest_factor_orig_db !== undefined ? m.crest_factor_orig_db : '--';
   if (crestEl) crestEl.innerHTML = `${crestVal} <span class="unit">dB</span>`;
   const crestDelta = document.getElementById('m_crest_delta');
-  if (crestDelta) crestDelta.innerText = `Healthy Punch (Raw: ${crestOrig} dB)`;
+  if (crestDelta) crestDelta.innerText = `Raw: ${crestOrig} dB`;
 
   // Sub-Bass Phase Correlation
   const phaseEl = document.getElementById('m_phase_corr');
-  const pProc = m.sub_phase_corr_proc !== undefined ? (m.sub_phase_corr_proc >= 0 ? `+${m.sub_phase_corr_proc.toFixed(2)}` : m.sub_phase_corr_proc.toFixed(2)) : '+0.99';
-  const pOrig = m.sub_phase_corr_orig !== undefined ? (m.sub_phase_corr_orig >= 0 ? `+${m.sub_phase_corr_orig.toFixed(2)}` : m.sub_phase_corr_orig.toFixed(2)) : '+0.84';
+  const pProc = m.sub_phase_corr_proc !== undefined ? (m.sub_phase_corr_proc >= 0 ? `+${m.sub_phase_corr_proc.toFixed(2)}` : m.sub_phase_corr_proc.toFixed(2)) : '--';
+  const pOrig = m.sub_phase_corr_orig !== undefined ? (m.sub_phase_corr_orig >= 0 ? `+${m.sub_phase_corr_orig.toFixed(2)}` : m.sub_phase_corr_orig.toFixed(2)) : '--';
   if (phaseEl) phaseEl.innerHTML = `${pProc} <span class="unit">Corr</span>`;
   const phaseDelta = document.getElementById('m_phase_corr_delta');
-  if (phaseDelta) phaseDelta.innerText = `Mono Lock (from ${pOrig})`;
+  if (phaseDelta) phaseDelta.innerText = `Raw: ${pOrig}`;
 
   const subEl = document.getElementById('m_sub');
   if (subEl) subEl.innerHTML = `-${m.sub_reduction_db} <span class="unit">dB</span>`;
@@ -1916,12 +1916,58 @@ function updateTelemetry(m) {
     if (harshDesc) harshDesc.innerText = `AI Glass Sibilance Neutralized`;
   }
 
+  renderDiagnosis(m.diagnosis);
+
   // Pre-populate frozen waveform buffers with real audio snapshot
   if (m.scope_sample_orig && m.scope_sample_proc) {
     frozenWaveRaw = new Uint8Array(m.scope_sample_orig);
     frozenWaveHealed = new Uint8Array(m.scope_sample_proc);
     hasCapturedAudio = true;
   }
+}
+
+// Antidote v2 summary for certificate tiles (measured corrections only)
+function antidoteSummary(m) {
+  const c = m.antidote_v2_corrections;
+  if (!Array.isArray(c)) return { value: 'OFF', sub: m.detected_resonance_hz ? `v1 target ${Math.round(m.detected_resonance_hz)} Hz (Classic 3.1)` : 'Classic 3.1 / stems' };
+  if (!c.length) return { value: 'NONE NEEDED', sub: 'no persistent resonance measured' };
+  return { value: `${c.length} BAND${c.length > 1 ? 'S' : ''} CUT`, sub: c.map(x => `${Math.round(x.hz)} Hz -${x.cut_db} dB`).join(', ') };
+}
+
+// Measured Spectral Diagnosis (engine: build_spectral_diagnosis). Text only - no canned claims.
+function renderDiagnosis(d) {
+  const fill = (listId, items) => {
+    const ul = document.getElementById(listId);
+    if (!ul || !Array.isArray(items)) return;
+    ul.innerHTML = '';
+    items.forEach(it => {
+      const li = document.createElement('li');
+      const b = document.createElement('span');
+      const icon = { issue: '\u26A0', warn: '\u26A0', ok: '\u2713', info: '\u2022' }[it.status] || '\u2022';
+      b.className = (it.status === 'issue' || it.status === 'warn') ? 'alert-bullet' : 'check-bullet';
+      if (it.status === 'warn') b.style.color = '#f59e0b';
+      b.textContent = icon + ' ';
+      const lab = document.createElement('b');
+      lab.textContent = it.label + ': ';
+      li.appendChild(b); li.appendChild(lab); li.appendChild(document.createTextNode(it.text));
+      ul.appendChild(li);
+    });
+  };
+  if (!d) return;
+  fill('diagSourceList', d.source);
+  fill('diagTreatList', d.treatment);
+  const src = Object.fromEntries((d.source || []).map(i => [i.key, i]));
+  const trt = Object.fromEntries((d.treatment || []).map(i => [i.key, i]));
+  const issues = (d.source || []).filter(i => i.status === 'issue').length;
+  const warns = (d.source || []).filter(i => i.status === 'warn').length;
+  const rawTag = document.getElementById('hudRawTag');
+  if (rawTag) rawTag.textContent = issues ? `${issues} DEFECT(S) MEASURED` : (warns ? `${warns} WARNING(S)` : 'NO DEFECTS MEASURED');
+  const rawInfo = document.getElementById('hudRawInfo');
+  if (rawInfo && src.peak) rawInfo.textContent = `TRUE-PEAK: ${Number(src.peak.value).toFixed(2)} dBTP`;
+  const procTag = document.getElementById('hudProcTag');
+  if (procTag) procTag.textContent = (d.profile || 'PHARMAKON').toUpperCase();
+  const procInfo = document.getElementById('hudProcInfo');
+  if (procInfo && trt.true_peak) procInfo.textContent = `TRUE-PEAK: ${Number(trt.true_peak.value).toFixed(2)} dBTP`;
 }
 
 function setMode(mode) {
@@ -2751,25 +2797,25 @@ function openMasteringReportModal() {
   const trackName = lastResult.track_name || "Audio Target";
   const tpProc = m.true_peak_proc_db !== undefined ? m.true_peak_proc_db : m.peak_proc_db;
   const tpOrig = m.true_peak_orig_db !== undefined ? m.true_peak_orig_db : m.peak_orig_db;
-  const lufsProc = m.lufs_proc !== undefined ? m.lufs_proc : -14.0;
-  const lufsOrig = m.lufs_orig !== undefined ? m.lufs_orig : -14.0;
-  const lufsDiff = (lufsProc - lufsOrig).toFixed(1);
+  const lufsProc = m.lufs_proc !== undefined ? m.lufs_proc : '--';
+  const lufsOrig = m.lufs_orig !== undefined ? m.lufs_orig : '--';
+  const lufsDiff = (m.lufs_proc !== undefined && m.lufs_orig !== undefined) ? (lufsProc - lufsOrig).toFixed(1) : '--';
   const lufsSign = lufsDiff >= 0 ? '+' : '';
   const rmsDiff = (m.rms_proc_db - m.rms_orig_db).toFixed(2);
   const rmsSign = rmsDiff >= 0 ? '+' : '';
-  const resHz = m.detected_resonance_hz ? Math.round(m.detected_resonance_hz) : 5000;
+  const resHz = m.detected_resonance_hz ? Math.round(m.detected_resonance_hz) : null;
   const resProm = m.detected_prominence_db ? `(+${m.detected_prominence_db.toFixed(1)} dB)` : '';
 
-  const crestProc = m.crest_factor_proc_db !== undefined ? m.crest_factor_proc_db : 10.8;
-  const crestOrig = m.crest_factor_orig_db !== undefined ? m.crest_factor_orig_db : 12.0;
-  const subCorrP = m.sub_phase_corr_proc !== undefined ? (m.sub_phase_corr_proc >= 0 ? `+${m.sub_phase_corr_proc.toFixed(2)}` : m.sub_phase_corr_proc.toFixed(2)) : '+0.99';
-  const subCorrO = m.sub_phase_corr_orig !== undefined ? (m.sub_phase_corr_orig >= 0 ? `+${m.sub_phase_corr_orig.toFixed(2)}` : m.sub_phase_corr_orig.toFixed(2)) : '+0.84';
-  const plrProc = m.plr_proc_db !== undefined ? m.plr_proc_db : 11.2;
+  const crestProc = m.crest_factor_proc_db !== undefined ? m.crest_factor_proc_db : '--';
+  const crestOrig = m.crest_factor_orig_db !== undefined ? m.crest_factor_orig_db : '--';
+  const subCorrP = m.sub_phase_corr_proc !== undefined ? (m.sub_phase_corr_proc >= 0 ? `+${m.sub_phase_corr_proc.toFixed(2)}` : m.sub_phase_corr_proc.toFixed(2)) : '--';
+  const subCorrO = m.sub_phase_corr_orig !== undefined ? (m.sub_phase_corr_orig >= 0 ? `+${m.sub_phase_corr_orig.toFixed(2)}` : m.sub_phase_corr_orig.toFixed(2)) : '--';
+  const plrProc = m.plr_proc_db !== undefined ? m.plr_proc_db : '--';
 
-  const shiftSub = m.energy_shift_sub_db !== undefined ? (m.energy_shift_sub_db >= 0 ? `+${m.energy_shift_sub_db.toFixed(1)}` : m.energy_shift_sub_db.toFixed(1)) : '-0.9';
-  const shiftBody = m.energy_shift_body_db !== undefined ? (m.energy_shift_body_db >= 0 ? `+${m.energy_shift_body_db.toFixed(1)}` : m.energy_shift_body_db.toFixed(1)) : '+0.1';
-  const shiftPres = m.energy_shift_presence_db !== undefined ? (m.energy_shift_presence_db >= 0 ? `+${m.energy_shift_presence_db.toFixed(1)}` : m.energy_shift_presence_db.toFixed(1)) : '-1.2';
-  const shiftAir = m.energy_shift_air_db !== undefined ? (m.energy_shift_air_db >= 0 ? `+${m.energy_shift_air_db.toFixed(1)}` : m.energy_shift_air_db.toFixed(1)) : '+1.3';
+  const shiftSub = m.energy_shift_sub_db !== undefined ? (m.energy_shift_sub_db >= 0 ? `+${m.energy_shift_sub_db.toFixed(1)}` : m.energy_shift_sub_db.toFixed(1)) : '--';
+  const shiftBody = m.energy_shift_body_db !== undefined ? (m.energy_shift_body_db >= 0 ? `+${m.energy_shift_body_db.toFixed(1)}` : m.energy_shift_body_db.toFixed(1)) : '--';
+  const shiftPres = m.energy_shift_presence_db !== undefined ? (m.energy_shift_presence_db >= 0 ? `+${m.energy_shift_presence_db.toFixed(1)}` : m.energy_shift_presence_db.toFixed(1)) : '--';
+  const shiftAir = m.energy_shift_air_db !== undefined ? (m.energy_shift_air_db >= 0 ? `+${m.energy_shift_air_db.toFixed(1)}` : m.energy_shift_air_db.toFixed(1)) : '--';
 
   // Generate SVG Spectrum (Full & Zoom)
   let svgChart = '';
@@ -2795,7 +2841,7 @@ function openMasteringReportModal() {
         ptsP.push(`${fToX(f).toFixed(1)},${dbToY(procDb[i]).toFixed(1)}`);
         if (deltaDb.length > i) {
           const rawD = deltaDb[i];
-          const dVal = rawD < -62 ? Math.max(-74, rawD + 22) : rawD;
+          const dVal = rawD;  // engine already applies the documented +22 dB display offset
           ptsD.push(`${fToX(f).toFixed(1)},${dbToY(dVal).toFixed(1)}`);
         }
       }
@@ -2872,12 +2918,12 @@ function openMasteringReportModal() {
       <div style="background:#090b10; border:1px solid #1f2738; border-radius:6px; padding:10px 12px;">
         <div style="font-family:var(--font-mono); font-size:9.5px; color:#64748b; letter-spacing:1px;">TRANSIENT CREST FACTOR</div>
         <div style="font-family:var(--font-display); font-size:18px; font-weight:700; color:#fff;">${crestProc} <span style="font-size:10px; color:#64748b;">dB</span></div>
-        <div style="font-family:var(--font-mono); font-size:10px; color:#10b981;">Healthy Punch (Raw: ${crestOrig} dB)</div>
+        <div style="font-family:var(--font-mono); font-size:10px; color:#94a3b8;">Raw: ${crestOrig} dB</div>
       </div>
       <div style="background:#090b10; border:1px solid #1f2738; border-radius:6px; padding:10px 12px;">
-        <div style="font-family:var(--font-mono); font-size:9.5px; color:#64748b; letter-spacing:1px;">DYNAMIC DE-HARSH</div>
-        <div style="font-family:var(--font-display); font-size:18px; font-weight:700; color:#fbbf24;">-${m.harsh_reduction_db} <span style="font-size:10px; color:#64748b;">dB</span></div>
-        <div style="font-family:var(--font-mono); font-size:10px; color:#94a3b8;">Whistle: ${resHz} Hz ${resProm}</div>
+        <div style="font-family:var(--font-mono); font-size:9.5px; color:#64748b; letter-spacing:1px;">AUTO ANTIDOTE v2</div>
+        <div style="font-family:var(--font-display); font-size:18px; font-weight:700; color:#fbbf24;">${antidoteSummary(m).value}</div>
+        <div style="font-family:var(--font-mono); font-size:10px; color:#94a3b8;">${antidoteSummary(m).sub}</div>
       </div>
       <div style="background:#090b10; border:1px solid #1f2738; border-radius:6px; padding:10px 12px;">
         <div style="font-family:var(--font-mono); font-size:9.5px; color:#64748b; letter-spacing:1px;">SUB-BASS SOLIDIFICATION & PHASE</div>
@@ -2890,6 +2936,20 @@ function openMasteringReportModal() {
         <div style="font-family:var(--font-mono); font-size:10px; color:#10b981;">Highs Mid-Side Air Spread</div>
       </div>
     </div>
+
+    <!-- MEASURED SPECTRAL DIAGNOSIS IN MODAL -->
+    ${(() => {
+      const d = m.diagnosis;
+      if (!d) return '';
+      const esc = (t) => String(t).replace(/[&<>"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch]));
+      const col = { issue: '#f43f5e', warn: '#f59e0b', ok: '#10b981', info: '#94a3b8' };
+      const ico = { issue: '&#9888;', warn: '&#9888;', ok: '&#10003;', info: '&bull;' };
+      const list = (items) => (items || []).map(i => `<div style="font-size:10px; margin-bottom:4px; line-height:1.35;"><span style="color:${col[i.status] || '#94a3b8'};">${ico[i.status] || '&bull;'}</span> <b style="color:#e2e8f0;">${esc(i.label)}:</b> <span style="color:#cbd5e1;">${esc(i.text)}</span></div>`).join('');
+      return `<div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px; font-family:var(--font-mono);">
+        <div style="background:#090b10; border:1px solid #3b1d24; border-radius:6px; padding:10px 12px;"><div style="font-size:9.5px; color:#f43f5e; letter-spacing:1px; margin-bottom:6px;">SOURCE DIAGNOSIS (MEASURED)</div>${list(d.source)}</div>
+        <div style="background:#090b10; border:1px solid #14342a; border-radius:6px; padding:10px 12px;"><div style="font-size:9.5px; color:#10b981; letter-spacing:1px; margin-bottom:6px;">TREATMENT (BEFORE &rarr; AFTER) &bull; ${esc(d.profile || '')}</div>${list(d.treatment)}</div>
+      </div>`;
+    })()}
 
     <!-- TRACK INTELLIGENCE MAP IN MODAL -->
     ${(() => {
@@ -2919,9 +2979,9 @@ function openMasteringReportModal() {
         const rej = s.events_rejected || 0;
         const lockStat = (acc + rej > 0) ? `${acc} / ${kCnt} locked` : `${kCnt} kicks`;
         const lockColor = acc > 0 ? '#10b981' : (kCnt > 0 ? '#f59e0b' : '#64748b');
-        const pk = (s.peak_mix_dbfs !== undefined) ? Number(s.peak_mix_dbfs).toFixed(1) : ((s.peak_dbfs !== undefined) ? Number(s.peak_dbfs).toFixed(1) : '-0.1');
-        const rms = (s.rms_mix_dbfs !== undefined) ? Number(s.rms_mix_dbfs).toFixed(1) : '-14.0';
-        const crest = (s.crest_factor_db !== undefined) ? Number(s.crest_factor_db).toFixed(1) : '9.0';
+        const pk = (s.peak_mix_dbfs !== undefined) ? Number(s.peak_mix_dbfs).toFixed(1) : ((s.peak_dbfs !== undefined) ? Number(s.peak_dbfs).toFixed(1) : '--');
+        const rms = (s.rms_mix_dbfs !== undefined) ? Number(s.rms_mix_dbfs).toFixed(1) : '--';
+        const crest = (s.crest_factor_db !== undefined) ? Number(s.crest_factor_db).toFixed(1) : '--';
         const nameClean = (s.name || 'Section').split('/')[0].trim();
         return `<div onclick="inspectTrackMapSection(${sIdx})" title="Click to enlarge & inspect section" style="background:#090c13; border:1px solid #1a2233; border-top:3px solid ${c}; border-radius:6px; padding:8px 10px; font-family:var(--font-mono); cursor:pointer; transition:all 0.2s ease; user-select:none;" onmouseover="this.style.transform='translateY(-2px)'; this.style.borderColor='${c}'; this.style.boxShadow='0 4px 14px ${c}33';" onmouseout="this.style.transform='translateY(0)'; this.style.borderColor='#1a2233'; this.style.borderTopColor='${c}'; this.style.boxShadow='none';">
           <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #161e2e; padding-bottom:4px; margin-bottom:6px;">
@@ -3214,20 +3274,20 @@ async function downloadReportPNG() {
   // 4. Telemetry Metric Boxes (6 tiles)
   const tpProc = m.true_peak_proc_db !== undefined ? m.true_peak_proc_db : m.peak_proc_db;
   const tpOrig = m.true_peak_orig_db !== undefined ? m.true_peak_orig_db : m.peak_orig_db;
-  const lufsProc = m.lufs_proc !== undefined ? m.lufs_proc : -14.0;
-  const lufsOrig = m.lufs_orig !== undefined ? m.lufs_orig : -14.0;
+  const lufsProc = m.lufs_proc !== undefined ? m.lufs_proc : '--';
+  const lufsOrig = m.lufs_orig !== undefined ? m.lufs_orig : '--';
 
-  const crestProc = m.crest_factor_proc_db !== undefined ? m.crest_factor_proc_db : 10.8;
-  const crestOrig = m.crest_factor_orig_db !== undefined ? m.crest_factor_orig_db : 12.0;
-  const subCorrP = m.sub_phase_corr_proc !== undefined ? (m.sub_phase_corr_proc >= 0 ? `+${m.sub_phase_corr_proc.toFixed(2)}` : m.sub_phase_corr_proc.toFixed(2)) : '+0.99';
-  const subCorrO = m.sub_phase_corr_orig !== undefined ? (m.sub_phase_corr_orig >= 0 ? `+${m.sub_phase_corr_orig.toFixed(2)}` : m.sub_phase_corr_orig.toFixed(2)) : '+0.84';
+  const crestProc = m.crest_factor_proc_db !== undefined ? m.crest_factor_proc_db : '--';
+  const crestOrig = m.crest_factor_orig_db !== undefined ? m.crest_factor_orig_db : '--';
+  const subCorrP = m.sub_phase_corr_proc !== undefined ? (m.sub_phase_corr_proc >= 0 ? `+${m.sub_phase_corr_proc.toFixed(2)}` : m.sub_phase_corr_proc.toFixed(2)) : '--';
+  const subCorrO = m.sub_phase_corr_orig !== undefined ? (m.sub_phase_corr_orig >= 0 ? `+${m.sub_phase_corr_orig.toFixed(2)}` : m.sub_phase_corr_orig.toFixed(2)) : '--';
 
   const tiles = [
     { label: '4X TRUE-PEAK CEILING', val: `${tpProc} dBFS`, sub: `Raw: ${tpOrig} dBFS (Clamped)`, color: '#ffffff' },
-    { label: 'INTEGRATED LOUDNESS', val: `${lufsProc} LUFS`, sub: `PLR: ${m.plr_proc_db || 11.2} dB`, color: '#38bdf8' },
-    { label: 'DYNAMIC CREST FACTOR', val: `${crestProc} dB`, sub: `Healthy Punch (Raw: ${crestOrig})`, color: '#ffffff' },
-    { label: 'DYNAMIC DE-HARSH', val: `-${m.harsh_reduction_db} dB`, sub: `Whistle: ${m.detected_resonance_hz ? Math.round(m.detected_resonance_hz) : 5000} Hz`, color: '#fbbf24' },
-    { label: 'SUB-BASS PHASE CORR', val: `${subCorrP} Corr`, sub: `Mono Anchor (Orig: ${subCorrO})`, color: '#fde047' },
+    { label: 'INTEGRATED LOUDNESS', val: `${lufsProc} LUFS`, sub: `PLR: ${m.plr_proc_db !== undefined ? m.plr_proc_db : '--'} dB`, color: '#38bdf8' },
+    { label: 'DYNAMIC CREST FACTOR', val: `${crestProc} dB`, sub: `Raw: ${crestOrig} dB`, color: '#ffffff' },
+    { label: 'AUTO ANTIDOTE v2', val: antidoteSummary(m).value, sub: antidoteSummary(m).sub, color: '#fbbf24' },
+    { label: 'SUB-BASS PHASE CORR', val: `${subCorrP} Corr`, sub: `Raw: ${subCorrO}`, color: '#fde047' },
     { label: '3D STEREO WIDTH', val: `+${m.stereo_expansion_db} dB`, sub: `Mid-Side Air Widening`, color: '#10b981' }
   ];
 

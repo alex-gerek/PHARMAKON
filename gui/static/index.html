@@ -567,18 +567,15 @@
               <div class="crt-overlay"></div>
               <canvas id="canvasRaw" width="580" height="280"></canvas>
               <div class="monitor-hud-overlay">
-                <span class="hud-tag tag-red">DIGITAL RESIDENTIAL HARSH</span>
-                <span class="hud-sub-info">CLIPPING RISK: HIGH</span>
+                <span class="hud-tag tag-red" id="hudRawTag">SOURCE // AWAITING ANALYSIS</span>
+                <span class="hud-sub-info" id="hudRawInfo">TRUE-PEAK: --</span>
               </div>
             </div>
             <!-- DIAGNOSIS: WHAT WAS WRONG -->
             <div class="monitor-diagnosis diag-raw">
-              <div class="diag-header">❌ SOURCE DEFECT DIAGNOSIS:</div>
-              <ul class="diag-list">
-                <li><span class="alert-bullet">⚠</span> <b>Peak Ceiling:</b> 0.00 dBFS (Harsh digital clipping detected)</li>
-                <li><span class="alert-bullet">⚠</span> <b>5kHz Resonance:</b> Toxic AI glass sibilance & harshness</li>
-                <li><span class="alert-bullet">⚠</span> <b>Sub-Bass:</b> Stereo smearing & destructive phase cancelation</li>
-                <li><span class="alert-bullet">⚠</span> <b>Infra-Rumble:</b> Infrasonic mud below 32Hz stealing headroom</li>
+              <div class="diag-header">❌ SOURCE DEFECT DIAGNOSIS (MEASURED):</div>
+              <ul class="diag-list" id="diagSourceList">
+                <li><span class="check-bullet">•</span> Process a track to measure its defects.</li>
               </ul>
             </div>
           </div>
@@ -596,19 +593,15 @@
               <div class="crt-overlay"></div>
               <canvas id="canvasHealed" width="580" height="280"></canvas>
               <div class="monitor-hud-overlay">
-                <span class="hud-tag tag-emerald">ANALOG TAPE GLUE TANH</span>
-                <span class="hud-sub-info">TRUE-PEAK: -0.3 dBFS</span>
+                <span class="hud-tag tag-emerald" id="hudProcTag">PHARMAKON MASTER</span>
+                <span class="hud-sub-info" id="hudProcInfo">TRUE-PEAK: --</span>
               </div>
             </div>
             <!-- SURGERY: WHAT WAS CURED -->
             <div class="monitor-diagnosis diag-healed">
-              <div class="diag-header">⚡ SURGICAL CURE // PHARMAKON DSP TELEMETRY:</div>
-              <ul class="diag-list">
-                <li><span class="check-bullet">✓</span> <b>4x True-Peak:</b> Output measured at <b><span id="txtTruePeak">-0.30 dBTP</span></b> (4x oversampled, ceiling held)</li>
-                <li><span class="check-bullet">✓</span> <b>Integrated Loudness:</b> Measured at <b><span id="txtLufs">-14.0 LUFS</span></b> (ITU-R BS.1770-4)</li>
-                <li><span class="check-bullet">✓</span> <b>Dynamic De-Harshing:</b> <span id="txtResonance">Adaptive Notch</span>: <b><span id="txtHarsh">-20.73 dB</span></b></li>
-                <li><span class="check-bullet">✓</span> <b>Mono Sub Lock:</b> Low-end below 120Hz locked to <b>100% True Mono</b></li>
-                <li><span class="check-bullet">✓</span> <b>Analog Tape Warmth:</b> Hyperbolic tangent saturation: <b><span id="txtRms">+1.35 dB</span></b></li>
+              <div class="diag-header">⚡ TREATMENT // MEASURED BEFORE &rarr; AFTER:</div>
+              <ul class="diag-list" id="diagTreatList">
+                <li><span class="check-bullet">•</span> Results appear here after processing.</li>
               </ul>
             </div>
           </div>
