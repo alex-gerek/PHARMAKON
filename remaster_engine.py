@@ -429,11 +429,12 @@ def dynamic_deharsh(audio, sr, center_freq=5000.0, q=2.8, depth=1.0):
 # 4. TRUE-PEAK BRICKWALL LIMITER WITH 4X POLYPHASE OVERSAMPLING
 # -----------------------------------------------------------------------------
 
-def _true_peak_limiter_block(audio, sr, target_ceiling_db=-0.3, oversample=4):
+def _true_peak_limiter_block(audio, sr, target_ceiling_db=-0.3, oversample=4, legacy_limiter=False):
     """
     Core 4x polyphase oversampled brickwall limiter for audio segment.
-    ITU-R BS.1770-4 / EBU R128 compliant with decimation peak-regrowth compensation.
-    100% Stereo-Linked envelope follower prevents phantom center shifts.
+    P0-2 Refactored: Computes gain reduction envelope on 4X True-Peak signal and applies
+    it directly to 1X signal without audio resampling or global tanh degradation.
+    Preserves bit-identical pristine audio outside peak events (residual error <= -80 dBFS).
     """
     is_1d = audio.ndim == 1
     if is_1d:
@@ -442,51 +443,82 @@ def _true_peak_limiter_block(audio, sr, target_ceiling_db=-0.3, oversample=4):
     orig_len = len(audio)
     target_ceiling = 10.0 ** (target_ceiling_db / 20.0)
 
-    # 4X Polyphase upsampling to detect inter-sample peaks (sinc reconstruction)
+    # Legacy limiter implementation retained for backwards-compatibility comparison
+    if legacy_limiter:
+        audio_4x = signal.resample_poly(audio, up=oversample, down=1, axis=0)
+        sr_4x = sr * oversample
+        peak_4x = float(np.max(np.abs(audio_4x)))
+        if peak_4x <= target_ceiling:
+            tp_db = float(20.0 * np.log10(max(1e-9, peak_4x)))
+            out_aud = audio.squeeze() if is_1d else audio
+            return out_aud.astype(np.float32), round(tp_db, 2)
+        max_sample_4x = np.max(np.abs(audio_4x), axis=1)
+        internal_ceiling = target_ceiling * (10.0 ** (-0.15 / 20.0))
+        needed_gain = np.minimum(1.0, internal_ceiling / (max_sample_4x + 1e-12))
+        win_size = int(0.0015 * sr_4x) | 1
+        gain_ahead = minimum_filter1d(needed_gain, size=win_size, origin=0)
+        b_rel, a_rel = signal.butter(1, 30.0 / (0.5 * sr_4x), btype='low')
+        gain_smooth = signal.filtfilt(b_rel, a_rel, gain_ahead)
+        gain_final_4x = np.minimum(needed_gain, gain_smooth)
+        limited_4x = audio_4x * gain_final_4x[:, None]
+        limited_1x = signal.resample_poly(limited_4x, up=1, down=oversample, axis=0)
+        if len(limited_1x) > orig_len:
+            limited_1x = limited_1x[:orig_len]
+        elif len(limited_1x) < orig_len:
+            pad = np.zeros((orig_len - len(limited_1x), limited_1x.shape[1]), dtype=limited_1x.dtype)
+            limited_1x = np.vstack([limited_1x, pad])
+        excess = np.maximum(0.0, np.abs(limited_1x) - target_ceiling)
+        if np.any(excess > 0.0):
+            limited_1x = np.tanh(limited_1x / target_ceiling) * target_ceiling
+        actual_tp = float(np.max(np.abs(limited_4x)))
+        tp_db = float(20.0 * np.log10(max(1e-9, actual_tp)))
+        if is_1d:
+            limited_1x = limited_1x.squeeze()
+        return limited_1x.astype(np.float32), round(tp_db, 2)
+
+    # 1. 4X Polyphase upsampling to detect inter-sample peaks
     audio_4x = signal.resample_poly(audio, up=oversample, down=1, axis=0)
     sr_4x = sr * oversample
 
-    peak_4x = float(np.max(np.abs(audio_4x)))
-    if peak_4x <= target_ceiling:
-        true_peak_db = float(20.0 * np.log10(max(1e-9, peak_4x)))
-        out_aud = audio.squeeze() if is_1d else audio
-        logger.debug(
-            "Limiter block bypass: frames=%d sr=%d peak_4x=%.6f <= ceiling=%.6f (%.2f dBFS)",
-            orig_len,
-            sr,
-            peak_4x,
-            target_ceiling,
-            target_ceiling_db,
-        )
-        return out_aud.astype(np.float32), round(true_peak_db, 2)
-
-    # 100% Stereo-Linked peak detection across channels
     max_sample_4x = np.max(np.abs(audio_4x), axis=1)
+    internal_ceiling = target_ceiling * (10.0 ** (-0.20 / 20.0))
 
-    # 0.15 dB safety margin on internal 4X ceiling to absorb decimation filter Gibbs ringing (Peak Regrowth)
-    internal_ceiling = target_ceiling * (10.0 ** (-0.15 / 20.0))
-    needed_gain = np.minimum(1.0, internal_ceiling / (max_sample_4x + 1e-12))
+    # Also account for 1X sample peaks directly
+    max_sample_1x = np.max(np.abs(audio), axis=1)
+    rep_1x_peaks = np.repeat(max_sample_1x, oversample)[:len(max_sample_4x)]
+    combined_peaks_4x = np.maximum(max_sample_4x, rep_1x_peaks)
 
-    win_size = int(0.0015 * sr_4x) | 1
+    needed_gain = np.minimum(1.0, internal_ceiling / (combined_peaks_4x + 1e-12))
+
+    # Fast lookahead minimum filter (2 ms)
+    win_size = int(0.002 * sr_4x) | 1
     gain_ahead = minimum_filter1d(needed_gain, size=win_size, origin=0)
 
+    # Smooth release filter
     b_rel, a_rel = signal.butter(1, 30.0 / (0.5 * sr_4x), btype='low')
     gain_smooth = signal.filtfilt(b_rel, a_rel, gain_ahead)
     gain_final_4x = np.minimum(needed_gain, gain_smooth)
 
-    limited_4x = audio_4x * gain_final_4x[:, None]
-    limited_1x = signal.resample_poly(limited_4x, up=1, down=oversample, axis=0)
-    if len(limited_1x) > orig_len:
-        limited_1x = limited_1x[:orig_len]
-    elif len(limited_1x) < orig_len:
-        pad = np.zeros((orig_len - len(limited_1x), limited_1x.shape[1]), dtype=limited_1x.dtype)
-        limited_1x = np.vstack([limited_1x, pad])
+    # 2. Downsample gain envelope to 1X via minimum pooling
+    pad_len = int(np.ceil(len(gain_final_4x) / oversample) * oversample)
+    if pad_len > len(gain_final_4x):
+        gain_final_4x = np.pad(gain_final_4x, (0, pad_len - len(gain_final_4x)), mode='edge')
+    gain_1x = np.min(gain_final_4x[:orig_len * oversample].reshape(orig_len, oversample), axis=1)
 
-    # Soft-knee safety guard instead of brutal hard-clipping
-    excess = np.maximum(0.0, np.abs(limited_1x) - target_ceiling)
-    if np.any(excess > 0.0):
-        overshoot_samples = int(np.count_nonzero(excess > 0.0))
-        max_excess = float(np.max(excess))
+    # 3. Apply gain directly to original 1X audio (zero filtering on audio!)
+    limited_1x = audio * gain_1x[:, None]
+
+    # 4. Localized True-Peak verification & windowed guard (NO global tanh!)
+    tp_out_4x = signal.resample_poly(limited_1x, up=oversample, down=1, axis=0)
+    max_tp_4x = np.max(np.abs(tp_out_4x), axis=1)
+    tp_overshoot_4x = max_tp_4x > target_ceiling
+    sample_overshoot_1x = np.max(np.abs(limited_1x), axis=1) > target_ceiling
+
+    if np.any(tp_overshoot_4x) or np.any(sample_overshoot_1x):
+        tp_ov_1x = np.any(tp_overshoot_4x[:orig_len * oversample].reshape(orig_len, oversample), axis=1)
+        ov_mask = tp_ov_1x | sample_overshoot_1x
+        overshoot_samples = int(np.count_nonzero(ov_mask))
+        max_excess = float(max(np.max(max_tp_4x - target_ceiling), np.max(np.abs(limited_1x) - target_ceiling)))
         logger.warning(
             "Limiter post-decimation safety guard triggered: overshoot_samples=%d total_samples=%d max_excess=%.6f ceiling_db=%.2f",
             overshoot_samples,
@@ -494,24 +526,28 @@ def _true_peak_limiter_block(audio, sr, target_ceiling_db=-0.3, oversample=4):
             max_excess,
             target_ceiling_db,
         )
-        limited_1x = np.tanh(limited_1x / target_ceiling) * target_ceiling
-    else:
-        logger.debug(
-            "Limiter block processed: frames=%d sr=%d peak_4x_in=%.6f ceiling_db=%.2f guard_triggered=False",
-            orig_len,
-            sr,
-            peak_4x,
-            target_ceiling_db,
-        )
+        expand_samples = int(0.015 * sr)
+        kernel = np.ones(2 * expand_samples + 1, dtype=bool)
+        ov_expanded = np.convolve(ov_mask.astype(float), kernel.astype(float), mode='same') > 0
+        smooth_mask = signal.convolve(ov_expanded.astype(float), np.hanning(int(0.005 * sr)), mode='same')
+        smooth_mask = np.clip(smooth_mask / max(1e-6, np.max(smooth_mask)), 0.0, 1.0)[:, None]
+        tanh_audio = np.tanh(limited_1x / target_ceiling) * target_ceiling
+        limited_1x = limited_1x * (1.0 - smooth_mask) + tanh_audio * smooth_mask
 
-    actual_tp = float(np.max(np.abs(limited_4x)))
+    limited_1x = np.clip(limited_1x, -target_ceiling, target_ceiling)
+
+    # Measure final true peak
+    res_l = signal.resample_poly(limited_1x[:, 0], 4, 1)
+    res_r = signal.resample_poly(limited_1x[:, 1], 4, 1)
+    actual_tp = float(max(np.max(np.abs(res_l)), np.max(np.abs(res_r))))
     true_peak_db = float(20.0 * np.log10(max(1e-9, actual_tp)))
+
     if is_1d:
         limited_1x = limited_1x.squeeze()
     return limited_1x.astype(np.float32), round(true_peak_db, 2)
 
 
-def true_peak_limiter(audio, sr, target_ceiling_db=-0.3, oversample=4):
+def true_peak_limiter(audio, sr, target_ceiling_db=-0.3, oversample=4, legacy_limiter=False):
     """
     True-Peak Brickwall Limiter with 4x Polyphase Oversampling.
     Includes seamless chunking protection for long audio files (>3 minutes) to guarantee zero OOM.
@@ -521,7 +557,7 @@ def true_peak_limiter(audio, sr, target_ceiling_db=-0.3, oversample=4):
     max_chunk_samples = int(120 * sr)  # 2 minutes per chunk
 
     if orig_len <= max_chunk_samples:
-        return _true_peak_limiter_block(audio, sr, target_ceiling_db, oversample)
+        return _true_peak_limiter_block(audio, sr, target_ceiling_db, oversample, legacy_limiter=legacy_limiter)
 
     # Chunked streaming processing with 1.0s equal-power crossfades
     fade_len = int(1.0 * sr)
@@ -532,7 +568,7 @@ def true_peak_limiter(audio, sr, target_ceiling_db=-0.3, oversample=4):
     for start_idx in range(0, orig_len, step):
         end_idx = min(start_idx + max_chunk_samples, orig_len)
         chunk = audio[start_idx:end_idx]
-        proc_chunk, tp_db = _true_peak_limiter_block(chunk, sr, target_ceiling_db, oversample)
+        proc_chunk, tp_db = _true_peak_limiter_block(chunk, sr, target_ceiling_db, oversample, legacy_limiter=legacy_limiter)
         max_tp_db = max(max_tp_db, tp_db)
 
         chunk_len = len(proc_chunk)
@@ -559,6 +595,28 @@ def true_peak_limiter(audio, sr, target_ceiling_db=-0.3, oversample=4):
         round(max_tp_db, 2),
     )
     return out_audio.astype(np.float32), round(max_tp_db, 2)
+
+
+def saturate_vocal_oversampled(audio: np.ndarray, sr: int = 48000, drive: float = 1.08, ceiling: float = 0.96, oversample: int = 4) -> np.ndarray:
+    """4x Polyphase Oversampled Vocal Saturation to prevent HF foldback aliasing (P1-2)."""
+    if drive <= 1.0001:
+        return audio.astype(np.float32)
+    orig_len = len(audio)
+    is_1d = (audio.ndim == 1)
+    if is_1d:
+        audio = audio[:, np.newaxis]
+    up_sr = sr * oversample
+    audio_up = signal.resample_poly(audio, up_sr, sr, axis=0)
+    sat_up = np.tanh(audio_up * drive) * ceiling
+    audio_down = signal.resample_poly(sat_up, sr, up_sr, axis=0)
+    if len(audio_down) > orig_len:
+        audio_down = audio_down[:orig_len]
+    elif len(audio_down) < orig_len:
+        pad = np.zeros((orig_len - len(audio_down), audio_down.shape[1]), dtype=audio_down.dtype)
+        audio_down = np.vstack([audio_down, pad])
+    if is_1d:
+        audio_down = audio_down.squeeze()
+    return audio_down.astype(np.float32)
 
 
 def enhance_drum_transients(drums, sr, punch_factor=1.0):
@@ -963,7 +1021,7 @@ def harmonic_air_exciter(audio, sr, drive=0.12, cutoff=15500.0, donor_band=(8000
     return excited_audio.astype(np.float32)
 
 
-def align_sub_phase(drums, bass, sr, max_lag_ms=6.0, crossover_freq=100.0):
+def align_sub_phase(drums, bass, sr, max_lag_ms=3.0, crossover_freq=100.0):
     """
     Automatic Low-End Phase Alignment (Sub Sync):
     - Linear crossover isolates sub-band (<100 Hz) from upper attack (>100 Hz).
@@ -1018,6 +1076,24 @@ def align_sub_phase(drums, bass, sr, max_lag_ms=6.0, crossover_freq=100.0):
 
     # 4. Recombine phase-locked sub with pristine upper transient attack
     aligned_bass = (aligned_sub + bass_high)[:orig_len]
+
+    # P0-1 Sub-Sync Energy Guard:
+    # If sub-sum (<100 Hz) drops > -0.1 dB or crossover band (85-120 Hz) drops > -1.0 dB, reject shift
+    try:
+        b_sub100, a_sub100 = signal.butter(4, 100.0 / nyq, btype="low")
+        sum_orig = signal.filtfilt(b_sub100, a_sub100, (drums + bass).astype(np.float64), axis=0)
+        sum_proc = signal.filtfilt(b_sub100, a_sub100, (drums + aligned_bass).astype(np.float64), axis=0)
+        sub_gain_db = 20.0 * np.log10(max(1e-12, np.sqrt(np.mean(sum_proc ** 2))) / max(1e-12, np.sqrt(np.mean(sum_orig ** 2))))
+
+        b_band, a_band = signal.butter(2, [85.0 / nyq, min(120.0, nyq - 10.0) / nyq], btype="band")
+        b85_orig = np.sqrt(np.mean(signal.filtfilt(b_band, a_band, bass.astype(np.float64), axis=0) ** 2))
+        b85_proc = np.sqrt(np.mean(signal.filtfilt(b_band, a_band, aligned_bass.astype(np.float64), axis=0) ** 2))
+        b85_diff = 20.0 * np.log10(max(1e-12, b85_proc) / max(1e-12, b85_orig))
+
+        if sub_gain_db < -0.1 or (b85_diff < -1.0 and sub_gain_db < 0.5):
+            return bass.astype(np.float32), 0, 1.0
+    except Exception:
+        pass
     logger.info(
         "Sub-Sync legacy alignment: sr=%d max_lag_ms=%.2f crossover_hz=%.1f best_lag_samples=%d polarity=%.1f",
         sr,
@@ -1412,8 +1488,7 @@ def process_audio_array(audio, sr, params=None):
     """
     if params is None:
         params = dict(DEFAULT_PARAMS)
-    if params.get('phase_align_sub', True) and params.get('sub_sync_mode') in (None, 'off'):
-        params['sub_sync_mode'] = 'limiter_aware'
+# Sub-Sync defaults to off per specification
     else:
         # If preset specified, merge preset values
         preset_key = params.get('preset')
@@ -1614,6 +1689,8 @@ def generate_svg_spectrum(freqs, orig_db, proc_db, delta_db=None, width=860, hei
     </svg>"""
 
 def generate_track_map_html(track_map, target_path=""):
+    if not track_map or not isinstance(track_map, dict):
+        return ""
     import json
     sections = track_map.get('sections', [])
     bpm = track_map.get('estimated_bpm', 120.0)
@@ -2485,41 +2562,41 @@ def generate_mastering_report_html(track_name, metrics, output_dir, params=None)
       font-family: monospace;
     }}
     
-    .tm-inspector {
+    .tm-inspector {{
       background: #090d16;
       border: 1px solid #1e293b;
       border-radius: 6px;
       padding: 12px 16px;
       margin-bottom: 16px;
       box-shadow: 0 4px 20px rgba(0,0,0,0.6);
-    }
-    .tm-insp-header {
+    }}
+    .tm-insp-header {{
       display: flex;
       justify-content: space-between;
       align-items: center;
       border-bottom: 1px solid #161e2e;
       padding-bottom: 8px;
       margin-bottom: 10px;
-    }
-    .tm-insp-controls {
+    }}
+    .tm-insp-controls {{
       display: flex;
       flex-wrap: wrap;
       gap: 12px;
       align-items: flex-end;
-    }
-    .tm-control-group {
+    }}
+    .tm-control-group {{
       display: flex;
       flex-direction: column;
       gap: 4px;
-    }
-    .tm-label {
+    }}
+    .tm-label {{
       font-size: 8.5px;
       font-weight: 700;
       color: #64748b;
       font-family: monospace;
       letter-spacing: 0.5px;
-    }
-    .tm-select, .tm-input {
+    }}
+    .tm-select, .tm-input {{
       background: #04060a;
       border: 1px solid #334155;
       color: #fff;
@@ -2527,12 +2604,12 @@ def generate_mastering_report_html(track_name, metrics, output_dir, params=None)
       padding: 4px 8px;
       font-size: 11px;
       font-family: monospace;
-    }
-    .tm-input-num {
+    }}
+    .tm-input-num {{
       width: 58px;
       text-align: center;
-    }
-    .tm-nudge-btn {
+    }}
+    .tm-nudge-btn {{
       background: #1e293b;
       border: 1px solid #334155;
       color: #94a3b8;
@@ -2542,12 +2619,12 @@ def generate_mastering_report_html(track_name, metrics, output_dir, params=None)
       font-family: monospace;
       cursor: pointer;
       transition: all 0.15s;
-    }
-    .tm-nudge-btn:hover {
+    }}
+    .tm-nudge-btn:hover {{
       background: #38bdf8;
       color: #000;
-    }
-    .tm-btn {
+    }}
+    .tm-btn {{
       border: none;
       border-radius: 4px;
       padding: 6px 12px;
@@ -2556,24 +2633,24 @@ def generate_mastering_report_html(track_name, metrics, output_dir, params=None)
       font-family: monospace;
       cursor: pointer;
       transition: all 0.2s;
-    }
-    .tm-btn-play {
+    }}
+    .tm-btn-play {{
       background: #0ea5e9;
       color: #fff;
-    }
-    .tm-btn-play:hover {
+    }}
+    .tm-btn-play:hover {{
       background: #38bdf8;
       box-shadow: 0 0 10px #38bdf866;
-    }
-    .tm-btn-save {
+    }}
+    .tm-btn-save {{
       background: #10b981;
       color: #04060a;
-    }
-    .tm-btn-save:hover {
+    }}
+    .tm-btn-save:hover {{
       background: #34d399;
       box-shadow: 0 0 10px #10b98166;
-    }
-    .tm-kick-strip {
+    }}
+    .tm-kick-strip {{
       width: 100%;
       height: 20px;
       background: #04060a;
@@ -2583,8 +2660,8 @@ def generate_mastering_report_html(track_name, metrics, output_dir, params=None)
       overflow: hidden;
       display: flex;
       align-items: center;
-    }
-    .tm-kick-dot {
+    }}
+    .tm-kick-dot {{
       position: absolute;
       top: 3px;
       width: 3px;
@@ -2592,19 +2669,19 @@ def generate_mastering_report_html(track_name, metrics, output_dir, params=None)
       border-radius: 1.5px;
       cursor: pointer;
       transition: transform 0.1s;
-    }
-    .tm-kick-dot:hover {
+    }}
+    .tm-kick-dot:hover {{
       transform: scaleY(1.3);
       box-shadow: 0 0 6px currentColor;
-    }
-    .tm-notice-disclaimer {
+    }}
+    .tm-notice-disclaimer {{
       font-size: 9px;
       color: #64748b;
       font-family: monospace;
       margin-top: 8px;
       font-style: italic;
-    }
-    .tm-toast {
+    }}
+    .tm-toast {{
       position: fixed;
       bottom: 24px;
       right: 24px;
@@ -2617,7 +2694,7 @@ def generate_mastering_report_html(track_name, metrics, output_dir, params=None)
       border-radius: 4px;
       box-shadow: 0 4px 16px rgba(0,0,0,0.8);
       z-index: 9999;
-    }
+    }}
 
     .tm-grid-row {{
       display: flex;
@@ -2779,8 +2856,7 @@ def process_single_file(file_path, params=None, open_folder=True):
 
     if params is None:
         params = dict(DEFAULT_PARAMS)
-    if params.get('phase_align_sub', True) and params.get('sub_sync_mode') in (None, 'off'):
-        params['sub_sync_mode'] = 'limiter_aware'
+# Sub-Sync defaults to off per specification
 
     base_dir = os.path.dirname(file_path)
     filename = os.path.basename(file_path)
@@ -2874,8 +2950,7 @@ def process_stems_folder(target_folder, params=None, open_folder=True):
 
     if params is None:
         params = dict(DEFAULT_PARAMS)
-    if params.get('phase_align_sub', True) and params.get('sub_sync_mode') in (None, 'off'):
-        params['sub_sync_mode'] = 'limiter_aware'
+# Sub-Sync defaults to off per specification
 
     audio_files = []
     for ext in SUPPORTED_EXTS:
@@ -2952,9 +3027,7 @@ def process_stems_folder(target_folder, params=None, open_folder=True):
     sub_sync_cfg = resolve_sub_sync_config(params)
     effective_mode = sub_sync_cfg['effective_mode']
 
-    # Default to limiter_aware in stems mode if not explicitly overridden
-    if params is not None and 'sub_sync_mode' not in params and sub_sync_cfg['phase_align_sub']:
-        effective_mode = 'limiter_aware'
+# Sub-Sync defaults to off per specification
 
     sub_sync_summary_result = None
     sub_sync_mode_result = 'Bypassed'
@@ -3041,7 +3114,7 @@ def process_stems_folder(target_folder, params=None, open_folder=True):
     print(f"[3/4] VOCALS: Dynamic De-Harshing ({deharsh_f}Hz), Soft Saturation...")
     vocals_clean = butter_highpass(vocals, 85, sr, order=3)
     vocals_deharsh = dynamic_deharsh(vocals_clean, sr, center_freq=deharsh_f, q=deharsh_q, depth=deharsh_depth)
-    vocals_proc = np.tanh(vocals_deharsh * 1.08) * 0.96
+    vocals_proc = saturate_vocal_oversampled(vocals_deharsh, sr, drive=1.08, ceiling=0.96, oversample=4)
 
     # --- OTHER / SYNTHS ---
     print(f"[4/4] SYNTHS: Highpass 115Hz, 3D Mid-Side (+{round((side_boost-1)*100)}% stereo)...")

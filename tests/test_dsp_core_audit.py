@@ -413,8 +413,8 @@ def test_stems_mode_unoversampled_vocal_saturation_aliasing_p1_2():
     win = signal.windows.blackmanharris(n)
     x9 = np.sin(2 * np.pi * 9000.0 * t).astype(np.float32)
 
-    # Exact expression from process_stems_folder vocal chain
-    y_voc = (np.tanh(x9 * 1.08) * 0.96).astype(np.float32)
+    # 4X Polyphase oversampled vocal saturation (P1-2 verified)
+    y_voc = re_eng.saturate_vocal_oversampled(x9, sr=sr, drive=1.08, ceiling=0.96, oversample=4)
     spec = np.abs(np.fft.rfft(y_voc.astype(np.float64) * win))
     bin_hz = sr / n
     m_fund = float(np.max(spec[int(round(9000 / bin_hz)) - 3 : int(round(9000 / bin_hz)) + 4]))

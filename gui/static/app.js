@@ -3,6 +3,35 @@
 // Dual Real-Time Oscilloscopes & Live Diagnostics by Lex Gerek
 // ==========================================================================
 
+let gSessionToken = '';
+function getCookie(name) {
+  const v = document.cookie.match('(^|;) ?' + name + '=([^;]*)(;|$)');
+  return v ? v[2] : null;
+}
+gSessionToken = getCookie('pharmakon_session_token') || '';
+const _origFetch = window.fetch;
+window.fetch = function(url, options = {}) {
+  options = options || {};
+  options.headers = options.headers || {};
+  if (!gSessionToken) {
+    gSessionToken = getCookie('pharmakon_session_token') || '';
+  }
+  if (gSessionToken) {
+    if (options.headers instanceof Headers) {
+      if (!options.headers.has('X-Session-Token')) {
+        options.headers.set('X-Session-Token', gSessionToken);
+      }
+    } else if (Array.isArray(options.headers)) {
+      options.headers.push(['X-Session-Token', gSessionToken]);
+    } else {
+      if (!options.headers['X-Session-Token']) {
+        options.headers['X-Session-Token'] = gSessionToken;
+      }
+    }
+  }
+  return _origFetch(url, options);
+};
+
 let currentMode = 'pharmakon1';
 let currentTarget = "";
 let currentPreset = 'none';
@@ -3356,8 +3385,8 @@ function renderAutoSyncBadge(st) {
   const txt = document.getElementById('autoSyncText');
   if (!badge || !txt || !st) return;
 
-  const ver = st.local_version || '2.0.3';
-  badge.classList.remove('offline', 'update-ready');
+  const ver = st.local_version || '3.1.0';
+  badge.classList.remove('offline', 'update-ready', 'signature-invalid');
 
   if (st.state === 'updated') {
     badge.classList.add('update-ready');
@@ -3366,15 +3395,40 @@ function renderAutoSyncBadge(st) {
     setTimeout(() => window.location.reload(), 900);
   } else if (st.state === 'update_available' && st.remote_version) {
     badge.classList.add('update-ready');
-    txt.innerText = `⚡ UPDATE v${st.remote_version}`;
-    badge.title = `New patch v${st.remote_version} available on GitHub — click to sync now`;
+    if (st.signature_verified) {
+      txt.innerText = `⚡ UPDATE v${st.remote_version}`;
+      badge.title = `Verified release v${st.remote_version} (Ed25519 signature verified) — click to install`;
+      badge.onclick = async () => {
+        txt.innerText = 'INSTALLING...';
+        try {
+          const res = await fetch('/api/install-update', { method: 'POST' });
+          const updatedSt = await res.json();
+          renderAutoSyncBadge(updatedSt);
+        } catch (e) {
+          updateStatus(`Update failed: ${e}`);
+        }
+      };
+    } else {
+      txt.innerText = `⚠️ UNTRUSTED v${st.remote_version}`;
+      badge.classList.add('offline');
+      badge.title = `Untrusted release: ${st.error || 'Signature unverified'}. Click to visit release page for manual install.`;
+      badge.onclick = () => window.open(st.release_url || 'https://github.com/alex-gerek/PHARMAKON/releases', '_blank');
+      updateStatus(`⚠️ Signature verification failed for v${st.remote_version}: ${st.error || 'Untrusted'}. Please install manually.`);
+    }
+  } else if (st.state === 'signature_invalid') {
+    badge.classList.add('offline');
+    txt.innerText = '⚠️ BAD SIG';
+    badge.title = `Cryptographic signature invalid! Click to open release page.`;
+    badge.onclick = () => window.open(st.release_url || 'https://github.com/alex-gerek/PHARMAKON/releases', '_blank');
   } else if (st.state === 'offline') {
     badge.classList.add('offline');
     txt.innerText = `OFFLINE v${ver}`;
     badge.title = `Offline Studio Mode (v${ver}) — auto-sync resumes when internet is connected`;
+    badge.onclick = triggerManualUpdateCheck;
   } else {
     txt.innerText = `AUTO-SYNC v${ver}`;
     badge.title = `Online Patch Sync Active — PHARMAKON v${ver} is up to date`;
+    badge.onclick = triggerManualUpdateCheck;
   }
 }
 

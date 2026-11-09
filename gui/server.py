@@ -3,6 +3,7 @@ import sys
 import json
 import shutil
 import asyncio
+import secrets
 import subprocess
 import urllib.parse
 from pathlib import Path
@@ -32,22 +33,81 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
-app = FastAPI(title="PHARMAKON 3.0 Studio Console", version="3.0.0")
+# Cryptographic Session Token & Security Policy
+SESSION_TOKEN = os.environ.get("PHARMAKON_SESSION_TOKEN") or secrets.token_hex(32)
+TOKEN_FILE = PROJECT_DIR / ".session_token"
+try:
+    TOKEN_FILE.write_text(SESSION_TOKEN, encoding="utf-8")
+    if sys.platform != "win32":
+        os.chmod(TOKEN_FILE, 0o600)
+except Exception:
+    pass
 
+ALLOWED_HOSTS = {
+    "127.0.0.1:7860", "localhost:7860", "127.0.0.1", "localhost", "testserver"
+}
+ALLOWED_ORIGINS = {
+    "http://127.0.0.1:7860", "http://localhost:7860", "http://testserver", "null"
+}
+ALLOWED_AUDIO_EXTENSIONS = {".wav", ".mp3", ".flac", ".ogg", ".aiff", ".aif"}
+ALLOWED_UPLOAD_EXTS = {".wav", ".mp3", ".flac", ".ogg", ".zip", ".aiff", ".aif"}
+MAX_UPLOAD_SIZE = 250 * 1024 * 1024  # 250 MB
+
+app = FastAPI(title="PHARMAKON 3.1 Studio Console", version="3.1.0")
+
+# Strict CORS: Only local loopback origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://127.0.0.1:7860", "http://localhost:7860", "http://testserver"],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def security_hardening_middleware(request: Request, call_next):
+    # 1. Host header validation
+    host = request.headers.get("Host", "").strip()
+    if host and host not in ALLOWED_HOSTS:
+        return JSONResponse(status_code=403, content={"detail": "Forbidden: invalid Host header"})
+
+    # 2. Sec-Fetch-Site CSRF defense
+    sec_fetch_site = request.headers.get("Sec-Fetch-Site", "").lower()
+    if sec_fetch_site == "cross-site":
+        return JSONResponse(status_code=403, content={"detail": "Forbidden: cross-site requests blocked"})
+
+    # 3. Origin header validation
+    origin = request.headers.get("Origin")
+    if origin and origin not in ALLOWED_ORIGINS:
+        return JSONResponse(status_code=403, content={"detail": "Forbidden: untrusted Origin"})
+
+    # 4. Session Token authentication for /api/* endpoints
+    path = request.url.path
+    if path.startswith("/api/"):
+        # Exempt public bootstrap & launcher probes
+        exempt_paths = {"/api/session-token", "/api/system-info", "/api/demos", "/api/shutdown"}
+        if path not in exempt_paths:
+            req_token = (
+                request.headers.get("X-Session-Token")
+                or request.cookies.get("pharmakon_session_token")
+                or request.query_params.get("token")
+            )
+            if not req_token or req_token != SESSION_TOKEN:
+                return JSONResponse(
+                    status_code=401,
+                    content={"detail": "Unauthorized: invalid or missing session token"}
+                )
+
+    response = await call_next(request)
+    return response
+
 
 UPLOAD_DIR = PROJECT_DIR / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
 
 DEMO_DIR = PROJECT_DIR / "demo_audio"
 
-# Bundled demo audio paths located directly inside the repository
 DEMO_TRACKS = [
     {
         "id": "bronze_psalter",
@@ -67,9 +127,20 @@ DEMO_TRACKS = [
     }
 ]
 
+
+@app.get("/api/session-token")
+def get_session_token(request: Request):
+    """Provides session token to local loopback UI during initialization."""
+    client_host = request.client.host if request.client else ""
+    if client_host and client_host not in ("127.0.0.1", "localhost", "::1", "testclient"):
+        raise HTTPException(status_code=403, detail="Forbidden")
+    return {"token": SESSION_TOKEN}
+
+
 @app.get("/api/demos")
 def get_demos():
     return {"demos": DEMO_TRACKS}
+
 
 @app.post("/api/browse-native")
 def browse_native(mode: str = "file"):
@@ -81,7 +152,8 @@ def browse_native(mode: str = "file"):
         root.withdraw()
         root.attributes('-topmost', True)
 
-        init_dir = r"D:\КЛИПЫ\Reels" if os.path.exists(r"D:\КЛИПЫ\Reels") else str(Path.home())
+        music_dir = Path.home() / "Music"
+        init_dir = str(music_dir) if music_dir.exists() else str(Path.home())
 
         if mode == "folder":
             selected = fd.askdirectory(title="PHARMAKON // Select Stems Folder", initialdir=init_dir)
@@ -102,17 +174,18 @@ def browse_native(mode: str = "file"):
     except Exception as e:
         return {"success": False, "error": str(e), "selected_path": ""}
 
+
 @app.get("/api/system-info")
 def get_system_info():
     demos = [d for d in DEMO_TRACKS if os.path.exists(d["path"])]
-    ver = "3.0.0"
+    ver = "3.1.0"
     if auto_updater is not None:
         try:
             ver = auto_updater.get_active_version_info().get("version", ver)
         except Exception:
             pass
     return {
-        "engine": "PHARMAKON 3.0 PRO DSP (Limiter-Guard Engine)",
+        "engine": "PHARMAKON 3.1 PRO DSP (Hardened Security Release)",
         "version": ver,
         "auto_update": True,
         "author": "Lex Gerek",
@@ -122,28 +195,40 @@ def get_system_info():
         "status": "ready"
     }
 
+
 @app.get("/api/update-status")
 async def get_update_status():
     if auto_updater is None:
-        return {"state": "offline", "local_version": "3.0.0"}
+        return {"state": "offline", "local_version": "3.1.0", "signature_verified": False}
     cached = auto_updater.get_cached_status()
     if cached.get("state") == "idle":
-        return await asyncio.to_thread(auto_updater.sync_online_patches, False, 2.5)
+        return await asyncio.to_thread(auto_updater.check_online_updates, 2.5)
     return cached
 
+
 @app.post("/api/check-update")
-async def check_and_sync_update():
+async def check_update():
+    """Checks for signed release updates without silent modification."""
     if auto_updater is None:
-        return {"state": "offline", "local_version": "3.0.0"}
-    return await asyncio.to_thread(auto_updater.sync_online_patches, True, 4.0)
+        return {"state": "offline", "local_version": "3.1.0", "signature_verified": False}
+    return await asyncio.to_thread(auto_updater.check_online_updates, 4.0)
+
+
+@app.post("/api/install-update")
+async def install_update():
+    """Installs verified release update upon explicit user click."""
+    if auto_updater is None:
+        return {"state": "offline", "error": "Auto-updater unavailable"}
+    return await asyncio.to_thread(auto_updater.install_verified_update, 10.0)
+
 
 @app.get("/api/presets")
 def get_presets():
     return remaster_engine.PRESETS
 
+
 @app.post("/api/split-and-master")
 async def split_and_master_target(request: Request):
-    """Decomposes single mixed file into 4 stems and executes deep stem surgery."""
     try:
         body = await request.json()
         target_path = body.get("target_path", "").strip().strip('"').strip("'")
@@ -196,7 +281,6 @@ async def process_target(request: Request):
         mode = body.get("mode", "pharmakon1")
         custom_params = body.get("params", {})
 
-        # Resolve relative paths against project root (e.g. demo_audio/...)
         if target_path and not os.path.exists(target_path):
             rel_candidate = PROJECT_DIR / target_path
             if rel_candidate.exists():
@@ -248,49 +332,71 @@ async def process_target(request: Request):
     except HTTPException:
         raise
     except Exception as e:
-        import traceback
-        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.post("/api/upload-binary")
 async def upload_binary(request: Request, filename: str):
-    """Direct streaming binary upload for drag & drop from browser without multipart dependency."""
-    try:
-        clean_name = os.path.basename(filename)
-        save_path = UPLOAD_DIR / clean_name
-        body = await request.body()
-        with open(save_path, "wb") as f:
-            f.write(body)
-        return {
-            "success": True,
-            "saved_path": str(save_path),
-            "filename": clean_name,
-            "size": len(body)
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    """Direct streaming binary upload with size limits and file extension validation."""
+    clean_name = os.path.basename(filename)
+    ext = Path(clean_name).suffix.lower()
+    if ext not in ALLOWED_UPLOAD_EXTS:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid file type. Only audio files and ZIP stem archives are permitted."
+        )
+
+    cl = request.headers.get("content-length")
+    if cl and int(cl) > MAX_UPLOAD_SIZE:
+        raise HTTPException(status_code=413, detail="File too large (exceeds 250 MB limit)")
+
+    body = await request.body()
+    if len(body) > MAX_UPLOAD_SIZE:
+        raise HTTPException(status_code=413, detail="File too large (exceeds 250 MB limit)")
+
+    save_path = UPLOAD_DIR / clean_name
+    with open(save_path, "wb") as f:
+        f.write(body)
+
+    return {
+        "success": True,
+        "saved_path": str(save_path),
+        "filename": clean_name,
+        "size": len(body)
+    }
+
 
 @app.get("/api/stream")
 def stream_audio(path: str):
-    """Stream audio file for synchronized in-browser A/B comparison."""
+    """Stream audio file for synchronized in-browser A/B comparison with path traversal guards."""
     clean_path = urllib.parse.unquote(path).strip().strip('"').strip("'")
-    if not os.path.isfile(clean_path):
+    if clean_path.startswith("file:///"):
+        clean_path = clean_path[8:]
+
+    p = (PROJECT_DIR / clean_path).resolve() if not os.path.isabs(clean_path) else Path(clean_path).resolve()
+
+    if not p.is_file():
         raise HTTPException(status_code=404, detail="Audio file not found")
-    return FileResponse(clean_path, media_type="audio/wav")
+
+    if p.suffix.lower() not in ALLOWED_AUDIO_EXTENSIONS:
+        raise HTTPException(status_code=404, detail="File is not a supported audio stream")
+
+    return FileResponse(str(p), media_type=f"audio/{p.suffix.lower().lstrip('.')}")
+
 
 def _find_latest_mastering_report(clean_path: str = "") -> str:
     """Finds the requested report or the most recently modified MASTERING_REPORT.html."""
-    if clean_path and os.path.isfile(clean_path):
-        return clean_path
+    if clean_path:
+        p = (PROJECT_DIR / clean_path).resolve() if not os.path.isabs(clean_path) else Path(clean_path).resolve()
+        if p.is_file() and p.suffix.lower() == ".html":
+            return str(p)
+        return ""
 
-    # Search candidates
     search_dirs = [
         PROJECT_DIR / "uploads",
         PROJECT_DIR / "Remaster",
         PROJECT_DIR / "demo_audio",
         PROJECT_DIR,
-        Path(r"D:/КЛИПЫ/Reels/Vector Pulse/Vector_Pulse_Full_Stems/Remaster"),
-        Path(r"D:/КЛИПЫ/Reels"),
     ]
 
     all_reports = []
@@ -325,7 +431,7 @@ def get_mastering_report(path: str = ""):
 
 @app.post("/api/open-report")
 async def open_report_file(request: Request):
-    """Opens HTML report in system default web browser (Chrome, Edge, etc.)."""
+    """Opens HTML report in system default web browser. Rejects non-HTML files."""
     try:
         body = await request.json()
         raw_path = body.get("path", "").strip().strip('"').strip("'")
@@ -333,11 +439,27 @@ async def open_report_file(request: Request):
             raw_path = raw_path[8:]
         clean_path = urllib.parse.unquote(raw_path)
 
+        # Security check: Strictly forbid non-HTML files
+        if clean_path:
+            p_check = (PROJECT_DIR / clean_path).resolve() if not os.path.isabs(clean_path) else Path(clean_path).resolve()
+            if p_check.suffix.lower() != ".html":
+                return JSONResponse(
+                    status_code=403,
+                    content={"success": False, "error": "Access denied: only HTML reports may be opened"}
+                )
+
         target_file = _find_latest_mastering_report(clean_path)
         if not target_file or not os.path.isfile(target_file):
-            return {"success": False, "error": "Report not found on disk. Please render a master first!"}
+            return JSONResponse(status_code=404, content={"success": False, "error": "Report not found on disk."})
 
-        target_file = os.path.normpath(target_file)
+        p = Path(target_file).resolve()
+        if p.suffix.lower() != ".html":
+            return JSONResponse(
+                status_code=403,
+                content={"success": False, "error": "Access denied: only HTML reports may be opened"}
+            )
+
+        target_file = str(p)
         if sys.platform == "win32":
             os.startfile(target_file)
             return {"success": True, "opened": target_file}
@@ -364,7 +486,7 @@ async def save_track_map(request: Request):
             else:
                 base_dir = target_path
         else:
-            base_dir = r"C:\Users\User\PHARMAKON\uploads\!!!Vector Pulse_V000_Stems"
+            base_dir = str(UPLOAD_DIR)
 
         remaster_dir = os.path.join(base_dir, "Remaster")
         save_dir = remaster_dir if os.path.exists(remaster_dir) else base_dir
@@ -379,12 +501,11 @@ async def save_track_map(request: Request):
             "total_sections": len(track_map.get("sections", []))
         }
     except Exception as e:
-        logger.error(f"Failed to save track map: {e}")
         return {"success": False, "error": str(e)}
+
 
 @app.post("/api/save-image-as")
 async def save_image_as(request: Request):
-    """Opens native Windows Save-As dialog to save PNG image to user-chosen directory."""
     try:
         import base64
         body = await request.json()
@@ -405,55 +526,64 @@ async def save_image_as(request: Request):
     except Exception as e:
         return {"success": False, "error": str(e)}
 
-def _run_save_stems_zip_dialog(default_name: str) -> str:
-    """Threaded native Tkinter Save As dialog for Stems ZIP archive."""
+
+def _run_save_image_dialog(default_name: str) -> str:
     import tkinter as tk
     import tkinter.filedialog as fd
-
     root = tk.Tk()
     root.withdraw()
     root.attributes('-topmost', True)
+    init_dir = os.path.expanduser("~/Pictures")
+    if not os.path.exists(init_dir):
+        init_dir = os.path.expanduser("~/Desktop")
+    save_dest = fd.asksaveasfilename(
+        title="PHARMAKON // Save Mastering Certificate Image As...",
+        initialdir=init_dir,
+        initialfile=default_name,
+        defaultextension=".png",
+        filetypes=[("PNG Image (*.png)", "*.png"), ("All Files (*.*)", "*.*")]
+    )
+    root.destroy()
+    return save_dest
 
+
+def _run_save_stems_zip_dialog(default_name: str) -> str:
+    import tkinter as tk
+    import tkinter.filedialog as fd
+    root = tk.Tk()
+    root.withdraw()
+    root.attributes('-topmost', True)
     init_dir = os.path.expanduser("~/Music")
     if not os.path.exists(init_dir):
         init_dir = os.path.expanduser("~/Desktop")
-
     save_dest = fd.asksaveasfilename(
         title="PHARMAKON // Save Stems Pack ZIP As...",
         initialdir=init_dir,
         initialfile=default_name,
         defaultextension=".zip",
-        filetypes=[
-            ("ZIP Archive (*.zip)", "*.zip"),
-            ("All Files (*.*)", "*.*")
-        ]
+        filetypes=[("ZIP Archive (*.zip)", "*.zip"), ("All Files (*.*)", "*.*")]
     )
     root.destroy()
     return save_dest
 
+
 @app.get("/api/download-stems")
 async def download_stems_zip(stems_dir: str):
-    """Packages 4 stems from stems_dir into a high-speed zip file for direct download."""
     import zipfile
-    from fastapi.responses import FileResponse
-
     clean_dir = urllib.parse.unquote(stems_dir).strip().strip('"').strip("'")
     if not os.path.isabs(clean_dir):
         candidate = PROJECT_DIR / clean_dir
         if candidate.exists():
             clean_dir = str(candidate.resolve())
 
-    # If clean_dir is a file or candidate _Stems dir
     if os.path.isfile(clean_dir):
         stem_cand = os.path.join(os.path.dirname(clean_dir), f"{os.path.splitext(os.path.basename(clean_dir))[0]}_Stems")
         if os.path.isdir(stem_cand):
             clean_dir = stem_cand
         else:
-            # Auto split on the fly if user requested download directly
             split_dir, _ = await asyncio.to_thread(remaster_engine.split_audio_to_stems, clean_dir)
             clean_dir = split_dir
     elif not os.path.isdir(clean_dir):
-        # Try finding corresponding _Stems directory
         dot_idx = clean_dir.rfind('.')
         cand = (clean_dir[:dot_idx] + "_Stems") if dot_idx != -1 else (clean_dir + "_Stems")
         if os.path.isdir(cand):
@@ -479,16 +609,11 @@ async def download_stems_zip(stems_dir: str):
                             zf.write(fp, arcname=f)
 
     await asyncio.to_thread(_pack_zip)
+    return FileResponse(cached_zip, media_type="application/zip", filename=zip_filename)
 
-    return FileResponse(
-        cached_zip,
-        media_type="application/zip",
-        filename=zip_filename
-    )
 
 @app.post("/api/save-stems-as")
 async def save_stems_zip_as(request: Request):
-    """Opens native Windows Save-As dialog and packages stems into user-selected ZIP file."""
     try:
         import zipfile
         body = await request.json()
@@ -514,51 +639,41 @@ async def save_stems_zip_as(request: Request):
                         if os.path.isfile(fp):
                             zip_file.write(fp, arcname=f)
             return {"success": True, "saved_path": save_dest, "filename": os.path.basename(save_dest)}
-        else:
-            return {"success": False, "cancelled": True}
+        return {"success": False, "cancelled": True}
     except Exception as e:
         return {"success": False, "error": str(e)}
 
 
 def _run_save_as_dialog(master_path: str) -> str:
-    """Threaded native Tkinter Save As dialog helper."""
     import tkinter as tk
     import tkinter.filedialog as fd
-
     root = tk.Tk()
     root.withdraw()
     root.attributes('-topmost', True)
-
     default_name = os.path.basename(master_path)
     init_dir = os.path.expanduser("~/Music")
     if not os.path.exists(init_dir):
         init_dir = os.path.expanduser("~/Desktop")
-
     save_dest = fd.asksaveasfilename(
         title="PHARMAKON // Save Lossless Master As...",
         initialdir=init_dir,
         initialfile=default_name,
         defaultextension=".wav",
-        filetypes=[
-            ("WAV Lossless Audio (*.wav)", "*.wav"),
-            ("All Files (*.*)", "*.*")
-        ]
+        filetypes=[("WAV Lossless Audio (*.wav)", "*.wav"), ("All Files (*.*)", "*.*")]
     )
     root.destroy()
     return save_dest
 
+
 @app.post("/api/save-as")
 async def save_master_as(request: Request):
-    """Opens native Windows Save-As dialog to save master WAV to any user-chosen directory."""
     try:
         body = await request.json()
         master_path = body.get("master_path", "").strip().strip('"').strip("'")
-        
-        # Unquote and resolve relative path if needed
         master_path = urllib.parse.unquote(master_path)
         if master_path.startswith("file:///"):
             master_path = master_path[8:]
-        
+
         if master_path and not os.path.isabs(master_path):
             candidate = PROJECT_DIR / master_path
             if candidate.exists():
@@ -568,7 +683,6 @@ async def save_master_as(request: Request):
             raise HTTPException(status_code=400, detail="Master audio file not found")
 
         save_dest = await asyncio.to_thread(_run_save_as_dialog, master_path)
-
         if save_dest:
             save_dest = os.path.normpath(save_dest)
             shutil.copy2(master_path, save_dest)
@@ -577,36 +691,30 @@ async def save_master_as(request: Request):
     except Exception as e:
         return {"success": False, "error": str(e)}
 
+
 def _run_save_delta_dialog(delta_path: str) -> str:
-    """Threaded native Tkinter Save As dialog helper for DELTA_POISON."""
     import tkinter as tk
     import tkinter.filedialog as fd
-
     root = tk.Tk()
     root.withdraw()
     root.attributes('-topmost', True)
-
     default_name = os.path.basename(delta_path)
     init_dir = os.path.expanduser("~/Music")
     if not os.path.exists(init_dir):
         init_dir = os.path.expanduser("~/Desktop")
-
     save_dest = fd.asksaveasfilename(
         title="PHARMAKON // Save Extracted Poison Delta As...",
         initialdir=init_dir,
         initialfile=default_name,
         defaultextension=".wav",
-        filetypes=[
-            ("WAV Lossless Audio (*.wav)", "*.wav"),
-            ("All Files (*.*)", "*.*")
-        ]
+        filetypes=[("WAV Lossless Audio (*.wav)", "*.wav"), ("All Files (*.*)", "*.*")]
     )
     root.destroy()
     return save_dest
 
+
 @app.post("/api/save-delta-as")
 async def save_delta_as(request: Request):
-    """Opens native Windows Save-As dialog to save DELTA_POISON.wav to user-chosen directory."""
     try:
         body = await request.json()
         delta_path = body.get("delta_path", "").strip().strip('"').strip("'")
@@ -619,11 +727,13 @@ async def save_delta_as(request: Request):
             if candidate.exists():
                 delta_path = str(candidate.resolve())
 
-        # Fallback: if not provided or missing, infer from master_path
         if not delta_path or not os.path.isfile(delta_path):
             master_path = body.get("master_path", "").strip().strip('"').strip("'")
             if master_path:
-                cand = os.path.join(os.path.dirname(master_path), f"{os.path.splitext(os.path.basename(master_path))[0].replace(' - STUDIO_REMASTER', '')} - DELTA_POISON.wav")
+                cand = os.path.join(
+                    os.path.dirname(master_path),
+                    f"{os.path.splitext(os.path.basename(master_path))[0].replace(' - STUDIO_REMASTER', '')} - DELTA_POISON.wav"
+                )
                 if os.path.isfile(cand):
                     delta_path = cand
 
@@ -631,7 +741,6 @@ async def save_delta_as(request: Request):
             raise HTTPException(status_code=400, detail="Delta audio file not found")
 
         save_dest = await asyncio.to_thread(_run_save_delta_dialog, delta_path)
-
         if save_dest:
             save_dest = os.path.normpath(save_dest)
             shutil.copy2(delta_path, save_dest)
@@ -640,9 +749,9 @@ async def save_delta_as(request: Request):
     except Exception as e:
         return {"success": False, "error": str(e)}
 
+
 @app.get("/api/download-delta")
 def download_delta_audio(path: str):
-    """Direct streaming download of DELTA_POISON.wav."""
     clean_path = urllib.parse.unquote(path).strip().strip('"').strip("'")
     if not os.path.isabs(clean_path):
         cand = PROJECT_DIR / clean_path
@@ -651,7 +760,10 @@ def download_delta_audio(path: str):
 
     if not os.path.isfile(clean_path):
         if os.path.exists(os.path.dirname(clean_path)):
-            cand = os.path.join(os.path.dirname(clean_path), f"{os.path.splitext(os.path.basename(clean_path))[0].replace(' - STUDIO_REMASTER', '')} - DELTA_POISON.wav")
+            cand = os.path.join(
+                os.path.dirname(clean_path),
+                f"{os.path.splitext(os.path.basename(clean_path))[0].replace(' - STUDIO_REMASTER', '')} - DELTA_POISON.wav"
+            )
             if os.path.isfile(cand):
                 clean_path = cand
 
@@ -660,44 +772,41 @@ def download_delta_audio(path: str):
 
     return FileResponse(clean_path, media_type="audio/wav", filename=os.path.basename(clean_path))
 
+
 @app.post("/api/reveal")
 async def reveal_in_explorer(request: Request):
-    """Reveals target file or folder in native Windows Explorer."""
+    """Reveals target file or folder in native Windows Explorer. Refuses non-existent paths."""
     try:
         body = await request.json()
         target_path = body.get("path", "").strip().strip('"').strip("'")
         if not target_path:
-            return {"success": False, "error": "No path provided"}
+            return JSONResponse(status_code=404, content={"success": False, "error": "No path provided"})
 
         target_path = urllib.parse.unquote(target_path)
         if target_path.startswith("file:///"):
             target_path = target_path[8:]
 
-        # Resolve relative path against project directory
         if not os.path.isabs(target_path):
-            candidate = (PROJECT_DIR / target_path).resolve()
-            if candidate.exists():
-                target_path = str(candidate)
+            p = (PROJECT_DIR / target_path).resolve()
+        else:
+            p = Path(target_path).resolve()
 
-        target_path = os.path.normpath(target_path)
+        if not p.exists():
+            return JSONResponse(status_code=404, content={"success": False, "error": f"Path not found: {target_path}"})
 
         if sys.platform == "win32":
-            if os.path.isfile(target_path):
-                subprocess.Popen(["explorer", f"/select,{target_path}"])
-                return {"success": True, "opened": target_path}
-            elif os.path.isdir(target_path):
-                subprocess.Popen(["explorer", target_path])
-                return {"success": True, "opened": target_path}
-            else:
-                # Try parent directory
-                parent = os.path.dirname(target_path)
-                if os.path.isdir(parent):
-                    subprocess.Popen(["explorer", parent])
-                    return {"success": True, "opened": parent}
+            target_str = str(p)
+            if p.is_file():
+                subprocess.Popen(["explorer", f"/select,{target_str}"])
+                return {"success": True, "opened": target_str}
+            elif p.is_dir():
+                subprocess.Popen(["explorer", target_str])
+                return {"success": True, "opened": target_str}
 
-        return {"success": False, "error": f"Folder not found: {target_path}"}
+        return {"success": False, "error": "Platform not supported"}
     except Exception as e:
-        return {"success": False, "error": str(e)}
+        return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
+
 
 # Mount static files for the UI
 STATIC_DIR = SCRIPT_DIR / "static"
@@ -711,18 +820,36 @@ if getattr(sys, 'frozen', False):
             STATIC_DIR = BASE_DIR / "static"
 STATIC_DIR.mkdir(exist_ok=True)
 
+
 @app.get("/static/{asset_path:path}")
 def serve_static_overlay(asset_path: str):
-    clean_rel = asset_path.lstrip("/").replace("..", "")
+    """Secure static file server preventing path traversal."""
+    unquoted = urllib.parse.unquote(asset_path)
+    if ".." in unquoted or "\\\\" in unquoted:
+        raise HTTPException(status_code=404, detail="Static asset not found")
+
+    clean_rel = unquoted.lstrip("/\\")
     eff_dir = auto_updater.get_effective_static_dir(STATIC_DIR) if auto_updater is not None else STATIC_DIR
+
     for root_cand in (eff_dir, STATIC_DIR):
-        target_f = root_cand / clean_rel
+        target_f = (root_cand / clean_rel).resolve()
+        try:
+            if not target_f.is_relative_to(root_cand.resolve()):
+                raise HTTPException(status_code=404, detail="Static asset not found")
+        except AttributeError:
+            # Fallback for Python < 3.9 if needed
+            if not str(target_f).startswith(str(root_cand.resolve())):
+                raise HTTPException(status_code=404, detail="Static asset not found")
+
         if target_f.is_file():
             headers = {"Cache-Control": "no-cache"} if clean_rel.endswith((".js", ".css", ".html")) else {}
             return FileResponse(str(target_f), headers=headers)
+
     raise HTTPException(status_code=404, detail="Static asset not found")
 
+
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
 
 @app.post("/api/shutdown")
 def shutdown():
@@ -733,6 +860,7 @@ def shutdown():
     threading.Thread(target=delayed_exit, daemon=True).start()
     return {"status": "shutting_down"}
 
+
 @app.get("/")
 def get_index():
     eff_dir = auto_updater.get_effective_static_dir(STATIC_DIR) if auto_updater is not None else STATIC_DIR
@@ -740,7 +868,7 @@ def get_index():
     if not index_file.exists():
         index_file = STATIC_DIR / "index.html"
     if index_file.exists():
-        return FileResponse(
+        resp = FileResponse(
             str(index_file),
             headers={
                 "Cache-Control": "no-cache, no-store, must-revalidate",
@@ -748,7 +876,15 @@ def get_index():
                 "Expires": "0"
             }
         )
+        resp.set_cookie(
+            key="pharmakon_session_token",
+            value=SESSION_TOKEN,
+            samesite="strict",
+            httponly=False
+        )
+        return resp
     return HTMLResponse("<h1>PHARMAKON Studio Console</h1><p>UI initializing...</p>")
+
 
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=7860, reload=False)
