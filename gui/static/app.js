@@ -3045,8 +3045,8 @@ function openMasteringReportModal() {
     })()}
 
     <!-- 4-Band Energy Shift Bar in Modal -->
-    <div style="display:flex; justify-content:space-between; align-items:center; background:#070a12; border:1px solid #1f2738; border-radius:6px; padding:8px 16px; margin-bottom:12px; font-family:var(--font-mono); font-size:11px;">
-      <div style="color:#64748b; font-weight:bold;">BAND BALANCE (VS OVERALL LEVEL):</div>
+    <div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:6px 18px; background:#070a12; border:1px solid #1f2738; border-radius:6px; padding:8px 16px; margin-bottom:12px; font-family:var(--font-mono); font-size:11px;">
+      <div style="color:#64748b; font-weight:bold; flex-basis:100%;">BAND BALANCE (VS OVERALL LEVEL):</div>
       <div><span style="color:#64748b;">SUB 20-120:</span> <span style="color:#fde047; font-weight:bold;">${tbv('sub')} dB</span></div>
       <div><span style="color:#64748b;">BODY 120-2k:</span> <span style="color:#93c5fd; font-weight:bold;">${tbv('body')} dB</span></div>
       <div><span style="color:#64748b;">PRESENCE 2-5k:</span> <span style="color:#f43f5e; font-weight:bold;">${tbv('presence')} dB</span></div>
@@ -3230,9 +3230,39 @@ async function downloadReportPNG() {
   
   const m = lastMetrics;
   const trackName = lastResult.track_name || "Audio Target";
+  // Full measured certificate (same data as the HTML report: metrics + measured diagnosis)
+  const d = m.diagnosis || {};
+  const W = 1400, PAD = 50, INNER = W - 2 * PAD;
+  const measure = document.createElement('canvas').getContext('2d');
+  const wrap = (text, font, maxW) => {
+    measure.font = font;
+    const words = String(text).split(' ');
+    const lines = []; let line = '';
+    words.forEach(w => {
+      const t = line ? line + ' ' + w : w;
+      if (measure.measureText(t).width > maxW && line) { lines.push(line); line = w; } else { line = t; }
+    });
+    if (line) lines.push(line);
+    return lines;
+  };
+  const DIAG_FONT = '12px monospace', DIAG_LH = 17;
+  const colW2 = (INNER - 20) / 2;
+  const diagLines = (items) => (items || []).map(i => ({ status: i.status, lines: wrap(`${i.label}: ${i.text}`, DIAG_FONT, colW2 - 44) }));
+  const srcRows = diagLines(d.source), trtRows = diagLines(d.treatment);
+  const colHeight = (rows) => rows.reduce((h, r) => h + r.lines.length * DIAG_LH + 6, 0);
+  const diagH = d.source ? Math.max(colHeight(srcRows), colHeight(trtRows)) + 50 : 0;
+  const sealLines = wrap((d.seal || []).join('  •  ') || 'Measurements: see telemetry above', 'bold 11px monospace', INNER);
+
+  const tilesY = 184, tileH = 86, tileGap = 12;
+  const diagY = tilesY + 2 * tileH + tileGap + 20;
+  const bandY = diagY + diagH + (diagH ? 16 : 0);
+  const chartY = bandY + 56;
+  const chartH = 380;
+  const H = chartY + chartH + 40 + sealLines.length * 16 + 40;
+
   const canvas = document.createElement('canvas');
-  canvas.width = 1200;
-  canvas.height = 760;
+  canvas.width = W;
+  canvas.height = H;
   const ctx = canvas.getContext('2d');
 
   // 1. Background
@@ -3254,7 +3284,7 @@ async function downloadReportPNG() {
   // 2. Header
   ctx.fillStyle = '#ffffff';
   ctx.font = 'bold 26px "Orbitron", sans-serif, monospace';
-  ctx.fillText('PHARMAKON 2.0 PRO', 50, 70);
+  ctx.fillText('PHARMAKON 3.2 PRO', 50, 70);
 
   ctx.fillStyle = '#f59e0b';
   ctx.font = 'bold 12px monospace';
@@ -3263,7 +3293,11 @@ async function downloadReportPNG() {
   ctx.textAlign = 'right';
   ctx.fillStyle = '#06b6d4';
   ctx.font = 'bold 14px monospace';
-  ctx.fillText('SERIAL: PH-2026-CERT', canvas.width - 50, 68);
+  const stamp = new Date();
+  const serial = 'PH-' + (Array.from(trackName + stamp.toISOString().slice(0, 10)).reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 7) % 900000 + 100000);
+  const pad2 = (v) => String(v).padStart(2, '0');
+  const localStamp = `${stamp.getFullYear()}-${pad2(stamp.getMonth() + 1)}-${pad2(stamp.getDate())} ${pad2(stamp.getHours())}:${pad2(stamp.getMinutes())}`;
+  ctx.fillText(`SERIAL: ${serial}  •  ${localStamp}`, canvas.width - 50, 68);
 
   ctx.fillStyle = '#64748b';
   ctx.font = '12px monospace';
@@ -3310,35 +3344,75 @@ async function downloadReportPNG() {
     { label: '3D STEREO WIDTH', val: `+${m.stereo_expansion_db} dB`, sub: `Side level of highs vs raw`, color: '#10b981' }
   ];
 
-  const colW = (canvas.width - 100 - 5 * 12) / 6;
-  const tileY = 184;
-  const tileH = 72;
-
+  const colW = (INNER - 2 * tileGap) / 3;
   tiles.forEach((t, i) => {
-    const x = 50 + i * (colW + 12);
+    const x = PAD + (i % 3) * (colW + tileGap);
+    const y = tilesY + Math.floor(i / 3) * (tileH + tileGap);
     ctx.fillStyle = '#090c13';
-    ctx.fillRect(x, tileY, colW, tileH);
+    ctx.fillRect(x, y, colW, tileH);
     ctx.strokeStyle = '#1e2638';
-    ctx.strokeRect(x, tileY, colW, tileH);
-
+    ctx.strokeRect(x, y, colW, tileH);
     ctx.fillStyle = '#64748b';
-    ctx.font = '9px monospace';
-    ctx.fillText(t.label, x + 10, tileY + 18);
-
+    ctx.font = '10px monospace';
+    ctx.fillText(t.label, x + 12, y + 20);
     ctx.fillStyle = t.color;
-    ctx.font = 'bold 16px "Orbitron", sans-serif';
-    ctx.fillText(t.val, x + 10, tileY + 42);
+    ctx.font = 'bold 18px "Orbitron", sans-serif';
+    ctx.fillText(t.val, x + 12, y + 46);
+    ctx.fillStyle = '#94a3b8';
+    wrap(t.sub, '10px monospace', colW - 24).slice(0, 2).forEach((ln, k) => {
+      ctx.font = '10px monospace';
+      ctx.fillText(ln, x + 12, y + 64 + k * 13);
+    });
+  });
 
-    ctx.fillStyle = '#10b981';
-    ctx.font = '9px monospace';
-    ctx.fillText(t.sub, x + 10, tileY + 60);
+  // 4b. Measured diagnosis (two columns)
+  if (d.source) {
+    const col = { issue: '#f43f5e', warn: '#f59e0b', ok: '#10b981', info: '#94a3b8' };
+    const ico = { issue: '!', warn: '!', ok: '✓', info: '•' };
+    const drawCol = (x, title, titleColor, border, rows) => {
+      ctx.fillStyle = '#090b10';
+      ctx.fillRect(x, diagY, colW2, diagH);
+      ctx.strokeStyle = border;
+      ctx.strokeRect(x, diagY, colW2, diagH);
+      ctx.fillStyle = titleColor;
+      ctx.font = 'bold 11px monospace';
+      ctx.fillText(title, x + 14, diagY + 24);
+      let yy = diagY + 46;
+      rows.forEach(r => {
+        ctx.fillStyle = col[r.status] || '#94a3b8';
+        ctx.font = 'bold 12px monospace';
+        ctx.fillText(ico[r.status] || '•', x + 14, yy);
+        ctx.fillStyle = '#cbd5e1';
+        ctx.font = DIAG_FONT;
+        r.lines.forEach((ln, k) => ctx.fillText(ln, x + 32, yy + k * DIAG_LH));
+        yy += r.lines.length * DIAG_LH + 6;
+      });
+    };
+    drawCol(PAD, 'SOURCE DIAGNOSIS (MEASURED ON THE ORIGINAL)', '#f43f5e', '#3b1d24', srcRows);
+    drawCol(PAD + colW2 + 20, `TREATMENT (BEFORE → AFTER) • ${d.profile || ''}`, '#10b981', '#14342a', trtRows);
+  }
+
+  // 4c. Band balance relative to overall level (same numbers as the diagnosis)
+  const tbRel = d.tonal_balance_rel_db || {};
+  ctx.fillStyle = '#070a12';
+  ctx.fillRect(PAD, bandY, INNER, 40);
+  ctx.strokeStyle = '#1a2234';
+  ctx.strokeRect(PAD, bandY, INNER, 40);
+  ctx.font = 'bold 11px monospace';
+  ctx.fillStyle = '#64748b';
+  ctx.fillText('BAND BALANCE (VS OVERALL LEVEL):', PAD + 14, bandY + 25);
+  [['SUB 20-120', 'sub', '#fde047'], ['BODY 120-2k', 'body', '#93c5fd'], ['PRESENCE 2-5k', 'presence', '#f43f5e'],
+   ['BRILLIANCE 5-10k', 'brilliance', '#f59e0b'], ['AIR 10-20k', 'air', '#10b981']].forEach(([lab, k, c], i) => {
+    const v = (typeof tbRel[k] === 'number') ? `${tbRel[k] >= 0 ? '+' : ''}${tbRel[k].toFixed(1)} dB` : '--';
+    const x = PAD + 290 + i * ((INNER - 300) / 5);
+    ctx.fillStyle = '#64748b'; ctx.font = '11px monospace'; ctx.fillText(lab + ':', x, bandY + 25);
+    measure.font = '11px monospace';
+    ctx.fillStyle = c; ctx.font = 'bold 11px monospace'; ctx.fillText(v, x + measure.measureText(lab + ': ').width, bandY + 25);
   });
 
   // 5. Spectrum Graph
-  const chartX = 50;
-  const chartY = 276;
-  const chartW = canvas.width - 100;
-  const chartH = 400;
+  const chartX = PAD;
+  const chartW = INNER;
 
   ctx.fillStyle = '#070a10';
   ctx.fillRect(chartX, chartY, chartW, chartH);
@@ -3424,12 +3498,12 @@ async function downloadReportPNG() {
   // 6. Seal of Quality at Bottom
   ctx.fillStyle = '#64748b';
   ctx.font = '10px monospace';
-  ctx.fillText('PHARMAKON 2.0 DSP ARCHITECTURE • OPEN-SOURCE MIT LICENSE • 2026 LEX GEREK', 50, canvas.height - 28);
+  ctx.fillText(`PHARMAKON 3.2 DSP • ${d.profile || ''} • OPEN-SOURCE MIT LICENSE • 2026 LEX GEREK`, PAD, canvas.height - 24);
 
-  ctx.textAlign = 'right';
+  // Seal: only statements measured true for this file (from the diagnosis)
   ctx.fillStyle = '#10b981';
   ctx.font = 'bold 11px monospace';
-  ctx.fillText('✓ VERIFIED STREAMING COMPLIANT • ZERO INTER-SAMPLE PEAKS (-0.3 dBFS)', canvas.width - 50, canvas.height - 28);
+  sealLines.forEach((ln, k) => ctx.fillText(ln, PAD, chartY + chartH + 30 + k * 16));
 
   const filename = `${trackName} - MASTERING_CERTIFICATE.png`;
 

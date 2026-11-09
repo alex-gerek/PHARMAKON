@@ -351,3 +351,10 @@ The Mastering Report keeps compact tiles, made consistent with the diagnosis:
 - Band row → "BAND BALANCE (VS OVERALL LEVEL)": sub 20-120, body 120-2k, presence 2-5k, brilliance 5-10k, air 10-20k — the same numbers as the diagnosis (`tonal_balance_rel_db`).
 - Stereo width caption → "Side level of highs vs raw (measured)"; "24-bit Lossless WAV" → actual container info.
 Browser check: modal opens without errors; no canned captions remain.
+
+## 23. Mastering Report usability: button state, full PNG certificate, band row
+
+- **Button looked unresponsive.** After a page reload (or while a track is processing, ~9 s) `openMasteringReportModal()` had no result to show and only wrote a status line at the top of the page, so clicks looked lost. Measured in a browser: with a result the modal opens in 1–4 ms on every click and nothing covers the button. Fix: `setReportButtonState('none' | 'busy' | 'ready')` — dimmed/dashed and labelled "process a track first" / "REPORT: PROCESSING…" until a result exists, a nudge animation on click, normal once ready.
+- **PNG card was the 2.0 design:** "PHARMAKON 2.0 PRO", fixed serial "PH-2026-CERT", fixed seal "VERIFIED STREAMING COMPLIANT • ZERO INTER-SAMPLE PEAKS (-0.3 dBFS)", six tiles only with truncated text. Now a full measured certificate (1400 px wide, height fits content): 3.2 header, serial derived from track + date with local timestamp, tiles in 2 × 3 with wrapped captions, the measured diagnosis in two columns, band balance relative to overall level, spectrum, and the seal lines from `diagnosis.seal`. Verified by rendering the real Bronze Psalter result to a PNG.
+- **Modal band row overlapped** ("-0.4BRILLIANCE"): flex-wrap with gaps, title on its own line; verified no overlaps.
+- Incident note: one patch script truncated `app.js` (file opened for writing before an encoding error); restored from the last commit, nothing lost. Patch scripts now encode before writing.
