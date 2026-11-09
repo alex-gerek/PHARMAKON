@@ -2070,8 +2070,8 @@ function setClassicSound(enable) {
   }
   if (desc) {
     desc.innerText = classicSound
-      ? 'Classic 3.1 • exact previous PHARMAKON processing (brighter, source-dependent saturation)'
-      : 'Removes measurable listening-fatigue defects (AI resonances, intermodulation, aliasing, added harshness) • keeps the original tonal character';
+      ? 'Previous 3.1 processing • brighter, source-dependent saturation'
+      : 'Removes AI resonances, distortion & harshness • keeps original tone';
   }
   updateStatus(`Sound Profile: ${classicSound ? 'CLASSIC 3.1 (previous processing)' : 'CLEAN CHAIN 3.2 (default)'}`);
 }
