@@ -341,3 +341,13 @@ Test: `tests/test_antidote_v2.py::test_antidote_v2_runs_in_both_workflow_modes`.
 Console (`renderDiagnosis`, HUD tags), in-app certificate modal (new diagnosis block, Antidote v2 tile), PNG export tiles and the HTML certificate (diagnosis block, Antidote v2 tile, band summary relative to overall level, real export format, measured seal) all render from it. No invented fallbacks: missing values show "—".
 
 **Tests:** `tests/test_spectral_diagnosis.py` — clean music → no resonance / clipping reported, "no correction needed"; injected resonance → reported at its frequency, corrected, nothing ≥ 3 dB remains; hard-clipped source → "clipped"; anti-phase low end → issue, and after processing the honest status (anti-phase content above the 120 Hz crossover stays stereo → warn, not ok); certificate contains none of the canned phrases and does contain the measured true-peak. Browser check: real Bronze Psalter diagnosis renders in the console lists and HUD with no console errors.
+
+## 22. Metric tiles: removed from the main page, kept in the Mastering Report
+
+The main console page duplicated the measured diagnosis with 8 metric tiles and a "4-band master profile" row that used different definitions (absolute band change incl. the overall level change vs relative in the diagnosis; de-harsh number at ~5 kHz shown next to the Antidote v2 frequency). The main page now shows only the diagnosis under the oscilloscopes (JS updates of the old tile ids are null-guarded).
+
+The Mastering Report keeps compact tiles, made consistent with the diagnosis:
+- "4X TRUE-PEAK CEILING … dBFS" → "4X TRUE-PEAK (MEASURED) … dBTP", raw value in dBTP (HTML certificate, in-app modal, PNG card).
+- Band row → "BAND BALANCE (VS OVERALL LEVEL)": sub 20-120, body 120-2k, presence 2-5k, brilliance 5-10k, air 10-20k — the same numbers as the diagnosis (`tonal_balance_rel_db`).
+- Stereo width caption → "Side level of highs vs raw (measured)"; "24-bit Lossless WAV" → actual container info.
+Browser check: modal opens without errors; no canned captions remain.

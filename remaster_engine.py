@@ -3320,9 +3320,9 @@ def generate_mastering_report_html(track_name, metrics, output_dir, params=None)
 
     <div class="telemetry-grid">
       <div class="t-card">
-        <div class="t-label">4X TRUE-PEAK CEILING</div>
-        <div class="t-val">{tp_proc} <span>dBFS</span></div>
-        <div class="t-sub">Oversampled (Raw: {tp_orig} dBFS)</div>
+        <div class="t-label">4X TRUE-PEAK (MEASURED)</div>
+        <div class="t-val">{tp_proc} <span>dBTP</span></div>
+        <div class="t-sub">Raw: {tp_orig} dBTP</div>
       </div>
       <div class="t-card">
         <div class="t-label">INTEGRATED LOUDNESS (LUFS)</div>

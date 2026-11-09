@@ -2812,10 +2812,9 @@ function openMasteringReportModal() {
   const subCorrO = m.sub_phase_corr_orig !== undefined ? (m.sub_phase_corr_orig >= 0 ? `+${m.sub_phase_corr_orig.toFixed(2)}` : m.sub_phase_corr_orig.toFixed(2)) : '--';
   const plrProc = m.plr_proc_db !== undefined ? m.plr_proc_db : '--';
 
-  const shiftSub = m.energy_shift_sub_db !== undefined ? (m.energy_shift_sub_db >= 0 ? `+${m.energy_shift_sub_db.toFixed(1)}` : m.energy_shift_sub_db.toFixed(1)) : '--';
-  const shiftBody = m.energy_shift_body_db !== undefined ? (m.energy_shift_body_db >= 0 ? `+${m.energy_shift_body_db.toFixed(1)}` : m.energy_shift_body_db.toFixed(1)) : '--';
-  const shiftPres = m.energy_shift_presence_db !== undefined ? (m.energy_shift_presence_db >= 0 ? `+${m.energy_shift_presence_db.toFixed(1)}` : m.energy_shift_presence_db.toFixed(1)) : '--';
-  const shiftAir = m.energy_shift_air_db !== undefined ? (m.energy_shift_air_db >= 0 ? `+${m.energy_shift_air_db.toFixed(1)}` : m.energy_shift_air_db.toFixed(1)) : '--';
+  // Band balance relative to the overall level change (same numbers as the measured diagnosis)
+  const tbRel = (m.diagnosis && m.diagnosis.tonal_balance_rel_db) || {};
+  const tbv = (k) => (typeof tbRel[k] === 'number') ? `${tbRel[k] >= 0 ? '+' : ''}${tbRel[k].toFixed(1)}` : '--';
 
   // Generate SVG Spectrum (Full & Zoom)
   let svgChart = '';
@@ -2899,16 +2898,16 @@ function openMasteringReportModal() {
         <div style="font-family:var(--font-display); font-size:17px; font-weight:700; color:#fff;">${trackName}</div>
       </div>
       <div style="text-align:right; font-family:var(--font-mono); font-size:11px; color:#38bdf8;">
-        <div>${m.sample_rate || 44100} Hz &bull; 24-bit Lossless WAV</div>
+        <div>${m.sample_rate || '--'} Hz &bull; WAV</div>
         <div style="color:#64748b; font-size:10px;">ARCHITECT: LEX GEREK</div>
       </div>
     </div>
 
     <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; margin-bottom:12px;">
       <div style="background:#090b10; border:1px solid #1f2738; border-radius:6px; padding:10px 12px;">
-        <div style="font-family:var(--font-mono); font-size:9.5px; color:#64748b; letter-spacing:1px;">4X TRUE-PEAK CEILING</div>
-        <div style="font-family:var(--font-display); font-size:18px; font-weight:700; color:#fff;">${tpProc} <span style="font-size:10px; color:#64748b;">dBFS</span></div>
-        <div style="font-family:var(--font-mono); font-size:10px; color:#10b981;">Oversampled (Raw: ${tpOrig} dBFS)</div>
+        <div style="font-family:var(--font-mono); font-size:9.5px; color:#64748b; letter-spacing:1px;">4X TRUE-PEAK (MEASURED)</div>
+        <div style="font-family:var(--font-display); font-size:18px; font-weight:700; color:#fff;">${tpProc} <span style="font-size:10px; color:#64748b;">dBTP</span></div>
+        <div style="font-family:var(--font-mono); font-size:10px; color:#94a3b8;">Raw: ${tpOrig} dBTP</div>
       </div>
       <div style="background:#090b10; border:1px solid #1f2738; border-radius:6px; padding:10px 12px;">
         <div style="font-family:var(--font-mono); font-size:9.5px; color:#64748b; letter-spacing:1px;">INTEGRATED LOUDNESS (LUFS)</div>
@@ -2933,7 +2932,7 @@ function openMasteringReportModal() {
       <div style="background:#090b10; border:1px solid #1f2738; border-radius:6px; padding:10px 12px;">
         <div style="font-family:var(--font-mono); font-size:9.5px; color:#64748b; letter-spacing:1px;">3D STEREO WIDTH</div>
         <div style="font-family:var(--font-display); font-size:18px; font-weight:700; color:#fff;">+${m.stereo_expansion_db} <span style="font-size:10px; color:#64748b;">dB</span></div>
-        <div style="font-family:var(--font-mono); font-size:10px; color:#10b981;">Highs Mid-Side Air Spread</div>
+        <div style="font-family:var(--font-mono); font-size:10px; color:#94a3b8;">Side level of highs vs raw (measured)</div>
       </div>
     </div>
 
@@ -3028,11 +3027,12 @@ function openMasteringReportModal() {
 
     <!-- 4-Band Energy Shift Bar in Modal -->
     <div style="display:flex; justify-content:space-between; align-items:center; background:#070a12; border:1px solid #1f2738; border-radius:6px; padding:8px 16px; margin-bottom:12px; font-family:var(--font-mono); font-size:11px;">
-      <div style="color:#64748b; font-weight:bold;">4-BAND MASTER PROFILE:</div>
-      <div><span style="color:#64748b;">SUB (&lt;120Hz):</span> <span style="color:#fde047; font-weight:bold;">${shiftSub} dB</span></div>
-      <div><span style="color:#64748b;">BODY (120-2k):</span> <span style="color:#93c5fd; font-weight:bold;">${shiftBody} dB</span></div>
-      <div><span style="color:#64748b;">PRESENCE (2-8k):</span> <span style="color:#f43f5e; font-weight:bold;">${shiftPres} dB</span></div>
-      <div><span style="color:#64748b;">AIR (&gt;8k):</span> <span style="color:#10b981; font-weight:bold;">${shiftAir} dB</span></div>
+      <div style="color:#64748b; font-weight:bold;">BAND BALANCE (VS OVERALL LEVEL):</div>
+      <div><span style="color:#64748b;">SUB 20-120:</span> <span style="color:#fde047; font-weight:bold;">${tbv('sub')} dB</span></div>
+      <div><span style="color:#64748b;">BODY 120-2k:</span> <span style="color:#93c5fd; font-weight:bold;">${tbv('body')} dB</span></div>
+      <div><span style="color:#64748b;">PRESENCE 2-5k:</span> <span style="color:#f43f5e; font-weight:bold;">${tbv('presence')} dB</span></div>
+      <div><span style="color:#64748b;">BRILLIANCE 5-10k:</span> <span style="color:#f59e0b; font-weight:bold;">${tbv('brilliance')} dB</span></div>
+      <div><span style="color:#64748b;">AIR 10-20k:</span> <span style="color:#10b981; font-weight:bold;">${tbv('air')} dB</span></div>
     </div>
 
     ${svgChart}
@@ -3268,7 +3268,7 @@ async function downloadReportPNG() {
   ctx.textAlign = 'right';
   ctx.fillStyle = '#38bdf8';
   ctx.font = '12px monospace';
-  ctx.fillText(`${m.sample_rate || 44100} Hz  •  24-bit Lossless WAV  •  ${m.duration_sec || 0}s`, canvas.width - 65, 146);
+  ctx.fillText(`${m.sample_rate || '--'} Hz  •  WAV  •  ${m.duration_sec || '--'}s`, canvas.width - 65, 146);
   ctx.textAlign = 'left';
 
   // 4. Telemetry Metric Boxes (6 tiles)
@@ -3283,12 +3283,12 @@ async function downloadReportPNG() {
   const subCorrO = m.sub_phase_corr_orig !== undefined ? (m.sub_phase_corr_orig >= 0 ? `+${m.sub_phase_corr_orig.toFixed(2)}` : m.sub_phase_corr_orig.toFixed(2)) : '--';
 
   const tiles = [
-    { label: '4X TRUE-PEAK CEILING', val: `${tpProc} dBFS`, sub: `Raw: ${tpOrig} dBFS (Clamped)`, color: '#ffffff' },
+    { label: '4X TRUE-PEAK (MEASURED)', val: `${tpProc} dBTP`, sub: `Raw: ${tpOrig} dBTP`, color: '#ffffff' },
     { label: 'INTEGRATED LOUDNESS', val: `${lufsProc} LUFS`, sub: `PLR: ${m.plr_proc_db !== undefined ? m.plr_proc_db : '--'} dB`, color: '#38bdf8' },
     { label: 'DYNAMIC CREST FACTOR', val: `${crestProc} dB`, sub: `Raw: ${crestOrig} dB`, color: '#ffffff' },
     { label: 'AUTO ANTIDOTE v2', val: antidoteSummary(m).value, sub: antidoteSummary(m).sub, color: '#fbbf24' },
     { label: 'SUB-BASS PHASE CORR', val: `${subCorrP} Corr`, sub: `Raw: ${subCorrO}`, color: '#fde047' },
-    { label: '3D STEREO WIDTH', val: `+${m.stereo_expansion_db} dB`, sub: `Mid-Side Air Widening`, color: '#10b981' }
+    { label: '3D STEREO WIDTH', val: `+${m.stereo_expansion_db} dB`, sub: `Side level of highs vs raw`, color: '#10b981' }
   ];
 
   const colW = (canvas.width - 100 - 5 * 12) / 6;
