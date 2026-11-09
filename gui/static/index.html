@@ -572,11 +572,9 @@
               </div>
             </div>
             <!-- DIAGNOSIS: WHAT WAS WRONG -->
-            <div class="monitor-diagnosis diag-raw">
-              <div class="diag-header">❌ SOURCE DEFECT DIAGNOSIS (MEASURED):</div>
-              <ul class="diag-list" id="diagSourceList">
-                <li><span class="check-bullet">•</span> Process a track to measure its defects.</li>
-              </ul>
+            <div class="monitor-diagnosis diag-raw" style="cursor:pointer;" onclick="event.stopPropagation(); openMasteringReportModal();" title="Open the full measured diagnosis in the Mastering Report">
+              <div class="diag-header">❌ SOURCE: <span id="diagSourceSummary" style="font-weight:normal;">process a track to measure its defects</span></div>
+              <div style="font-size:10.5px; color:#64748b; margin-top:4px;">Full measured diagnosis &rarr; MASTERING REPORT</div>
             </div>
           </div>
 
@@ -598,11 +596,9 @@
               </div>
             </div>
             <!-- SURGERY: WHAT WAS CURED -->
-            <div class="monitor-diagnosis diag-healed">
-              <div class="diag-header">⚡ TREATMENT // MEASURED BEFORE &rarr; AFTER:</div>
-              <ul class="diag-list" id="diagTreatList">
-                <li><span class="check-bullet">•</span> Results appear here after processing.</li>
-              </ul>
+            <div class="monitor-diagnosis diag-healed" style="cursor:pointer;" onclick="event.stopPropagation(); openMasteringReportModal();" title="Open the full before/after measurements in the Mastering Report">
+              <div class="diag-header">⚡ TREATMENT: <span id="diagTreatSummary" style="font-weight:normal;">results appear after processing</span></div>
+              <div style="font-size:10.5px; color:#64748b; margin-top:4px;">Full before &rarr; after measurements &rarr; MASTERING REPORT</div>
             </div>
           </div>
 

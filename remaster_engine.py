@@ -2297,7 +2297,7 @@ def generate_track_map_html(track_map, target_path=""):
               </div>
               <div class="tm-grid-row">
                 <span class="tm-lbl">SUB-CORRELATION</span>
-                <span class="tm-val" style="color:#38bdf8;">{s.get('sub_correlation_r', 0.0):+.2f} r</span>
+                <span class="tm-val" style="color:#38bdf8;">{(format(s['sub_correlation_r'], '+.2f') + ' r') if isinstance(s.get('sub_correlation_r'), (int, float)) else '&mdash; (stems only)'}</span>
               </div>
               <div style="margin-top:5px; font-size:9.5px; font-family:monospace; color:{c};">
                 &#9642; {s.get('policy_verdict', '')}

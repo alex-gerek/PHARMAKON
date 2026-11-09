@@ -1961,6 +1961,24 @@ function renderDiagnosis(d) {
   if (!d) return;
   fill('diagSourceList', d.source);
   fill('diagTreatList', d.treatment);
+  // One-line summaries on the main page (full lists live in the Mastering Report)
+  const nIssue = (d.source || []).filter(i => i.status === 'issue').length;
+  const nWarn = (d.source || []).filter(i => i.status === 'warn').length;
+  const srcSum = document.getElementById('diagSourceSummary');
+  if (srcSum) {
+    const flagged = (d.source || []).filter(i => i.status === 'issue' || i.status === 'warn').map(i => i.label);
+    srcSum.textContent = (nIssue || nWarn)
+      ? `${nIssue} defect(s), ${nWarn} warning(s) measured - ${flagged.join(', ')}`
+      : 'no defects measured';
+  }
+  const trtSum = document.getElementById('diagTreatSummary');
+  if (trtSum) {
+    const t = Object.fromEntries((d.treatment || []).map(i => [i.key, i]));
+    const tp = t.true_peak ? `True-Peak ${Number(t.true_peak.value).toFixed(2)} dBTP` : '';
+    const cors = t.antidote && t.antidote.value ? t.antidote.value.corrections : null;
+    const anti = Array.isArray(cors) ? (cors.length ? `Antidote: ${cors.length} band(s) cut` : 'Antidote: none needed') : 'Antidote: off';
+    trtSum.textContent = [d.profile, tp, anti].filter(Boolean).join(' • ');
+  }
   const src = Object.fromEntries((d.source || []).map(i => [i.key, i]));
   const trt = Object.fromEntries((d.treatment || []).map(i => [i.key, i]));
   const issues = (d.source || []).filter(i => i.status === 'issue').length;
@@ -3010,7 +3028,7 @@ function openMasteringReportModal() {
           <div style="font-size:9.5px; display:flex; justify-content:space-between; margin-bottom:3px;"><span style="color:#64748b;">CREST:</span><span style="color:#fff; font-weight:bold;">${crest} dB</span></div>
           <div style="font-size:9.5px; display:flex; justify-content:space-between; margin-bottom:3px;"><span style="color:#64748b;">PEAK / RMS:</span><span>${pk} / ${rms}</span></div>
           <div style="font-size:9.5px; display:flex; justify-content:space-between; margin-bottom:3px;"><span style="color:#64748b;">KICKS / PHASE:</span><span style="color:${lockColor}; font-weight:bold;">${lockStat}</span></div>
-          <div style="font-size:9.5px; display:flex; justify-content:space-between; margin-bottom:3px;"><span style="color:#64748b;">SUB-CORRELATION:</span><span style="color:#38bdf8;">${Number(s.sub_correlation_r || 0.0).toFixed(2)} r</span></div>
+          <div style="font-size:9.5px; display:flex; justify-content:space-between; margin-bottom:3px;"><span style="color:#64748b;">SUB-CORRELATION:</span><span style="color:#38bdf8;">${(typeof s.sub_correlation_r === 'number') ? s.sub_correlation_r.toFixed(2) + ' r' : '-- (stems only)'}</span></div>
           <div style="font-size:8.5px; color:${c}; margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">▪ ${s.policy_verdict || ''}</div>
         </div>`;
       }).join('');
@@ -3191,8 +3209,8 @@ function inspectTrackMapSection(secIdx) {
         </div>
         <div style="background:#080b12; border:1px solid #1f293d; border-radius:6px; padding:10px 12px;">
           <div style="font-size:10px; color:#64748b; font-weight:bold; margin-bottom:4px;">SUB-CORRELATION</div>
-          <div style="font-size:16px; font-weight:800; color:#0ea5e9;">${Number(s.sub_correlation_r || 0.0).toFixed(2)} <span style="font-size:11px; font-weight:normal; color:#94a3b8;">r</span></div>
-          <div style="font-size:9.5px; color:#10b981; margin-top:2px;">Coherent Alignment</div>
+          <div style="font-size:16px; font-weight:800; color:#0ea5e9;">${(typeof s.sub_correlation_r === 'number') ? s.sub_correlation_r.toFixed(2) : '--'} <span style="font-size:11px; font-weight:normal; color:#94a3b8;">r</span></div>
+          <div style="font-size:9.5px; color:#94a3b8; margin-top:2px;">${(typeof s.sub_correlation_r === 'number') ? 'Kick vs bass, sub band (measured)' : 'Kick vs bass needs separate stems'}</div>
         </div>
       </div>
 
@@ -3255,7 +3273,13 @@ async function downloadReportPNG() {
 
   const tilesY = 184, tileH = 86, tileGap = 12;
   const diagY = tilesY + 2 * tileH + tileGap + 20;
-  const bandY = diagY + diagH + (diagH ? 16 : 0);
+  const tm = m.track_map || (m.sub_sync_summary && m.sub_sync_summary.track_map);
+  const tmSecs = (tm && Array.isArray(tm.sections)) ? tm.sections : [];
+  const TM_COLS = 4, TM_CARD_H = 112, TM_GAP = 10;
+  const tmRows = Math.ceil(tmSecs.length / TM_COLS);
+  const tmH = tmSecs.length ? 34 + 44 + tmRows * (TM_CARD_H + TM_GAP) + 6 : 0;
+  const tmY = diagY + diagH + (diagH ? 16 : 0);
+  const bandY = tmY + tmH + (tmH ? 16 : 0);
   const chartY = bandY + 56;
   const chartH = 380;
   const H = chartY + chartH + 40 + sealLines.length * 16 + 40;
@@ -3390,6 +3414,75 @@ async function downloadReportPNG() {
     };
     drawCol(PAD, 'SOURCE DIAGNOSIS (MEASURED ON THE ORIGINAL)', '#f43f5e', '#3b1d24', srcRows);
     drawCol(PAD + colW2 + 20, `TREATMENT (BEFORE → AFTER) • ${d.profile || ''}`, '#10b981', '#14342a', trtRows);
+  }
+
+  // 4b2. Track Intelligence Map (sections bar + section cards)
+  if (tmSecs.length) {
+    ctx.fillStyle = '#070a12';
+    ctx.fillRect(PAD, tmY, INNER, tmH);
+    ctx.strokeStyle = '#1f2738';
+    ctx.strokeRect(PAD, tmY, INNER, tmH);
+    const bpm = tm.estimated_bpm || tm.tempo_bpm;
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 12px monospace';
+    ctx.fillText('TRACK INTELLIGENCE MAP', PAD + 14, tmY + 22);
+    ctx.fillStyle = '#64748b';
+    ctx.font = '11px monospace';
+    ctx.fillText(`${bpm ? Number(bpm).toFixed(1) + ' BPM \u2022 ' : ''}${tmSecs.length} SECTORS \u2022 ${Number(tm.total_duration_s || 0).toFixed(1)} s`, PAD + 210, tmY + 22);
+    const secLabel = (sx) => sx.sec_tag || sx.tag || 'SECTION';
+    const secTime = (sx) => sx.time_str || ((sx.start_str && sx.end_str) ? `${sx.start_str}-${sx.end_str}` : `${Number(sx.start_s || 0).toFixed(1)}s`);
+    // proportional sections bar
+    const barX = PAD + 14, barY = tmY + 34, barW = INNER - 28, barH = 34;
+    const totalDur = tmSecs.reduce((a, sx) => a + (sx.duration_s || 0), 0) || 1;
+    let bx = barX;
+    tmSecs.forEach(sx => {
+      const w = Math.max(2, barW * (sx.duration_s || 0) / totalDur);
+      const c = sx.color || '#0ea5e9';
+      ctx.fillStyle = c + '33';
+      ctx.fillRect(bx, barY, w - 2, barH);
+      ctx.strokeStyle = c;
+      ctx.strokeRect(bx, barY, w - 2, barH);
+      if (w > 46) {
+        ctx.fillStyle = c; ctx.font = 'bold 9px monospace';
+        ctx.fillText(secLabel(sx).slice(0, Math.floor(w / 7)), bx + 4, barY + 14);
+        ctx.fillStyle = '#cbd5e1'; ctx.font = '9px monospace';
+        ctx.fillText(secTime(sx).slice(0, Math.floor(w / 6)), bx + 4, barY + 27);
+      }
+      bx += w;
+    });
+    // section cards
+    const cardW = (INNER - 28 - (TM_COLS - 1) * TM_GAP) / TM_COLS;
+    tmSecs.forEach((sx, i) => {
+      const cx = PAD + 14 + (i % TM_COLS) * (cardW + TM_GAP);
+      const cy = barY + barH + 10 + Math.floor(i / TM_COLS) * (TM_CARD_H + TM_GAP);
+      const c = sx.color || '#0ea5e9';
+      ctx.fillStyle = '#090c13'; ctx.fillRect(cx, cy, cardW, TM_CARD_H);
+      ctx.strokeStyle = '#1a2233'; ctx.strokeRect(cx, cy, cardW, TM_CARD_H);
+      ctx.fillStyle = c; ctx.fillRect(cx, cy, cardW, 3);
+      ctx.font = 'bold 10px monospace'; ctx.fillText(secLabel(sx), cx + 10, cy + 20);
+      ctx.fillStyle = '#ffffff'; ctx.font = 'bold 11px monospace';
+      ctx.fillText(String(sx.name || 'Section').split('/')[0].trim().slice(0, 22), cx + 10 + 70, cy + 20);
+      ctx.fillStyle = '#94a3b8'; ctx.font = '10px monospace';
+      ctx.textAlign = 'right'; ctx.fillText(secTime(sx), cx + cardW - 10, cy + 20); ctx.textAlign = 'left';
+      const kCnt = (sx.kick_events_count !== undefined) ? sx.kick_events_count : (sx.kicks_count || 0);
+      const acc = sx.events_accepted || 0, rej = sx.events_rejected || 0;
+      const num = (v, dgt) => (v === undefined || v === null) ? '--' : Number(v).toFixed(dgt);
+      const rowsTxt = [
+        ['CREST', `${num(sx.crest_factor_db, 1)} dB`],
+        ['PEAK / RMS', `${num(sx.peak_mix_dbfs !== undefined ? sx.peak_mix_dbfs : sx.peak_dbfs, 1)} / ${num(sx.rms_mix_dbfs, 1)} dBFS`],
+        ['KICKS / PHASE', (acc + rej > 0) ? `${acc} / ${kCnt} locked` : `${kCnt} kicks`],
+        ['KICK-BASS CORR', (typeof sx.sub_correlation_r === 'number') ? `${sx.sub_correlation_r.toFixed(2)} r` : '-- (stems only)'],
+      ];
+      rowsTxt.forEach(([k, v], j) => {
+        const yy = cy + 40 + j * 15;
+        ctx.fillStyle = '#64748b'; ctx.font = '10px monospace'; ctx.fillText(k + ':', cx + 10, yy);
+        ctx.fillStyle = '#e2e8f0'; ctx.textAlign = 'right'; ctx.fillText(v, cx + cardW - 10, yy); ctx.textAlign = 'left';
+      });
+      if (sx.policy_verdict) {
+        ctx.fillStyle = c; ctx.font = '9px monospace';
+        ctx.fillText(('\u25AA ' + sx.policy_verdict).slice(0, Math.floor((cardW - 20) / 5.6)), cx + 10, cy + TM_CARD_H - 10);
+      }
+    });
   }
 
   // 4c. Band balance relative to overall level (same numbers as the diagnosis)

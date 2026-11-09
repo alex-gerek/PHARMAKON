@@ -321,6 +321,11 @@ def build_provisional_track_map(
     mix_mono = np.mean(ensure_stereo(full_mix), axis=1)
     duration_s = float(len(mix_mono) / sr)
 
+    # Kick-vs-bass sub correlation only exists when separate drum and bass signals are
+    # given (stems mode). For a full mix both defaults are the SAME signal, which would
+    # make the correlation a meaningless constant 1.00 - report None instead.
+    kick_bass_separate = (sub_drums is not None) and (sub_bass is not None) and (sub_bass is not sub_drums)
+
     if sub_drums is None:
         sub_drums = butter_lowpass(mix_mono, 100.0, sr, order=2)
     if sub_bass is None:
@@ -396,7 +401,7 @@ def build_provisional_track_map(
             r_sub_second = float(20.0 * np.log10(np.sqrt(np.mean(seg_sb[(half_pt - s_idx):]**2) + 1e-12)))
             sub_rise = r_sub_second - r_sub_first
 
-            corr = float(np.corrcoef(seg_sd, seg_sb)[0, 1]) if (len(seg_sd) > 0 and r_sd > -60.0 and r_sb > -60.0) else 0.0
+            corr = (float(np.corrcoef(seg_sd, seg_sb)[0, 1]) if (len(seg_sd) > 0 and r_sd > -60.0 and r_sb > -60.0) else 0.0) if kick_bass_separate else None
 
             is_start = (i == 0)
             is_end = (i == len(raw_b) - 2)
@@ -567,7 +572,7 @@ def build_provisional_track_map(
             k_in_sec = [int(k) for k in kick_peaks if s_idx <= k < e_idx]
             k_count = len(k_in_sec)
             k_density = float(k_count / max(1.0, sec_dur))
-            corr = float(np.corrcoef(seg_sd, seg_sb)[0, 1]) if (len(seg_sd) > 0 and r_sd > -60.0 and r_sb > -60.0) else 0.0
+            corr = (float(np.corrcoef(seg_sd, seg_sb)[0, 1]) if (len(seg_sd) > 0 and r_sd > -60.0 and r_sb > -60.0) else 0.0) if kick_bass_separate else None
 
             sections.append({
                 "sec_type": sec_type, "sec_tag": sec_tag, "sec_color": sec_color,
@@ -679,7 +684,7 @@ def build_provisional_track_map(
             "peak_mix_dbfs": round(pk_mix, 2),
             "peak_dbfs": round(pk_mix, 2),
             "crest_factor_db": round(crest_factor, 2),
-            "sub_correlation_r": round(corr, 3),
+            "sub_correlation_r": round(corr, 3) if corr is not None else None,
             "events_accepted": events_acc,
             "events_rejected": events_rej,
             "events_bypassed": events_byp,
