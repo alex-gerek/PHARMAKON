@@ -1,6 +1,7 @@
 import os
 import sys
 import time
+import urllib.error
 import urllib.request
 import subprocess
 import threading
@@ -24,14 +25,19 @@ URL = "http://127.0.0.1:7860"
 
 def is_server_running():
     try:
-        with urllib.request.urlopen(f"{URL}/api/system-info", timeout=1) as res:
+        with urllib.request.urlopen(f"{URL}/api/ping", timeout=1) as res:
             return res.getcode() == 200
+    except urllib.error.HTTPError:
+        return True  # something answered (e.g. an older build without /api/ping)
     except Exception:
         return False
 
 def stop_server():
     try:
-        req = urllib.request.Request(f"{URL}/api/shutdown", method="POST")
+        from gui import security
+        req = urllib.request.Request(
+            f"{URL}/api/shutdown", method="POST",
+            headers={"X-Pharmakon-Token": security.read_token_file()})
         with urllib.request.urlopen(req, timeout=2) as res:
             return res.getcode() == 200
     except Exception:
@@ -94,10 +100,11 @@ def main():
             print("PHARMAKON Server is not currently running.")
         return
 
-    # Smart Online Patch Sync on launch (silent fallback if offline)
+    # Update CHECK on launch (notify-only: nothing is downloaded or executed without an explicit click).
+    # Previously installed patches are mounted only if their signature and hashes verify.
     try:
         import auto_updater
-        auto_updater.sync_online_patches(timeout=2.0)
+        auto_updater.sync_online_patches(apply=False, timeout=2.0)
         auto_updater.activate_live_patches(load_server=getattr(sys, 'frozen', False))
     except Exception:
         pass

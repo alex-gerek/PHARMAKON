@@ -29,18 +29,28 @@ import remaster_engine
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
-from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
+
+try:
+    from gui import security
+except ImportError:  # launched as a plain script: python gui/server.py
+    import security
 
 app = FastAPI(title="PHARMAKON 3.0 Studio Console", version="3.0.0")
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# No CORS: the UI is served by this same origin. Every /api/* call needs the per-run session token
+# (cookie set when the UI page is loaded), and Host/Origin/Sec-Fetch-Site must be local.
+SESSION_TOKEN = security.new_token()
+app.add_middleware(security.LocalGuardMiddleware, token=SESSION_TOKEN, port=7860)
+try:
+    security.write_token_file(SESSION_TOKEN)
+except Exception:
+    pass
+
+
+@app.get("/api/ping")
+def ping():
+    return {"ok": True}
 
 UPLOAD_DIR = PROJECT_DIR / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
@@ -256,8 +266,12 @@ async def process_target(request: Request):
 async def upload_binary(request: Request, filename: str):
     """Direct streaming binary upload for drag & drop from browser without multipart dependency."""
     try:
-        clean_name = os.path.basename(filename)
+        clean_name = os.path.basename(filename.replace("\\", "/"))
+        if not clean_name or clean_name.startswith(".") or not security.is_audio_path(clean_name):
+            raise HTTPException(status_code=400, detail="Only audio files can be uploaded")
         save_path = UPLOAD_DIR / clean_name
+        if not security.is_inside(save_path, UPLOAD_DIR):
+            raise HTTPException(status_code=400, detail="Invalid file name")
         body = await request.body()
         with open(save_path, "wb") as f:
             f.write(body)
@@ -267,20 +281,22 @@ async def upload_binary(request: Request, filename: str):
             "filename": clean_name,
             "size": len(body)
         }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/stream")
 def stream_audio(path: str):
     """Stream audio file for synchronized in-browser A/B comparison."""
-    clean_path = urllib.parse.unquote(path).strip().strip('"').strip("'")
-    if not os.path.isfile(clean_path):
+    clean_path = security.clean_user_path(path)
+    if not security.is_audio_path(clean_path) or not os.path.isfile(clean_path):
         raise HTTPException(status_code=404, detail="Audio file not found")
     return FileResponse(clean_path, media_type="audio/wav")
 
 def _find_latest_mastering_report(clean_path: str = "") -> str:
     """Finds the requested report or the most recently modified MASTERING_REPORT.html."""
-    if clean_path and os.path.isfile(clean_path):
+    if clean_path and security.is_report_path(clean_path) and os.path.isfile(clean_path):
         return clean_path
 
     # Search candidates
@@ -338,6 +354,8 @@ async def open_report_file(request: Request):
             return {"success": False, "error": "Report not found on disk. Please render a master first!"}
 
         target_file = os.path.normpath(target_file)
+        if not security.is_report_path(target_file):
+            return {"success": False, "error": "Not a PHARMAKON report file"}
         if sys.platform == "win32":
             os.startfile(target_file)
             return {"success": True, "opened": target_file}
@@ -655,7 +673,7 @@ def download_delta_audio(path: str):
             if os.path.isfile(cand):
                 clean_path = cand
 
-    if not os.path.isfile(clean_path):
+    if not security.is_audio_path(clean_path) or not os.path.isfile(clean_path):
         raise HTTPException(status_code=404, detail="Delta audio file not found")
 
     return FileResponse(clean_path, media_type="audio/wav", filename=os.path.basename(clean_path))
@@ -713,13 +731,16 @@ STATIC_DIR.mkdir(exist_ok=True)
 
 @app.get("/static/{asset_path:path}")
 def serve_static_overlay(asset_path: str):
-    clean_rel = asset_path.lstrip("/").replace("..", "")
+    clean_rel = asset_path.lstrip("/").replace("\\", "/")
     eff_dir = auto_updater.get_effective_static_dir(STATIC_DIR) if auto_updater is not None else STATIC_DIR
     for root_cand in (eff_dir, STATIC_DIR):
         target_f = root_cand / clean_rel
-        if target_f.is_file():
-            headers = {"Cache-Control": "no-cache"} if clean_rel.endswith((".js", ".css", ".html")) else {}
-            return FileResponse(str(target_f), headers=headers)
+        if not security.is_inside(target_f, root_cand) or not target_f.is_file():
+            continue
+        if root_cand != STATIC_DIR and not (auto_updater is not None and auto_updater.is_verified_overlay_file("gui/static/" + clean_rel)):
+            continue  # unverified overlay file: fall back to the bundled copy
+        headers = {"Cache-Control": "no-cache"} if clean_rel.endswith((".js", ".css", ".html")) else {}
+        return FileResponse(str(target_f), headers=headers)
     raise HTTPException(status_code=404, detail="Static asset not found")
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")

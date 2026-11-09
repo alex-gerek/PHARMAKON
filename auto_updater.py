@@ -1,9 +1,21 @@
 """
-PHARMAKON 2.0 — Smart Online Patch Sync & Live Overlay Updater
-Checks GitHub repository for verified DSP/UI patches when online,
-stages & syntax-validates updates atomically, and remains 100% functional offline.
+PHARMAKON — Signed Patch Updater
+
+Security model (fail closed):
+  * An update is described by `release_manifest.json` (version, git tag, per-file SHA-256) and a
+    detached Ed25519 signature `release_manifest.json.sig`. The matching PUBLIC key is embedded below.
+  * Nothing is downloaded-and-run unless the signature verifies AND every file hash matches.
+  * Updates are never applied silently: the app only reports "update_available"; files are
+    downloaded and installed only after an explicit user action (apply=True).
+  * Files are fetched from the immutable release tag named in the signed manifest, never from `master`.
+  * Only the files in ALLOWED_PATCH_FILES can ever be installed.
+  * Installed patches are re-verified (signature + hashes) every time they are loaded.
+  * If no public key is configured or `cryptography` is missing, updates are notify-only.
+Release tooling: tools/release_tool.py (keygen / build / sign / verify).
 """
 
+import base64
+import hashlib
 import importlib.util
 import json
 import os
@@ -16,7 +28,26 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-RAW_BASE_URL = "https://raw.githubusercontent.com/alex-gerek/PHARMAKON/master"
+RAW_HOST = "https://raw.githubusercontent.com/alex-gerek/PHARMAKON"
+MANIFEST_REF = "master"          # only the SIGNED manifest is read from here; code comes from a pinned tag
+MANIFEST_NAME = "release_manifest.json"
+SIGNATURE_NAME = "release_manifest.json.sig"
+
+# Base64 of the 32-byte Ed25519 PUBLIC key (generate with `python tools/release_tool.py keygen`).
+# Empty = signature verification impossible = updates are notify-only.
+UPDATE_PUBLIC_KEY_B64 = ""
+
+ALLOWED_PATCH_FILES = frozenset({
+    "remaster_engine.py",
+    "track_map_engine.py",
+    "gui/server.py",
+    "gui/security.py",
+    "gui/static/index.html",
+    "gui/static/app.js",
+    "gui/static/style.css",
+})
+MAX_PATCH_FILE_BYTES = 8 * 1024 * 1024
+_TAG_RE = re.compile(r"^v\d+\.\d+\.\d+$")
 RELEASE_PAGE_URL = "https://github.com/alex-gerek/PHARMAKON/releases/tag/v3.0.0"
 FALLBACK_VERSION = "3.0.0"
 
@@ -87,11 +118,96 @@ def get_bundled_version_info() -> dict:
     return {"app": "PHARMAKON", "version": FALLBACK_VERSION, "release_url": RELEASE_PAGE_URL}
 
 
+# ----------------------------------------------------------------------------- verification
+
+def verify_manifest_signature(manifest_bytes: bytes, sig_b64: bytes, pubkey_b64: str = None) -> bool:
+    """True only if `sig_b64` is a valid Ed25519 signature of `manifest_bytes`. Fails closed."""
+    key_b64 = UPDATE_PUBLIC_KEY_B64 if pubkey_b64 is None else pubkey_b64
+    if not key_b64:
+        return False
+    try:
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+        pub = Ed25519PublicKey.from_public_bytes(base64.b64decode(key_b64, validate=True))
+        pub.verify(base64.b64decode(bytes(sig_b64).strip(), validate=True), manifest_bytes)
+        return True
+    except Exception:
+        return False
+
+
+def _sha256(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def _manifest_files(manifest: dict):
+    """Validated {path: sha256} map from a manifest, or None if anything is out of policy."""
+    files = manifest.get("files")
+    if manifest.get("app") != "PHARMAKON" or not isinstance(files, dict) or not files:
+        return None
+    if not _TAG_RE.match(str(manifest.get("ref", ""))):
+        return None
+    out = {}
+    for rel, meta in files.items():
+        if rel not in ALLOWED_PATCH_FILES or not isinstance(meta, dict):
+            return None
+        digest = str(meta.get("sha256", "")).lower()
+        if not re.fullmatch(r"[0-9a-f]{64}", digest):
+            return None
+        out[rel] = digest
+    return out
+
+
+_VERIFY_CACHE = {}
+
+
+def _verified_installed_files(patch_dir: Path):
+    """Re-verify the installed overlay: signature of the stored manifest + hash of every file.
+    Returns the set of verified relative paths, or None if the overlay must not be used."""
+    try:
+        mf = patch_dir / MANIFEST_NAME
+        sg = patch_dir / SIGNATURE_NAME
+        if not mf.is_file() or not sg.is_file():
+            return None
+        # cache key covers the manifest, signature AND every installed patch file (mtime/size/inode),
+        # so editing any installed file invalidates the cached verdict
+        stat_key = tuple(
+            (str(p.relative_to(patch_dir)), st.st_mtime_ns, st.st_size, st.st_ino)
+            for p in sorted(q for q in patch_dir.rglob("*") if q.is_file())
+            for st in (p.stat(),)
+        )
+        key = (str(patch_dir), stat_key, UPDATE_PUBLIC_KEY_B64)
+        if key in _VERIFY_CACHE:
+            return _VERIFY_CACHE[key]
+        result = None
+        raw = mf.read_bytes()
+        if verify_manifest_signature(raw, sg.read_bytes()):
+            files = _manifest_files(json.loads(raw.decode("utf-8")))
+            if files is not None:
+                ok = True
+                for rel, digest in files.items():
+                    fp = patch_dir / rel
+                    if not fp.is_file() or _sha256(fp.read_bytes()) != digest:
+                        ok = False
+                        break
+                if ok:
+                    result = frozenset(files)
+        _VERIFY_CACHE.clear()
+        _VERIFY_CACHE[key] = result
+        return result
+    except Exception:
+        return None
+
+
+def is_verified_overlay_file(rel_path: str) -> bool:
+    verified = _verified_installed_files(resolve_live_patch_dir())
+    return bool(verified) and rel_path in verified
+
+
 def get_active_version_info() -> dict:
     bundled = get_bundled_version_info()
     patch_dir = resolve_live_patch_dir()
     patched = _read_json_safe(patch_dir / "VERSION.json")
-    if patched and parse_version(patched.get("version", "")) > parse_version(bundled.get("version", "")):
+    if (patched and parse_version(patched.get("version", "")) > parse_version(bundled.get("version", ""))
+            and _verified_installed_files(patch_dir) is not None):
         return patched
     return bundled
 
@@ -102,7 +218,9 @@ def has_newer_live_patch() -> bool:
     patched = _read_json_safe(patch_dir / "VERSION.json")
     if not patched:
         return False
-    return parse_version(patched.get("version", "")) > parse_version(bundled.get("version", ""))
+    if not parse_version(patched.get("version", "")) > parse_version(bundled.get("version", "")):
+        return False
+    return _verified_installed_files(patch_dir) is not None
 
 
 def get_effective_static_dir(default_static_dir: Path) -> Path:
@@ -111,7 +229,7 @@ def get_effective_static_dir(default_static_dir: Path) -> Path:
         return Path(env_dir)
     if has_newer_live_patch():
         patched_static = resolve_live_patch_dir() / "gui" / "static"
-        if (patched_static / "index.html").is_file():
+        if (patched_static / "index.html").is_file() and is_verified_overlay_file("gui/static/index.html"):
             return patched_static
     return default_static_dir
 
@@ -128,43 +246,40 @@ def _load_module_from_file(mod_name: str, file_path: Path):
 
 def activate_live_patches(load_server: bool = False) -> bool:
     """
-    Mounts verified live-patched modules & static UI assets ahead of frozen PYZ bundle.
-    Safe rollback: if any patched file fails to load, restores default behavior cleanly.
+    Mounts live-patched modules & static UI assets ahead of the bundled copies, but ONLY if the
+    installed overlay passes signature + hash verification. Any failure -> bundled code is used.
     """
     if not has_newer_live_patch():
         return False
-
     patch_dir = resolve_live_patch_dir()
+    verified = _verified_installed_files(patch_dir) or frozenset()
+
     patched_static = patch_dir / "gui" / "static"
-    if (patched_static / "index.html").is_file():
+    if (patched_static / "index.html").is_file() and "gui/static/index.html" in verified:
         os.environ["PHARMAKON_STATIC_DIR"] = str(patched_static)
 
     saved_engine = sys.modules.get("remaster_engine")
     try:
-        tm_file = patch_dir / "track_map_engine.py"
-        if tm_file.is_file():
-            new_tm = _load_module_from_file("track_map_engine", tm_file)
+        if "track_map_engine.py" in verified:
+            new_tm = _load_module_from_file("track_map_engine", patch_dir / "track_map_engine.py")
             for mod_key in ("gui.server", "remaster_engine", "__main__"):
                 m = sys.modules.get(mod_key)
                 if m is not None and hasattr(m, "track_map_engine"):
                     setattr(m, "track_map_engine", new_tm)
 
-        eng_file = patch_dir / "remaster_engine.py"
-        if eng_file.is_file():
-            new_eng = _load_module_from_file("remaster_engine", eng_file)
+        if "remaster_engine.py" in verified:
+            new_eng = _load_module_from_file("remaster_engine", patch_dir / "remaster_engine.py")
             for mod_key in ("gui.server", "__main__"):
                 m = sys.modules.get(mod_key)
                 if m is not None and hasattr(m, "remaster_engine"):
                     setattr(m, "remaster_engine", new_eng)
 
-        if load_server:
-            srv_file = patch_dir / "gui" / "server.py"
-            if srv_file.is_file():
-                if "gui" not in sys.modules:
-                    pkg = types.ModuleType("gui")
-                    pkg.__path__ = [str(patch_dir / "gui")]
-                    sys.modules["gui"] = pkg
-                _load_module_from_file("gui.server", srv_file)
+        if load_server and "gui/server.py" in verified:
+            if "gui" not in sys.modules:
+                pkg = types.ModuleType("gui")
+                pkg.__path__ = [str(patch_dir / "gui")]
+                sys.modules["gui"] = pkg
+            _load_module_from_file("gui.server", patch_dir / "gui" / "server.py")
         return True
     except Exception as exc:
         if saved_engine is not None:
@@ -176,199 +291,122 @@ def activate_live_patches(load_server: bool = False) -> bool:
         return False
 
 
-def _validate_downloaded_file(rel_path: str, raw_bytes: bytes) -> bool:
-    try:
-        text = raw_bytes.decode("utf-8")
-    except UnicodeDecodeError:
-        return False
+# ----------------------------------------------------------------------------- network
 
-    if len(text) < 64:
-        return False
-
-    if rel_path.endswith(".py"):
-        if "PHARMAKON" not in text:
-            return False
-        try:
-            compile(text, rel_path, "exec")
-        except SyntaxError:
-            return False
-    elif rel_path.endswith(".html"):
-        if "PHARMAKON" not in text or "</html>" not in text.lower():
-            return False
-    elif rel_path.endswith(".js"):
-        if "runPharmakonProcess" not in text:
-            return False
-    return True
-
-
-def _fetch_bytes(url: str, timeout: float) -> bytes:
+def _fetch_bytes(url: str, timeout: float, max_bytes: int = MAX_PATCH_FILE_BYTES) -> bytes:
+    if not url.startswith("https://"):
+        raise urllib.error.URLError("HTTPS required")
     req = urllib.request.Request(
-        url,
-        headers={
-            "User-Agent": "PHARMAKON-Studio-AutoSync/3.0",
-            "Cache-Control": "no-cache",
-        },
-    )
+        url, headers={"User-Agent": "PHARMAKON-Studio-Updater/3.1", "Cache-Control": "no-cache"})
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         if resp.status != 200:
             raise urllib.error.URLError(f"HTTP {resp.status}")
-        return resp.read()
+        data = resp.read(max_bytes + 1)
+    if len(data) > max_bytes:
+        raise ValueError("Download exceeds size limit")
+    return data
 
 
-def sync_online_patches(force_apply_in_git: bool = False, timeout: float = 2.5) -> dict:
-    """
-    Checks GitHub master VERSION.json. If a newer version exists:
-    - Downloads and validates all patch files atomically into _live_patches/
-    - Hot-reloads remaster_engine & static assets in memory
-    - Gracefully returns 'offline' when no internet connection is available
-    """
+def _status(state, local_ver, remote_ver=None, notes="", rel_url=RELEASE_PAGE_URL, **extra):
     global _LAST_UPDATE_STATUS
-    project_dir, _ = get_paths()
+    st = {"state": state, "local_version": local_ver, "remote_version": remote_ver,
+          "updated_just_now": state == "updated", "notes": notes, "release_url": rel_url,
+          "checked_at": int(time.time())}
+    st.update(extra)
+    _LAST_UPDATE_STATUS = st
+    return st
+
+
+def sync_online_patches(apply: bool = False, timeout: float = 2.5) -> dict:
+    """
+    Check for a signed release newer than the running version.
+      apply=False (default, used at launch): only report 'update_available'; nothing is installed.
+      apply=True  (explicit user click): download from the pinned tag, verify, install, hot-load.
+    """
     active_info = get_active_version_info()
     local_ver = active_info.get("version", FALLBACK_VERSION)
-    ts = int(time.time())
+    prev_notes = active_info.get("notes", "")
 
     try:
-        raw_manifest = _fetch_bytes(f"{RAW_BASE_URL}/VERSION.json?t={ts}", timeout=timeout)
-        remote_info = json.loads(raw_manifest.decode("utf-8"))
+        manifest_bytes = _fetch_bytes(f"{RAW_HOST}/{MANIFEST_REF}/{MANIFEST_NAME}", timeout, 1024 * 1024)
+        sig_bytes = _fetch_bytes(f"{RAW_HOST}/{MANIFEST_REF}/{SIGNATURE_NAME}", timeout, 4096)
     except Exception:
-        status = {
-            "state": "offline",
-            "local_version": local_ver,
-            "remote_version": None,
-            "updated_just_now": _LAST_UPDATE_STATUS.get("updated_just_now", False),
-            "notes": active_info.get("notes", ""),
-            "release_url": active_info.get("release_url", RELEASE_PAGE_URL),
-            "checked_at": ts,
-        }
-        _LAST_UPDATE_STATUS = status
-        return status
+        return _status("offline", local_ver, notes=prev_notes,
+                       rel_url=active_info.get("release_url", RELEASE_PAGE_URL))
 
-    if not isinstance(remote_info, dict) or remote_info.get("app") != "PHARMAKON":
-        status = {
-            "state": "offline",
-            "local_version": local_ver,
-            "remote_version": None,
-            "updated_just_now": False,
-            "notes": active_info.get("notes", ""),
-            "release_url": RELEASE_PAGE_URL,
-            "checked_at": ts,
-        }
-        _LAST_UPDATE_STATUS = status
-        return status
+    verified = verify_manifest_signature(manifest_bytes, sig_bytes)
+    try:
+        manifest = json.loads(manifest_bytes.decode("utf-8"))
+    except Exception:
+        manifest = None
+    if not isinstance(manifest, dict) or manifest.get("app") != "PHARMAKON":
+        return _status("offline", local_ver, notes=prev_notes)
 
-    remote_ver = str(remote_info.get("version", local_ver))
-    notes = str(remote_info.get("notes", ""))
-    rel_url = str(remote_info.get("release_url", RELEASE_PAGE_URL))
+    remote_ver = str(manifest.get("version", local_ver))
+    notes = str(manifest.get("notes", ""))
+    rel_url = str(manifest.get("release_url", RELEASE_PAGE_URL))
+    if not rel_url.startswith("https://github.com/alex-gerek/PHARMAKON/"):
+        rel_url = RELEASE_PAGE_URL
 
     if parse_version(remote_ver) <= parse_version(local_ver):
-        status = {
-            "state": "up_to_date",
-            "local_version": local_ver,
-            "remote_version": remote_ver,
-            "updated_just_now": _LAST_UPDATE_STATUS.get("updated_just_now", False),
-            "notes": notes,
-            "release_url": rel_url,
-            "checked_at": ts,
-        }
-        _LAST_UPDATE_STATUS = status
-        return status
+        return _status("up_to_date", local_ver, remote_ver, notes, rel_url)
 
-    # Developer git workspace protection: notify without overwriting unless explicitly clicked
-    is_git_repo = (project_dir / ".git").exists() and not getattr(sys, "frozen", False)
-    if is_git_repo and not force_apply_in_git:
-        status = {
-            "state": "update_available",
-            "local_version": local_ver,
-            "remote_version": remote_ver,
-            "updated_just_now": False,
-            "notes": notes,
-            "release_url": rel_url,
-            "checked_at": ts,
-        }
-        _LAST_UPDATE_STATUS = status
-        return status
+    # Announce only. The remote notes are shown as untrusted text unless the signature verified.
+    if not verified:
+        return _status("update_available", local_ver, remote_ver, notes if verified else "", rel_url,
+                       signature_verified=False,
+                       error="Update signature could not be verified; install it manually from the release page.")
+    if not apply:
+        return _status("update_available", local_ver, remote_ver, notes, rel_url, signature_verified=True)
 
-    # Download & validate all patch files into temporary staging directory
-    patch_files = remote_info.get("patch_files") or [
-        "remaster_engine.py",
-        "gui/server.py",
-        "gui/static/index.html",
-        "gui/static/app.js",
-        "gui/static/style.css",
-    ]
+    files = _manifest_files(manifest)
+    if files is None:
+        return _status("update_available", local_ver, remote_ver, notes, rel_url,
+                       signature_verified=True, error="Manifest violates update policy")
 
+    project_dir, _ = get_paths()
     patch_dir = resolve_live_patch_dir()
     staging_dir = patch_dir.parent / "_live_patches_staging"
+    ref = manifest["ref"]
     try:
         if staging_dir.exists():
             shutil.rmtree(staging_dir, ignore_errors=True)
         staging_dir.mkdir(parents=True, exist_ok=True)
+        for rel, digest in files.items():
+            data = _fetch_bytes(f"{RAW_HOST}/{ref}/{rel}", max(timeout, 8.0))
+            if _sha256(data) != digest:
+                raise ValueError(f"Hash mismatch for {rel}")
+            if rel.endswith(".py"):
+                compile(data.decode("utf-8"), rel, "exec")
+            dest = staging_dir / rel
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_bytes(data)
+        (staging_dir / MANIFEST_NAME).write_bytes(manifest_bytes)
+        (staging_dir / SIGNATURE_NAME).write_bytes(sig_bytes)
+        (staging_dir / "VERSION.json").write_text(json.dumps(
+            {"app": "PHARMAKON", "version": remote_ver, "notes": notes, "release_url": rel_url,
+             "channel": manifest.get("channel", "production")}, indent=2), encoding="utf-8")
 
-        for rel_file in patch_files:
-            clean_rel = rel_file.strip("/").replace("\\", "/")
-            if ".." in clean_rel:
-                raise ValueError(f"Unsafe path in manifest: {clean_rel}")
-            raw_data = _fetch_bytes(f"{RAW_BASE_URL}/{clean_rel}?t={ts}", timeout=max(timeout, 6.0))
-            if not _validate_downloaded_file(clean_rel, raw_data):
-                raise ValueError(f"Validation failed for {clean_rel}")
-            dest_file = staging_dir / clean_rel
-            dest_file.parent.mkdir(parents=True, exist_ok=True)
-            dest_file.write_bytes(raw_data)
+        # Replace the overlay as a unit so a failure never leaves a half-updated mix.
+        old_dir = patch_dir.parent / "_live_patches_old"
+        shutil.rmtree(old_dir, ignore_errors=True)
+        if patch_dir.exists():
+            patch_dir.rename(old_dir)
+        try:
+            staging_dir.rename(patch_dir)
+        except Exception:
+            if old_dir.exists() and not patch_dir.exists():
+                old_dir.rename(patch_dir)
+            raise
+        shutil.rmtree(old_dir, ignore_errors=True)
 
-        (staging_dir / "VERSION.json").write_text(
-            json.dumps(remote_info, indent=2), encoding="utf-8"
-        )
-
-        # Ensure companion static assets (icons/SVGs) exist in live patch static dir
-        _, base_dir = get_paths()
-        orig_static = base_dir / "gui" / "static"
-        patch_static = patch_dir / "gui" / "static"
-        if orig_static.is_dir():
-            patch_static.mkdir(parents=True, exist_ok=True)
-            for asset in orig_static.iterdir():
-                if asset.is_file() and not (patch_static / asset.name).exists():
-                    shutil.copy2(asset, patch_static / asset.name)
-
-        # Commit validated staging files into live patch overlay
-        for item in staging_dir.rglob("*"):
-            if item.is_file():
-                rel = item.relative_to(staging_dir)
-                target = patch_dir / rel
-                target.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(item, target)
-
-        shutil.rmtree(staging_dir, ignore_errors=True)
-
-        # Hot-activate updated DSP engine & static assets immediately
         activate_live_patches(load_server=False)
-
-        status = {
-            "state": "updated",
-            "previous_version": local_ver,
-            "local_version": remote_ver,
-            "remote_version": remote_ver,
-            "updated_just_now": True,
-            "notes": notes,
-            "release_url": rel_url,
-            "checked_at": ts,
-        }
-        _LAST_UPDATE_STATUS = status
-        return status
+        return _status("updated", remote_ver, remote_ver, notes, rel_url,
+                       previous_version=local_ver, signature_verified=True)
     except Exception as exc:
         shutil.rmtree(staging_dir, ignore_errors=True)
-        status = {
-            "state": "update_available",
-            "local_version": local_ver,
-            "remote_version": remote_ver,
-            "updated_just_now": False,
-            "notes": notes,
-            "release_url": rel_url,
-            "error": str(exc),
-            "checked_at": ts,
-        }
-        _LAST_UPDATE_STATUS = status
-        return status
+        return _status("update_available", local_ver, remote_ver, notes, rel_url,
+                       signature_verified=True, error=str(exc))
 
 
 def get_cached_status() -> dict:

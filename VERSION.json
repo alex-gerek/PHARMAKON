@@ -8,6 +8,7 @@
   "patch_files": [
     "remaster_engine.py",
     "gui/server.py",
+    "gui/security.py",
     "gui/static/index.html",
     "gui/static/app.js",
     "gui/static/style.css",
