@@ -38,3 +38,7 @@ _live_patches_staging/
 .session_token
 *.pem
 *.key
+
+# Versioned release build outputs
+dist_*/
+build_*/
