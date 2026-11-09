@@ -1,0 +1,275 @@
+{
+ "summary": {
+  "4 dB injected": {
+   "v1_residual_median_db": 3.79,
+   "v2_residual_median_db": 1.32,
+   "v2_residual_worst_db": 2.97
+  },
+  "6 dB injected": {
+   "v1_residual_median_db": 6.14,
+   "v2_residual_median_db": 1.17,
+   "v2_residual_worst_db": 1.51
+  },
+  "9 dB injected": {
+   "v1_residual_median_db": 8.77,
+   "v2_residual_median_db": 1.24,
+   "v2_residual_worst_db": 1.6
+  }
+ },
+ "v1_note_damage_db_on_clean_music": [
+  -8.48,
+  -10.29,
+  -8.24,
+  -9.67,
+  -10.19,
+  -9.23
+ ],
+ "rows": [
+  {
+   "seed": 0,
+   "f": 3142.9,
+   "gain": 4.0,
+   "residual_v1_db": "3.64",
+   "residual_v2_db": "1.27",
+   "v2_corrections": [
+    {
+     "hz": 3181.3,
+     "cut_db": 3.05,
+     "q": 14.7
+    }
+   ]
+  },
+  {
+   "seed": 0,
+   "f": 4996.4,
+   "gain": 6.0,
+   "residual_v1_db": "9.49",
+   "residual_v2_db": "1.51",
+   "v2_corrections": [
+    {
+     "hz": 4980.0,
+     "cut_db": 3.05,
+     "q": 12.6
+    }
+   ]
+  },
+  {
+   "seed": 0,
+   "f": 5507.5,
+   "gain": 9.0,
+   "residual_v1_db": "10.95",
+   "residual_v2_db": "1.25",
+   "v2_corrections": [
+    {
+     "hz": 5510.3,
+     "cut_db": 7.02,
+     "q": 11.4
+    }
+   ]
+  },
+  {
+   "seed": 1,
+   "f": 2643.4,
+   "gain": 4.0,
+   "residual_v1_db": "3.93",
+   "residual_v2_db": "1.87",
+   "v2_corrections": [
+    {
+     "hz": 2694.0,
+     "cut_db": 2.41,
+     "q": 9.2
+    }
+   ]
+  },
+  {
+   "seed": 1,
+   "f": 3239.6,
+   "gain": 6.0,
+   "residual_v1_db": "3.24",
+   "residual_v2_db": "0.87",
+   "v2_corrections": [
+    {
+     "hz": 3204.3,
+     "cut_db": 4.26,
+     "q": 8.6
+    }
+   ]
+  },
+  {
+   "seed": 1,
+   "f": 7141.1,
+   "gain": 9.0,
+   "residual_v1_db": "7.3",
+   "residual_v2_db": "1.15",
+   "v2_corrections": [
+    {
+     "hz": 7148.0,
+     "cut_db": 7.78,
+     "q": 11.0
+    }
+   ]
+  },
+  {
+   "seed": 2,
+   "f": 2852.1,
+   "gain": 4.0,
+   "residual_v1_db": "3.11",
+   "residual_v2_db": "0.73",
+   "v2_corrections": [
+    {
+     "hz": 2854.4,
+     "cut_db": 3.11,
+     "q": 10.3
+    }
+   ]
+  },
+  {
+   "seed": 2,
+   "f": 3148.9,
+   "gain": 6.0,
+   "residual_v1_db": "5.09",
+   "residual_v2_db": "1.26",
+   "v2_corrections": [
+    {
+     "hz": 3181.3,
+     "cut_db": 4.89,
+     "q": 10.0
+    }
+   ]
+  },
+  {
+   "seed": 2,
+   "f": 7241.6,
+   "gain": 9.0,
+   "residual_v1_db": "6.41",
+   "residual_v2_db": "1.1",
+   "v2_corrections": [
+    {
+     "hz": 7252.1,
+     "cut_db": 7.8,
+     "q": 11.1
+    }
+   ]
+  },
+  {
+   "seed": 3,
+   "f": 5609.4,
+   "gain": 4.0,
+   "residual_v1_db": "5.28",
+   "residual_v2_db": "1.36",
+   "v2_corrections": [
+    {
+     "hz": 5590.5,
+     "cut_db": 2.07,
+     "q": 13.0
+    }
+   ]
+  },
+  {
+   "seed": 3,
+   "f": 4345.0,
+   "gain": 6.0,
+   "residual_v1_db": "7.66",
+   "residual_v2_db": "1.11",
+   "v2_corrections": [
+    {
+     "hz": 4372.4,
+     "cut_db": 4.15,
+     "q": 9.8
+    }
+   ]
+  },
+  {
+   "seed": 3,
+   "f": 5057.0,
+   "gain": 9.0,
+   "residual_v1_db": "10.25",
+   "residual_v2_db": "1.23",
+   "v2_corrections": [
+    {
+     "hz": 5016.1,
+     "cut_db": 6.13,
+     "q": 11.0
+    }
+   ]
+  },
+  {
+   "seed": 4,
+   "f": 5814.2,
+   "gain": 4.0,
+   "residual_v1_db": "5.7",
+   "residual_v2_db": "0.66",
+   "v2_corrections": [
+    {
+     "hz": 5838.3,
+     "cut_db": 3.32,
+     "q": 12.2
+    }
+   ]
+  },
+  {
+   "seed": 4,
+   "f": 3876.5,
+   "gain": 6.0,
+   "residual_v1_db": "5.22",
+   "residual_v2_db": "1.23",
+   "v2_corrections": [
+    {
+     "hz": 3839.0,
+     "cut_db": 4.47,
+     "q": 10.6
+    }
+   ]
+  },
+  {
+   "seed": 4,
+   "f": 3189.8,
+   "gain": 9.0,
+   "residual_v1_db": "6.81",
+   "residual_v2_db": "1.6",
+   "v2_corrections": [
+    {
+     "hz": 3181.3,
+     "cut_db": 6.44,
+     "q": 9.0
+    }
+   ]
+  },
+  {
+   "seed": 5,
+   "f": 6440.2,
+   "gain": 4.0,
+   "residual_v1_db": "3.58",
+   "residual_v2_db": "2.97",
+   "v2_corrections": []
+  },
+  {
+   "seed": 5,
+   "f": 5851.8,
+   "gain": 6.0,
+   "residual_v1_db": "7.06",
+   "residual_v2_db": "1.09",
+   "v2_corrections": [
+    {
+     "hz": 5838.3,
+     "cut_db": 4.69,
+     "q": 12.0
+    }
+   ]
+  },
+  {
+   "seed": 5,
+   "f": 5061.9,
+   "gain": 9.0,
+   "residual_v1_db": "11.32",
+   "residual_v2_db": "1.53",
+   "v2_corrections": [
+    {
+     "hz": 4980.0,
+     "cut_db": 5.68,
+     "q": 12.6
+    }
+   ]
+  }
+ ]
+}

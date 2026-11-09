@@ -1853,6 +1853,10 @@ function updateTelemetry(m) {
     const txtLufs = document.getElementById('txtLufs');
     if (txtLufs) txtLufs.innerText = `${m.lufs_proc} LUFS`;
   }
+  if (m.true_peak_proc_db !== undefined) {
+    const txtTp = document.getElementById('txtTruePeak');
+    if (txtTp) txtTp.innerText = `${m.true_peak_proc_db} dBTP`;
+  }
 
   const rmsDiff = (m.rms_proc_db - m.rms_orig_db).toFixed(2);
   const sign = rmsDiff >= 0 ? '+' : '';
@@ -2786,7 +2790,7 @@ function openMasteringReportModal() {
           <div>
             <span style="color:#f43f5e; margin-right:12px; font-weight:bold;">● RAW AI INPUT</span>
             <span style="color:#10b981; margin-right:12px; font-weight:bold;">● PHARMAKON MASTER</span>
-            <span style="color:#f59e0b; font-weight:bold;">● DELTA RESIDUE (Δ)</span>
+            <span style="color:#f59e0b; font-weight:bold;">● DELTA RESIDUE (Δ, +22 dB display offset)</span>
           </div>
         </div>
         
@@ -2947,7 +2951,7 @@ function openMasteringReportModal() {
 
     <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid #1c2333; padding-top:12px; font-family:var(--font-mono); font-size:10.5px; color:#64748b;">
       <div>PHARMAKON DSP &bull; MIT LICENSE &copy; 2026 LEX GEREK</div>
-      <div style="color:#10b981; font-weight:700;">&#10003; VERIFIED STREAMING COMPLIANT (EBU R128 / TRUE-PEAK -0.3 dBFS)</div>
+      <div style="color:#10b981; font-weight:700;">&#10003; LOUDNESS: ITU-R BS.1770-4 (EBU TECH 3341 VERIFIED) / 4X TRUE-PEAK</div>
     </div>
   `;
 
@@ -3244,7 +3248,7 @@ async function downloadReportPNG() {
   ctx.fillStyle = '#10b981';
   ctx.fillText('● MASTER', chartX + chartW - 220, chartY + 24);
   ctx.fillStyle = '#f59e0b';
-  ctx.fillText('● DELTA RESIDUE (Δ)', chartX + chartW - 120, chartY + 24);
+  ctx.fillText('● Δ RESIDUE +22dB', chartX + chartW - 120, chartY + 24);
 
   // Draw Grid Lines
   ctx.strokeStyle = '#141b29';

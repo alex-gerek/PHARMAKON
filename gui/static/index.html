@@ -585,8 +585,8 @@
             <div class="monitor-diagnosis diag-healed">
               <div class="diag-header">⚡ SURGICAL CURE // PHARMAKON DSP TELEMETRY:</div>
               <ul class="diag-list">
-                <li><span class="check-bullet">✓</span> <b>4x True-Peak Ceiling:</b> Clamped strictly to <b>-0.30 dBFS</b> (ISP immune)</li>
-                <li><span class="check-bullet">✓</span> <b>Integrated Loudness:</b> Normalized to <b><span id="txtLufs">-14.0 LUFS</span></b> (ITU-R BS.1770)</li>
+                <li><span class="check-bullet">✓</span> <b>4x True-Peak:</b> Output measured at <b><span id="txtTruePeak">-0.30 dBTP</span></b> (4x oversampled, ceiling held)</li>
+                <li><span class="check-bullet">✓</span> <b>Integrated Loudness:</b> Measured at <b><span id="txtLufs">-14.0 LUFS</span></b> (ITU-R BS.1770-4)</li>
                 <li><span class="check-bullet">✓</span> <b>Dynamic De-Harshing:</b> <span id="txtResonance">Adaptive Notch</span>: <b><span id="txtHarsh">-20.73 dB</span></b></li>
                 <li><span class="check-bullet">✓</span> <b>Mono Sub Lock:</b> Low-end below 120Hz locked to <b>100% True Mono</b></li>
                 <li><span class="check-bullet">✓</span> <b>Analog Tape Warmth:</b> Hyperbolic tangent saturation: <b><span id="txtRms">+1.35 dB</span></b></li>
@@ -612,7 +612,7 @@
           <div class="telemetry-card highlight-card">
             <div class="t-label">INTEGRATED LOUDNESS (LUFS)</div>
             <div class="t-value" id="m_lufs">-14.0 <span class="unit">LUFS</span></div>
-            <div class="t-delta" id="m_lufs_delta">ITU-R BS.1770 / EBU R128</div>
+            <div class="t-delta" id="m_lufs_delta">ITU-R BS.1770-4</div>
           </div>
           <div class="telemetry-card highlight-card">
             <div class="t-label">ANALOG WARMTH (RMS)</div>

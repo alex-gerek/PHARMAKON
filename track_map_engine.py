@@ -100,14 +100,36 @@ def detect_bpm_and_grid(mix_mono: np.ndarray, sr: int):
     d_sub_env = np.convolve(d_sub_env, np.ones(w_smooth) / w_smooth, mode='same')
 
     hop_onset = int(0.005 * sr)
+    # Real hop duration (220 samples @ 44.1 kHz = 4.989 ms, not 5 ms)
+    hop_sec = hop_onset / float(sr)
     ds = d_sub_env[::hop_onset] - np.mean(d_sub_env[::hop_onset])
-    corr = np.correlate(ds, ds, mode='full')
+    corr = signal.correlate(ds, ds, mode='full')
     corr = corr[len(corr) // 2 :]
 
-    min_lag = int(round((60.0 / 170.0) / 0.005))
-    max_lag = int(round((60.0 / 90.0) / 0.005))
-    best_lag = min_lag + np.argmax(corr[min_lag:max_lag])
-    bpm = float(60.0 / (best_lag * 0.005))
+    min_lag = int(round((60.0 / 170.0) / hop_sec))
+    max_lag = int(round((60.0 / 90.0) / hop_sec))
+    best_lag = min_lag + int(np.argmax(corr[min_lag:max_lag]))
+
+    # Sub-hop precision: parabolic interpolation of the autocorrelation peak.
+    # Integer lags alone quantize e.g. 128 BPM to 127.66 BPM (bar grid drifts
+    # ~0.6 s over 128 bars).
+    def _parabolic_peak(idx):
+        if 0 < idx < len(corr) - 1:
+            c_m, c_0, c_p = corr[idx - 1], corr[idx], corr[idx + 1]
+            denom = c_m - 2.0 * c_0 + c_p
+            if denom < 0.0:
+                return idx + float(np.clip(0.5 * (c_m - c_p) / denom, -0.5, 0.5))
+        return float(idx)
+
+    lag_f = _parabolic_peak(best_lag)
+    # Refine on the 4-beat (bar) autocorrelation peak: the same interpolation
+    # error is divided by 4 when the period is measured over a whole bar.
+    bar_center = int(round(4.0 * lag_f))
+    if bar_center + 4 < len(corr):
+        lo, hi = bar_center - 3, bar_center + 4
+        bar_idx = lo + int(np.argmax(corr[lo:hi]))
+        lag_f = _parabolic_peak(bar_idx) / 4.0
+    bpm = float(60.0 / (lag_f * hop_sec))
 
     if bpm < 100.0 and corr[best_lag // 2] > 0.6 * corr[best_lag]:
         bpm *= 2.0
@@ -803,6 +825,10 @@ def process_local_sub_sync(
 
         raw_sub_sum = d_sub_win + b_sub_win
         cand_b_sub = np.roll(b_sub_win * best_pol, best_lag)
+        if best_lag > 0:
+            cand_b_sub[:best_lag] = b_sub_win[:best_lag]
+        elif best_lag < 0:
+            cand_b_sub[best_lag:] = b_sub_win[best_lag:]
         cand_sub_sum = d_sub_win + cand_b_sub
 
         rms_raw_sub = float(np.sqrt(np.mean(np.square(raw_sub_sum)) + 1e-12))
@@ -837,8 +863,9 @@ def process_local_sub_sync(
             reason = f"valid_shift (gain={gain_sub_db:+.3f}dB, pk_diff={peak_diff_db:+.3f}dB)"
 
         if decision == "ACCEPT":
-            # Seamless crossfade: raw * (1 - taper) + shifted * taper
-            bass_corrected[w_start:w_end] = raw_b_seg * (1.0 - w_taper) + shifted_b * w_taper
+            # Seamless crossfade onto the current output (not the raw segment), so a
+            # window overlapping a previously corrected kick does not jump back to raw.
+            bass_corrected[w_start:w_end] = bass_corrected[w_start:w_end] * (1.0 - w_taper) + shifted_b * w_taper
             corrected_count += 1
             applied_shifts_ms.append(abs(shift_ms))
 

@@ -16,7 +16,7 @@ However, deep-dive acoustic experiments across multi-stem AI audio revealed a cr
 
 **PHARMAKON 3.0** fundamentally resolves this challenge through **micro-transient intelligence**:
 1. **Limiter-Aware Transient-Guarded Sub-Sync (Local Guard)**: Operates at the individual kick onset level, evaluating phase coherence against a **Virtual Micro-Limiter Cost Function**.
-2. **True-Peak Limiter Guard**: 4x polyphase oversampling ceiling (-0.3 dBFS) ensuring 100% broadcast compliance (EBU R128 / ITU-R BS.1770-5).
+2. **True-Peak Limiter Guard**: 4x polyphase oversampled True-Peak ceiling (default -0.3 dBTP; set -1.0 dBTP for EBU R128 broadcast delivery).
 3. **PHARMAKON Track Intelligence Map**: 9-sector automated structural composition map with interactive section inspection and intra-section kick onset tracking.
 4. **Preservation of v2.0**: The proven PHARMAKON 2.0 processing core remains fully intact, with v3.0 serving as an advanced intelligence layer.
 

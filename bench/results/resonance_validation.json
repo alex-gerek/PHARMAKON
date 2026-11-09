@@ -1,0 +1,228 @@
+{
+ "false_positives_clean_synth": {
+  "v1": 12,
+  "v2": 0,
+  "n": 12
+ },
+ "recall_by_gain": {
+  "synth": {
+   "3 dB": {
+    "v1": "0/36",
+    "v2": "16/36"
+   },
+   "4 dB": {
+    "v1": "2/36",
+    "v2": "28/36"
+   },
+   "6 dB": {
+    "v1": "4/36",
+    "v2": "32/36"
+   },
+   "9 dB": {
+    "v1": "3/36",
+    "v2": "35/36"
+   }
+  },
+  "real": {
+   "3 dB": {
+    "v1": "0/30",
+    "v2": "10/30"
+   },
+   "4 dB": {
+    "v1": "1/30",
+    "v2": "14/30"
+   },
+   "6 dB": {
+    "v1": "0/30",
+    "v2": "22/30"
+   },
+   "9 dB": {
+    "v1": "1/30",
+    "v2": "24/30"
+   }
+  }
+ },
+ "recall_detail": {
+  "synth|gain=3|Q=5": {
+   "v1": 0,
+   "v2": 3,
+   "n": 12
+  },
+  "synth|gain=3|Q=10": {
+   "v1": 0,
+   "v2": 6,
+   "n": 12
+  },
+  "synth|gain=3|Q=20": {
+   "v1": 0,
+   "v2": 7,
+   "n": 12
+  },
+  "synth|gain=4|Q=5": {
+   "v1": 0,
+   "v2": 5,
+   "n": 12
+  },
+  "synth|gain=4|Q=10": {
+   "v1": 2,
+   "v2": 11,
+   "n": 12
+  },
+  "synth|gain=4|Q=20": {
+   "v1": 0,
+   "v2": 12,
+   "n": 12
+  },
+  "synth|gain=6|Q=5": {
+   "v1": 1,
+   "v2": 9,
+   "n": 12
+  },
+  "synth|gain=6|Q=10": {
+   "v1": 1,
+   "v2": 12,
+   "n": 12
+  },
+  "synth|gain=6|Q=20": {
+   "v1": 2,
+   "v2": 11,
+   "n": 12
+  },
+  "synth|gain=9|Q=5": {
+   "v1": 0,
+   "v2": 11,
+   "n": 12
+  },
+  "synth|gain=9|Q=10": {
+   "v1": 1,
+   "v2": 12,
+   "n": 12
+  },
+  "synth|gain=9|Q=20": {
+   "v1": 2,
+   "v2": 12,
+   "n": 12
+  },
+  "real|gain=3|Q=5": {
+   "v1": 0,
+   "v2": 1,
+   "n": 10
+  },
+  "real|gain=3|Q=10": {
+   "v1": 0,
+   "v2": 5,
+   "n": 10
+  },
+  "real|gain=3|Q=20": {
+   "v1": 0,
+   "v2": 4,
+   "n": 10
+  },
+  "real|gain=4|Q=5": {
+   "v1": 0,
+   "v2": 5,
+   "n": 10
+  },
+  "real|gain=4|Q=10": {
+   "v1": 1,
+   "v2": 4,
+   "n": 10
+  },
+  "real|gain=4|Q=20": {
+   "v1": 0,
+   "v2": 5,
+   "n": 10
+  },
+  "real|gain=6|Q=5": {
+   "v1": 0,
+   "v2": 4,
+   "n": 10
+  },
+  "real|gain=6|Q=10": {
+   "v1": 0,
+   "v2": 9,
+   "n": 10
+  },
+  "real|gain=6|Q=20": {
+   "v1": 0,
+   "v2": 9,
+   "n": 10
+  },
+  "real|gain=9|Q=5": {
+   "v1": 0,
+   "v2": 4,
+   "n": 10
+  },
+  "real|gain=9|Q=10": {
+   "v1": 0,
+   "v2": 10,
+   "n": 10
+  },
+  "real|gain=9|Q=20": {
+   "v1": 1,
+   "v2": 10,
+   "n": 10
+  }
+ },
+ "v2_freq_error_median_pct": 0.52,
+ "v2_freq_error_max_pct": 2.15,
+ "v2_q_est_over_true_median": 1.06,
+ "real_tracks_original_detections": {
+  "Il Fuoco del Cuore.wav": {
+   "v1": [
+    4212.9
+   ],
+   "v2": [
+    {
+     "hz": 2417.2,
+     "persistence": 0.667,
+     "prominence_db": 6.98,
+     "width_oct": 0.122,
+     "q_est": 11.8,
+     "score": 4.653
+    }
+   ]
+  },
+  "Miami Summer.wav": {
+   "v1": [
+    3533.2
+   ],
+   "v2": [
+    {
+     "hz": 2434.7,
+     "persistence": 0.692,
+     "prominence_db": 3.98,
+     "width_oct": 0.114,
+     "q_est": 12.7,
+     "score": 2.756
+    },
+    {
+     "hz": 3181.3,
+     "persistence": 0.641,
+     "prominence_db": 3.03,
+     "width_oct": 0.111,
+     "q_est": 13.0,
+     "score": 1.945
+    }
+   ]
+  },
+  "Cobalt Lullaby.wav": {
+   "v1": [
+    6802.7
+   ],
+   "v2": []
+  },
+  "Bronze Psalter (1).wav": {
+   "v1": [
+    3962.1
+   ],
+   "v2": []
+  },
+  "!!!Round and Round.wav": {
+   "v1": [
+    6164.1
+   ],
+   "v2": []
+  }
+ }
+}
