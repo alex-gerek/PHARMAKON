@@ -15,11 +15,11 @@
   ],
   "release_tag": "v3.2.0",
   "files": {
-    "remaster_engine.py": "500d828b73c73c6f7bab7dd955390aeeaf0bd7c0c9a4f1c87eefa65897979722",
-    "gui/server.py": "842cb9f7ba37b0e308bfbf091d1084da2caeea82d1fee29e8d8c438ce4aa298b",
-    "gui/static/index.html": "3ba2495f45dee3ec6dec0f11290d134a396b79a135078b833b393c6eef221be5",
-    "gui/static/app.js": "573cdd048ca559ded6efa042f1c0e90686acc20a9b8e0dd94dcddf7bb2bc352d",
-    "gui/static/style.css": "9c373a8fc31b6821fb9ce228030c7060468d0ae2db67e6dd0adbd77eea9f54dd",
-    "track_map_engine.py": "92472730b2c91a1ce595b5f3de32c3b9264bc3bf83765127b20824a2207ed0d5"
+    "remaster_engine.py": "3b72fe2d0b8ae3f1de6b41830e68531049b5cd7752ad0f9ba67950468994c43e",
+    "gui/server.py": "8694218bbbacddd9a7c83b2b4997663beef9cd447d393b6d4fc388dd9460c031",
+    "gui/static/index.html": "0c748f85a8821f32c62abfd6cfbaf38cdfb0be42a6169e32763cc1819d83baa1",
+    "gui/static/app.js": "eab5e052c2fb26f1604e51b312a0ec37097b9db7682ea55796756fb6d8abc4d9",
+    "gui/static/style.css": "7589d68b682f6ed5b30ce5838d54cbbce931ea0853c52cf410a61bab4b8157dc",
+    "track_map_engine.py": "055e7e56b2476eb7bf5f0a5804bb96eb25935628aa1593da1a8a2e0377d47f66"
   }
 }
