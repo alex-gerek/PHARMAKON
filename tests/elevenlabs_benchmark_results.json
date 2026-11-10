@@ -1,8 +1,8 @@
 [
   {
     "file": "LEX_GEREK_PHARMAKON_VOICEOVER.wav",
-    "master": "D:\\КЛИПЫ\\Reels\\stems\\Remaster\\LEX_GEREK_PHARMAKON_VOICEOVER - STUDIO_REMASTER.wav",
-    "delta": "D:\\КЛИПЫ\\Reels\\stems\\Remaster\\LEX_GEREK_PHARMAKON_VOICEOVER - DELTA_POISON.wav",
+    "master": "benchmarks\\reels\\stems\\Remaster\\LEX_GEREK_PHARMAKON_VOICEOVER - STUDIO_REMASTER.wav",
+    "delta": "benchmarks\\reels\\stems\\Remaster\\LEX_GEREK_PHARMAKON_VOICEOVER - DELTA_POISON.wav",
     "true_peak_in": -6.71,
     "true_peak_out": -6.78,
     "lufs_in": -19.68,
@@ -20,8 +20,8 @@
   },
   {
     "file": "Speech for intro Piston stroke.mp3",
-    "master": "D:\\КЛИПЫ\\Reels\\Piston stroke\\Remaster\\Speech for intro Piston stroke - STUDIO_REMASTER.wav",
-    "delta": "D:\\КЛИПЫ\\Reels\\Piston stroke\\Remaster\\Speech for intro Piston stroke - DELTA_POISON.wav",
+    "master": "benchmarks\\reels\\Piston stroke\\Remaster\\Speech for intro Piston stroke - STUDIO_REMASTER.wav",
+    "delta": "benchmarks\\reels\\Piston stroke\\Remaster\\Speech for intro Piston stroke - DELTA_POISON.wav",
     "true_peak_in": -0.89,
     "true_peak_out": -3.09,
     "lufs_in": -17.56,

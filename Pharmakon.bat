@@ -59,10 +59,10 @@ REM If file or folder was dragged onto this .bat, run immediately in CLI batch m
 if not "%TARGET%"=="" goto :run_engine
 
 REM If launched without arguments, prompt for GUI or CLI
-echo [1] Запустить визуальный интерфейс PHARMAKON Studio Console (Нажмите ENTER)
-echo [2] Консольный режим (Drag & Drop в терминал)
+echo [1] Launch PHARMAKON Studio Console (Press ENTER)
+echo [2] Console / Terminal Mode (Drag ^& Drop)
 echo.
-set /p "CHOICE=Выберите режим [1/2, по умолчанию 1]: "
+set /p "CHOICE=Select mode [1/2, default 1]: "
 
 if "%CHOICE%"=="2" goto :cli_prompt
 
@@ -73,7 +73,6 @@ exit /b 0
 :cli_prompt
 echo.
 echo Drag and drop an audio file [*.wav, *.mp3, *.flac] or stems folder here:
-echo [Перетащите сюда аудиофайл или папку со стемами]:
 echo.
 set /p "TARGET=> "
 
