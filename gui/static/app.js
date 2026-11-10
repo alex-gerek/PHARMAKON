@@ -3029,7 +3029,7 @@ function openMasteringReportModal() {
           <div style="font-size:9.5px; display:flex; justify-content:space-between; margin-bottom:3px;"><span style="color:#64748b;">CREST:</span><span style="color:#fff; font-weight:bold;">${crest} dB</span></div>
           <div style="font-size:9.5px; display:flex; justify-content:space-between; margin-bottom:3px;"><span style="color:#64748b;">PEAK / RMS:</span><span>${pk} / ${rms}</span></div>
           <div style="font-size:9.5px; display:flex; justify-content:space-between; margin-bottom:3px;"><span style="color:#64748b;">KICKS / PHASE:</span><span style="color:${lockColor}; font-weight:bold;">${lockStat}</span></div>
-          <div style="font-size:9.5px; display:flex; justify-content:space-between; margin-bottom:3px;"><span style="color:#64748b;">SUB-CORRELATION:</span><span style="color:#38bdf8;">${(typeof s.sub_correlation_r === 'number') ? s.sub_correlation_r.toFixed(2) + ' r' : '-- (stems only)'}</span></div>
+          <div style="font-size:9.5px; display:flex; justify-content:space-between; margin-bottom:3px;"><span style="color:#64748b;">KICK-BASS r:</span><span style="color:#38bdf8;">${(typeof s.sub_correlation_r === 'number') ? s.sub_correlation_r.toFixed(2) : 'stems only'}</span></div>
           <div style="font-size:9px; color:#94a3b8; margin-top:3px;">${tmEvidenceText(s)}</div>
           <div style="font-size:8.5px; color:${c}; margin-top:3px;">▪ ${s.policy_verdict || ''}</div>
         </div>`;

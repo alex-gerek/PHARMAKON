@@ -2240,9 +2240,12 @@ def generate_track_map_html(track_map, target_path=""):
         "BUILDUP": "#f97316",
         "OUTRO": "#a855f7",
         "SECTION": "#38bdf8",
-        "VERSE": "#8b5cf6",
-        "CHORUS": "#ec4899",
-        "PRE-CHORUS": "#eab308"
+        "VERSE": "#38bdf8",
+        "CHORUS": "#e11d48",
+        "PRE-CHORUS": "#fb923c",
+        "PRECHORUS": "#fb923c",
+        "BRIDGE": "#6366f1",
+        "CLIP": "#64748b"
     }
 
     seg_html_list = []
@@ -2318,7 +2321,7 @@ def generate_track_map_html(track_map, target_path=""):
     cards_html = "".join(cards_html_list)
 
     return f'''
-    <!-- PHARMAKON 3.0 TRACK INTELLIGENCE MAP -->
+    <!-- PHARMAKON 3.2 TRACK INTELLIGENCE MAP -->
     <div class="track-map-card" id="trackMapRoot">
       <script id="tm-raw-data" type="application/json">{sections_json}</script>
       <input type="hidden" id="tm-target-path" value="{target_path}" />
@@ -2683,7 +2686,7 @@ def generate_track_map_html(track_map, target_path=""):
         }}, 100);
       }})();
     </script>
-    <!-- /PHARMAKON 3.0 TRACK INTELLIGENCE MAP -->
+    <!-- /PHARMAKON 3.2 TRACK INTELLIGENCE MAP -->
     '''
 
 def generate_mastering_report_html(track_name, metrics, output_dir, params=None):
