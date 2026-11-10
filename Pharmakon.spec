@@ -48,7 +48,13 @@ hidden_imports += collect_submodules('cryptography')
 
 datas = [
     ('gui/static', 'gui/static'),
-    ('demo_audio', 'demo_audio'),
+    # Only the two demos the GUI offers (server.DEMO_TRACKS); research audio and
+    # previous Remaster outputs are not shipped (~800 MB smaller).
+    ('demo_audio/bronze_psalter/Bronze_Psalter_Demo.wav', 'demo_audio/bronze_psalter'),
+    ('demo_audio/gravity_stems/Gravity_Bass_Demo.wav', 'demo_audio/gravity_stems'),
+    ('demo_audio/gravity_stems/Gravity_Drums_Demo.wav', 'demo_audio/gravity_stems'),
+    ('demo_audio/gravity_stems/Gravity_Other_Demo.wav', 'demo_audio/gravity_stems'),
+    ('demo_audio/gravity_stems/Gravity_Vocals_Demo.wav', 'demo_audio/gravity_stems'),
     ('pharmakon_hd_256.ico', '.'),
     ('VERSION.json', '.'),
 ]

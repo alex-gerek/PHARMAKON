@@ -106,7 +106,10 @@ async def security_hardening_middleware(request: Request, call_next):
 UPLOAD_DIR = PROJECT_DIR / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
 
-DEMO_DIR = PROJECT_DIR / "demo_audio"
+# PyInstaller >= 6 puts bundled data in _internal (sys._MEIPASS), not next to the exe:
+# look there first, then beside the exe / project root.
+_DEMO_CANDIDATES = [Path(getattr(sys, "_MEIPASS", PROJECT_DIR)) / "demo_audio", PROJECT_DIR / "demo_audio"]
+DEMO_DIR = next((d for d in _DEMO_CANDIDATES if d.exists()), _DEMO_CANDIDATES[-1])
 
 DEMO_TRACKS = [
     {
