@@ -27,7 +27,7 @@ def _kick_track(bpm, sr, seconds=40.0, seed=1):
 
 
 @pytest.mark.parametrize("sr", [44100, 48000])
-# Detector search range is 90-170 BPM (e.g. 174 BPM DnB is out of range by design)
+# Detector range is 50-210 BPM; octave chosen metrically (see bench/validate_tempo.py)
 @pytest.mark.parametrize("bpm", [95.0, 124.0, 128.0, 140.0, 165.0])
 def test_bpm_within_0p1(sr, bpm):
     est, bar_s = tm.detect_bpm_and_grid(_kick_track(bpm, sr), sr)

@@ -1,0 +1,205 @@
+{
+ "acc1": 0.8636363636363636,
+ "acc2": 1.0,
+ "shown": 1.0,
+ "rows": [
+  {
+   "style": "four_on_floor",
+   "true": 124,
+   "est": 124.0,
+   "alt": null,
+   "acc1": true,
+   "acc2": true,
+   "shown": true
+  },
+  {
+   "style": "four_on_floor",
+   "true": 128,
+   "est": 128.0,
+   "alt": null,
+   "acc1": true,
+   "acc2": true,
+   "shown": true
+  },
+  {
+   "style": "four_on_floor",
+   "true": 138,
+   "est": 138.0,
+   "alt": null,
+   "acc1": true,
+   "acc2": true,
+   "shown": true
+  },
+  {
+   "style": "four_on_floor",
+   "true": 145,
+   "est": 144.99,
+   "alt": null,
+   "acc1": true,
+   "acc2": true,
+   "shown": true
+  },
+  {
+   "style": "four_on_floor",
+   "true": 100,
+   "est": 100.0,
+   "alt": null,
+   "acc1": true,
+   "acc2": true,
+   "shown": true
+  },
+  {
+   "style": "four_on_floor",
+   "true": 118,
+   "est": 117.99,
+   "alt": null,
+   "acc1": true,
+   "acc2": true,
+   "shown": true
+  },
+  {
+   "style": "half_time",
+   "true": 140,
+   "est": 70.0,
+   "alt": 140.0,
+   "acc1": false,
+   "acc2": true,
+   "shown": true
+  },
+  {
+   "style": "half_time",
+   "true": 75,
+   "est": 149.99,
+   "alt": 75.0,
+   "acc1": false,
+   "acc2": true,
+   "shown": true
+  },
+  {
+   "style": "hip_hop",
+   "true": 88,
+   "est": 88.0,
+   "alt": 176.0,
+   "acc1": true,
+   "acc2": true,
+   "shown": true
+  },
+  {
+   "style": "hip_hop",
+   "true": 94,
+   "est": 93.96,
+   "alt": null,
+   "acc1": true,
+   "acc2": true,
+   "shown": true
+  },
+  {
+   "style": "hip_hop",
+   "true": 72,
+   "est": 72.0,
+   "alt": 144.0,
+   "acc1": true,
+   "acc2": true,
+   "shown": true
+  },
+  {
+   "style": "trap",
+   "true": 70,
+   "est": 70.0,
+   "alt": 140.0,
+   "acc1": true,
+   "acc2": true,
+   "shown": true
+  },
+  {
+   "style": "trap",
+   "true": 140,
+   "est": 70.0,
+   "alt": 140.0,
+   "acc1": false,
+   "acc2": true,
+   "shown": true
+  },
+  {
+   "style": "dnb",
+   "true": 174,
+   "est": 174.01,
+   "alt": 87.0,
+   "acc1": true,
+   "acc2": true,
+   "shown": true
+  },
+  {
+   "style": "dnb",
+   "true": 170,
+   "est": 170.0,
+   "alt": 85.0,
+   "acc1": true,
+   "acc2": true,
+   "shown": true
+  },
+  {
+   "style": "waltz_3_4",
+   "true": 90,
+   "est": 90.0,
+   "alt": null,
+   "acc1": true,
+   "acc2": true,
+   "shown": true
+  },
+  {
+   "style": "waltz_3_4",
+   "true": 150,
+   "est": 149.99,
+   "alt": null,
+   "acc1": true,
+   "acc2": true,
+   "shown": true
+  },
+  {
+   "style": "ballad_no_kick",
+   "true": 66,
+   "est": 66.0,
+   "alt": 132.0,
+   "acc1": true,
+   "acc2": true,
+   "shown": true
+  },
+  {
+   "style": "ballad_no_kick",
+   "true": 80,
+   "est": 80.0,
+   "alt": null,
+   "acc1": true,
+   "acc2": true,
+   "shown": true
+  },
+  {
+   "style": "rock_8ths",
+   "true": 110,
+   "est": 109.96,
+   "alt": null,
+   "acc1": true,
+   "acc2": true,
+   "shown": true
+  },
+  {
+   "style": "rock_8ths",
+   "true": 160,
+   "est": 160.0,
+   "alt": null,
+   "acc1": true,
+   "acc2": true,
+   "shown": true
+  },
+  {
+   "style": "rock_8ths",
+   "true": 96,
+   "est": 96.0,
+   "alt": null,
+   "acc1": true,
+   "acc2": true,
+   "shown": true
+  }
+ ]
+}

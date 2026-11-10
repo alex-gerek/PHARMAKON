@@ -3039,7 +3039,7 @@ function openMasteringReportModal() {
             <div style="display:flex; align-items:center; gap:6px;">
               <span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:#10b981; box-shadow:0 0 6px #10b981;"></span>
               <span style="font-size:10.5px; font-weight:bold; color:#fff; letter-spacing:1px;">PHARMAKON 3.0 TRACK INTELLIGENCE MAP</span>
-              <span style="font-size:9.5px; color:#64748b;">${bpmVal} BPM · 4/4 · ${tm.sections.length} SECTORS</span>
+              <span style="font-size:9.5px; color:#64748b;">${Number(bpmVal).toFixed(1)} BPM${tm.tempo_alt_bpm ? ` (or ${Number(tm.tempo_alt_bpm).toFixed(1)})` : ''} · 4/4 · ${tm.sections.length} SECTORS</span>
             </div>
             <div style="display:flex; gap:6px; font-size:8.5px; font-weight:bold;">
               <span style="color:#f59e0b;">■ INTRO</span>
@@ -3428,7 +3428,7 @@ async function downloadReportPNG() {
     ctx.fillText('TRACK INTELLIGENCE MAP', PAD + 14, tmY + 22);
     ctx.fillStyle = '#64748b';
     ctx.font = '11px monospace';
-    ctx.fillText(`${bpm ? Number(bpm).toFixed(1) + ' BPM \u2022 ' : ''}${tmSecs.length} SECTORS \u2022 ${Number(tm.total_duration_s || 0).toFixed(1)} s`, PAD + 210, tmY + 22);
+    ctx.fillText(`${bpm ? Number(bpm).toFixed(1) + ' BPM' + (tm.tempo_alt_bpm ? ` (or ${Number(tm.tempo_alt_bpm).toFixed(1)})` : '') + ' \u2022 ' : ''}${tmSecs.length} SECTORS \u2022 ${Number(tm.total_duration_s || 0).toFixed(1)} s`, PAD + 210, tmY + 22);
     const secLabel = (sx) => sx.sec_tag || sx.tag || 'SECTION';
     const secTime = (sx) => sx.time_str || ((sx.start_str && sx.end_str) ? `${sx.start_str}-${sx.end_str}` : `${Number(sx.start_s || 0).toFixed(1)}s`);
     // proportional sections bar

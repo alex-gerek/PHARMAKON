@@ -85,57 +85,153 @@ def evaluate_candidate_lags(
     return best_lag, best_pol
 
 
+# ---------------------------------------------------------------------------
+# Tempo v2 (3.2): multi-band onset periodicity + metrical octave decision.
+# Validated on ground-truth synthetic tracks (bench/validate_tempo.py): the
+# previous sub-band-only detector (90-170 BPM) scored acc1 32 % / acc2 36 %
+# (wrong on hip-hop, trap, DnB, rock, 3/4); this one scores acc1 86 % / acc2 100 %.
+# ---------------------------------------------------------------------------
+TEMPO_MIN_BPM = 50.0
+TEMPO_MAX_BPM = 210.0
+TEMPO_OFFBEAT_RATIO = 0.6   # a pulse level is "too slow" if its off-beats carry >= 60 % of the beat strength
+_TEMPO_BANDS = ((20.0, 150.0), (150.0, 2000.0), (2000.0, 6000.0), (6000.0, 16000.0))
+
+
+def _onset_bands(mono: np.ndarray, sr: int, hop: int = 256, n_fft: int = 2048):
+    """Half-wave rectified log-spectral flux in 4 bands (kick / body / snare / hats), each unit-std."""
+    f, _, Z = signal.stft(mono, sr, nperseg=n_fft, noverlap=n_fft - hop, boundary=None, padded=False)
+    L = np.log1p(1000.0 * np.abs(Z))
+    d = np.maximum(0.0, np.diff(L, axis=1))
+    fps = sr / float(hop)
+    w = max(3, int(round(0.4 * fps)))
+    out = []
+    for lo, hi in _TEMPO_BANDS:
+        m = (f >= lo) & (f < min(hi, 0.5 * sr))
+        e = d[m].sum(axis=0) if np.any(m) else np.zeros(d.shape[1])
+        e = np.maximum(e - np.convolve(e, np.ones(w) / w, mode="same"), 0.0)
+        out.append(e / (np.std(e) + 1e-12))
+    return np.array(out), fps
+
+
+def _acf(e: np.ndarray) -> np.ndarray:
+    e = e - e.mean()
+    n = len(e)
+    F = np.fft.rfft(e, 2 * n)
+    a = np.fft.irfft(np.abs(F) ** 2)[:n]
+    return a / (a[0] + 1e-12)
+
+
+def _interp(a: np.ndarray, x):
+    x = np.asarray(x, dtype=float)
+    i = np.clip(np.floor(x).astype(int), 0, len(a) - 2)
+    fr = x - i
+    return a[i] * (1.0 - fr) + a[i + 1] * fr
+
+
+def _beat_offbeat(B: np.ndarray, tau: float):
+    """Best phase (on kick+body+snare bands) and per-band off-beat/beat strength ratios."""
+    n = B.shape[1]
+    E = B[0] + B[1] + B[2]
+    spread = lambda e: np.maximum(np.maximum(e, np.roll(e, 1)), np.roll(e, -1))  # +-1 frame tolerance
+    Em = spread(E)
+    best_b, best_ph = -1.0, 0.0
+    for ph in np.arange(0.0, tau, 1.0):
+        b = Em[np.round(np.arange(ph, n - 1, tau)).astype(int)].mean()
+        if b > best_b:
+            best_b, best_ph = b, ph
+    pos = np.arange(best_ph, n - 1, tau)
+    off = pos + tau / 2.0
+    off = off[off < n - 1]
+    ratios = []
+    for k in range(3):
+        em = spread(B[k])
+        b = em[np.round(pos).astype(int)].mean()
+        o = em[np.round(off).astype(int)].mean()
+        ratios.append(float(o / (b + 1e-12)))
+    return ratios, best_ph
+
+
+def detect_tempo(mix_mono: np.ndarray, sr: int) -> dict:
+    """
+    Tempo with evidence. Returns bpm (quarter-note level), alt_bpm (the octave a
+    listener might also tap, or None), octave_confident, pulse_clarity (0..1),
+    and the per-level off-beat ratios used for the decision.
+    """
+    mono = np.asarray(mix_mono, dtype=float)
+    B, fps = _onset_bands(mono, sr)
+    full = B.sum(axis=0)
+    full = np.convolve(full, np.array([0.25, 0.5, 0.25]), mode="same")
+    A = _acf(full)
+
+    # 1) periodicity: comb over beat multiples (finds the right tempo FAMILY, octave-agnostic)
+    bpms = np.arange(40.0, 240.0, 0.25)
+    taus = 60.0 * fps / bpms
+    comb = sum(_interp(A, k * taus) / k for k in (1, 2, 3, 4))
+    comb = np.where(4.0 * taus < len(A) - 2, comb, -np.inf)
+    bpm0 = float(bpms[int(np.argmax(comb))])
+
+    # 2) octave: climb from the slowest level until off-beats stop carrying kick/snare hits
+    cands = sorted({bpm0 * 2.0 ** k for k in range(-3, 4) if TEMPO_MIN_BPM <= bpm0 * 2.0 ** k <= TEMPO_MAX_BPM})
+    if not cands:
+        cands = [float(np.clip(bpm0, TEMPO_MIN_BPM, TEMPO_MAX_BPM))]
+    levels = []
+    chosen = None
+    for c in cands:
+        r, _ = _beat_offbeat(B, 60.0 * fps / c)
+        levels.append({"bpm": round(float(c), 2), "offbeat_ratio": [round(v, 3) for v in r]})
+        if chosen is None and max(r) < TEMPO_OFFBEAT_RATIO:
+            chosen = c
+    decided = chosen is not None
+    if chosen is None:
+        # no level has clean off-beats (dense mix): take the level closest to 120 BPM
+        chosen = min(cands, key=lambda c: abs(np.log2(c / 120.0)))
+
+    # 3) precision: fit the period over 16 beat multiples (error / 16 vs one lag)
+    tau0 = 60.0 * fps / chosen
+    kmax = int(max(1, min(16, (len(A) - 3) // max(1.0, tau0))))
+    grid = tau0 * (1.0 + np.linspace(-0.012, 0.012, 2401))
+    ks = np.arange(1, kmax + 1)
+    score = _interp(A, grid[:, None] * ks[None, :]).sum(axis=1)
+    tau = float(grid[int(np.argmax(score))])
+    bpm = 60.0 * fps / tau
+
+    # 4) honesty: margin of the octave decision
+    idx = [i for i, L in enumerate(levels) if abs(L["bpm"] - round(chosen, 2)) < 0.02]
+    i = idx[0] if idx else 0
+    r_here = max(levels[i]["offbeat_ratio"])
+    r_below = max(levels[i - 1]["offbeat_ratio"]) if i > 0 else None
+    margin_up = TEMPO_OFFBEAT_RATIO - r_here
+    margin_down = (r_below - TEMPO_OFFBEAT_RATIO) if r_below is not None else 1.0
+    octave_confident = bool(decided and margin_up >= 0.15 and margin_down >= 0.15)
+    alt = None
+    if not octave_confident:
+        dbl, half = bpm * 2.0, bpm / 2.0
+        if margin_up < 0.15 and dbl <= TEMPO_MAX_BPM + 30.0:
+            alt = dbl
+        elif half >= 40.0:
+            alt = half
+    if alt is None and bpm < 80.0:
+        # half-time grooves (trap, dubstep, half-time DnB) are the same pattern as a slow
+        # groove with a backbeat; the genre convention often counts them double.
+        alt = bpm * 2.0
+        octave_confident = False
+    if alt is not None and not (70.0 <= alt <= 180.0):
+        alt = None   # outside the range people count in (e.g. "134 or 67"): not a useful alternative
+    pulse = float(np.clip(_interp(A, np.array([tau]))[0], 0.0, 1.0))
+    return {
+        "bpm": round(float(bpm), 2),
+        "alt_bpm": round(float(alt), 1) if alt else None,
+        "octave_confident": octave_confident,
+        "pulse_clarity": round(pulse, 3),
+        "levels": levels,
+    }
+
+
 def detect_bpm_and_grid(mix_mono: np.ndarray, sr: int):
-    """
-    Detects track BPM and bar/phrase grid from low-end rhythmic onsets.
-    """
-    nyq = 0.5 * sr
-    b_sub, a_sub = signal.butter(2, min(nyq - 10, 120.0) / nyq, btype='low')
-    sub = signal.filtfilt(b_sub, a_sub, mix_mono)
-
-    env_sub = np.abs(sub)
-    w_smooth = int(round(0.008 * sr))
-    env_s_smooth = np.convolve(env_sub, np.ones(w_smooth) / w_smooth, mode='same')
-    d_sub_env = np.maximum(0, np.diff(env_s_smooth, prepend=env_s_smooth[0]))
-    d_sub_env = np.convolve(d_sub_env, np.ones(w_smooth) / w_smooth, mode='same')
-
-    hop_onset = int(0.005 * sr)
-    # Real hop duration (220 samples @ 44.1 kHz = 4.989 ms, not 5 ms)
-    hop_sec = hop_onset / float(sr)
-    ds = d_sub_env[::hop_onset] - np.mean(d_sub_env[::hop_onset])
-    corr = signal.correlate(ds, ds, mode='full')
-    corr = corr[len(corr) // 2 :]
-
-    min_lag = int(round((60.0 / 170.0) / hop_sec))
-    max_lag = int(round((60.0 / 90.0) / hop_sec))
-    best_lag = min_lag + int(np.argmax(corr[min_lag:max_lag]))
-
-    # Sub-hop precision: parabolic interpolation of the autocorrelation peak.
-    # Integer lags alone quantize e.g. 128 BPM to 127.66 BPM (bar grid drifts
-    # ~0.6 s over 128 bars).
-    def _parabolic_peak(idx):
-        if 0 < idx < len(corr) - 1:
-            c_m, c_0, c_p = corr[idx - 1], corr[idx], corr[idx + 1]
-            denom = c_m - 2.0 * c_0 + c_p
-            if denom < 0.0:
-                return idx + float(np.clip(0.5 * (c_m - c_p) / denom, -0.5, 0.5))
-        return float(idx)
-
-    lag_f = _parabolic_peak(best_lag)
-    # Refine on the 4-beat (bar) autocorrelation peak: the same interpolation
-    # error is divided by 4 when the period is measured over a whole bar.
-    bar_center = int(round(4.0 * lag_f))
-    if bar_center + 4 < len(corr):
-        lo, hi = bar_center - 3, bar_center + 4
-        bar_idx = lo + int(np.argmax(corr[lo:hi]))
-        lag_f = _parabolic_peak(bar_idx) / 4.0
-    bpm = float(60.0 / (lag_f * hop_sec))
-
-    if bpm < 100.0 and corr[best_lag // 2] > 0.6 * corr[best_lag]:
-        bpm *= 2.0
-
-    bar_s = (60.0 / bpm) * 4.0
-    return round(bpm, 2), bar_s
+    """Track BPM and bar length (4/4 assumed for the bar grid)."""
+    t = detect_tempo(mix_mono, sr)
+    bpm = t["bpm"]
+    return bpm, (60.0 / bpm) * 4.0
 
 
 def detect_acoustic_boundaries(mix_mono: np.ndarray, sr: int, bpm: float = None) -> list:
@@ -331,7 +427,13 @@ def build_provisional_track_map(
     if sub_bass is None:
         sub_bass = sub_drums
 
-    bpm, bar_s = detect_bpm_and_grid(mix_mono, sr)
+    tempo_info = detect_tempo(mix_mono, sr)
+    bpm = tempo_info["bpm"]
+    # Phrase grid resolution: a slow reading (< 80 BPM) is often the half-time of the
+    # counted tempo; its double is on the SAME grid (every other line), so use the finer
+    # one for section boundaries. The displayed tempo stays the measured one (+ alt).
+    grid_bpm = bpm * 2.0 if bpm < 80.0 else bpm
+    bar_s = (60.0 / grid_bpm) * 4.0
 
     # Detect kick peaks on sub_drums or low-end onsets
     if kick_peaks is None or len(kick_peaks) == 0:
@@ -365,7 +467,7 @@ def build_provisional_track_map(
     
     if target_mode == "electronic":
         # === 100% PRESERVED EXACT EDM / TECHNO ALGORITHM ===
-        raw_b = detect_acoustic_boundaries(mix_mono, sr, bpm=bpm)
+        raw_b = detect_acoustic_boundaries(mix_mono, sr, bpm=grid_bpm)
         phrase_8 = 8.0 * bar_s
         prev_tag = None
         for i in range(len(raw_b) - 1):
@@ -700,6 +802,9 @@ def build_provisional_track_map(
         "duration_str": f"{m_tot}:{s_tot:02d}",
         "tempo_bpm": round(bpm, 1),
         "estimated_bpm": round(bpm, 1),
+        "tempo_alt_bpm": tempo_info["alt_bpm"],
+        "tempo_octave_confident": tempo_info["octave_confident"],
+        "tempo_pulse_clarity": tempo_info["pulse_clarity"],
         "total_kicks": len(kick_peaks),
         "total_kick_events": len(kick_peaks),
         "num_sections": len(out_sections),
