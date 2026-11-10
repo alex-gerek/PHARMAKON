@@ -59,7 +59,7 @@ binaries += collect_dynamic_libs('soundfile')
 
 a = Analysis(
     ['launcher.pyw'],
-    pathex=['C:\\Users\\User\\PHARMAKON'],
+    pathex=['.'],
     binaries=binaries,
     datas=datas,
     hiddenimports=hidden_imports,
