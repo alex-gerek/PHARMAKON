@@ -7,8 +7,8 @@
 ### Created by Lex Gerek // Abbey Road 1974 × Blade Runner 2049
 
 <p align="center">
-  <a href="https://github.com/alex-gerek/PHARMAKON/releases/download/v3.0.0/PHARMAKON_v3.0.0_Windows_Portable.zip">
-    <img src="assets/badges/btn_download_v3.svg" alt="Download Windows Portable v3.0.0">
+  <a href="https://github.com/alex-gerek/PHARMAKON/releases/download/v3.2.0/PHARMAKON_v3.2.0_Windows_Portable.zip">
+    <img src="assets/badges/btn_download_v3.svg" alt="Download Windows Portable v3.2.0">
   </a>
   &nbsp;
   <a href="https://github.com/alex-gerek/PHARMAKON/releases/download/v2.0.3/PHARMAKON_v2.0.3_Windows_Portable.zip">
@@ -25,7 +25,7 @@
 </p>
 
 <p align="center">
-  <img src="assets/badges/badge_version_3.svg" alt="Version 3.0.0">
+  <img src="assets/badges/badge_version_3.svg" alt="Version 3.2.0">
   <img src="assets/badges/badge_track_map.svg" alt="Track Map">
   <img src="assets/badges/badge_sub_sync.svg" alt="Sub-Sync">
   <img src="assets/badges/badge_true_peak.svg" alt="True Peak Guard">
