@@ -27,6 +27,28 @@ def hash_file_sha256(path: str) -> str:
             h.update(chunk)
     return h.hexdigest()
 
+def release_bytes(rel_name: str, ref: str = "HEAD") -> bytes:
+    """
+    The exact bytes a client downloads for `rel_name`: the git blob at `ref`, which
+    raw.githubusercontent.com serves for the release tag. A working-tree file is NOT
+    used: on Windows (core.autocrlf=true) it has CRLF line endings while the blob and
+    the download have LF, so a disk hash never matches what clients receive.
+    """
+    import subprocess
+    rel = rel_name.replace("\\", "/")
+    dirty = subprocess.run(["git", "diff", "--quiet", ref, "--", rel])
+    if dirty.returncode != 0:
+        raise SystemExit(f"[ERROR] {rel} differs from {ref}: commit it before signing.")
+    out = subprocess.run(["git", "show", f"{ref}:{rel}"], capture_output=True)
+    if out.returncode != 0:
+        raise SystemExit(f"[ERROR] {rel} is not in {ref}: {out.stderr.decode(errors='ignore').strip()}")
+    return out.stdout
+
+
+def release_sha256(rel_name: str, ref: str = "HEAD") -> str:
+    return hashlib.sha256(release_bytes(rel_name, ref)).hexdigest()
+
+
 def cmd_keygen(args):
     """Generates an Ed25519 keypair, saving private key outside repository."""
     out_path = Path(args.out).resolve()
@@ -77,7 +99,7 @@ def cmd_sign(args):
                 rel_name = p.resolve().relative_to(cwd).as_posix()
             except ValueError:
                 rel_name = p.as_posix()
-            files_dict[rel_name] = hash_file_sha256(str(p))
+            files_dict[rel_name] = release_sha256(rel_name)   # bytes clients download, not disk bytes
             
     manifest_out = Path(args.manifest_out).resolve()
     existing_meta = {}
@@ -154,13 +176,31 @@ def cmd_verify(args):
             if not f_on_disk.exists():
                 print(f"[WARN] File missing on disk: {fname}")
                 continue
-            actual_hash = hash_file_sha256(str(f_on_disk))
+            actual_hash = hashlib.sha256(f_on_disk.read_bytes().replace(b"\r\n", b"\n")).hexdigest()
             if actual_hash != expected_hash:
                 print(f"[MISMATCH] Hash mismatch for {fname}: expected {expected_hash}, got {actual_hash}", file=sys.stderr)
                 sys.exit(3)
             else:
                 print(f"[OK] {fname}: SHA-256 matches")
                 
+    if args.remote:
+        # The real client check: download every file from the release tag on GitHub.
+        import urllib.request
+        tag = manifest.get("release_tag") or f"v{manifest.get('version')}"
+        base = f"https://raw.githubusercontent.com/{args.repo}/{tag}/"
+        bad = 0
+        for fname, expected_hash in manifest.get("files", {}).items():
+            raw = urllib.request.urlopen(base + fname, timeout=30).read()
+            got = hashlib.sha256(raw).hexdigest()
+            if got != expected_hash:
+                bad += 1
+                print(f"[MISMATCH] {fname} at {tag}: expected {expected_hash}, served {got}", file=sys.stderr)
+            else:
+                print(f"[OK] {fname} at {tag}: download matches the manifest")
+        if bad:
+            print(f"[FAILED] {bad} file(s) on GitHub do not match the signed manifest; clients will refuse the update.", file=sys.stderr)
+            sys.exit(4)
+
     print("[SUCCESS] All manifest verifications passed.")
 
 def main():
@@ -184,7 +224,9 @@ def main():
     p_vf.add_argument("--manifest", default="VERSION.json", help="Path to manifest JSON")
     p_vf.add_argument("--sig", default="", help="Path to signature file (defaults to <manifest>.sig)")
     p_vf.add_argument("--pubkey", required=True, help="Base64 encoded public key")
-    p_vf.add_argument("--check-files-dir", default="", help="Directory to verify file SHA-256 hashes")
+    p_vf.add_argument("--check-files-dir", default="", help="Directory to verify file SHA-256 hashes (CRLF normalised to LF)")
+    p_vf.add_argument("--remote", action="store_true", help="Download every file from the release tag on GitHub and check its hash (what clients do)")
+    p_vf.add_argument("--repo", default="alex-gerek/PHARMAKON", help="GitHub owner/repo for --remote")
     
     args = parser.parse_args()
     if args.command == "keygen":
