@@ -209,6 +209,8 @@ def detect_tempo(mix_mono: np.ndarray, sr: int) -> dict:
     def _is_grouping(slow, fast_family):
         for e in range(-3, 4):
             f = fast_family * 2.0 ** e
+            if not (TEMPO_MIN_BPM <= f <= TEMPO_MAX_BPM):
+                continue
             r = f / slow
             if r >= 1.9 and abs(r - round(r)) < 0.03:
                 return True
@@ -216,15 +218,18 @@ def detect_tempo(mix_mono: np.ndarray, sr: int) -> dict:
 
     rival_family = None
     bpm0 = bpm_sum
-    for ak in band_acf:
-        cand = float(bpms[int(np.argmax(ak))])
+    tops = [float(bpms[int(np.argmax(ak))]) for ak in band_acf]
+    for cand in tops:
         if _same_family(cand, bpm_sum) or _is_grouping(cand, bpm_sum):
             continue
         s_c, s_s = _family_score(cand), _family_score(bpm_sum)
-        if s_c > s_s + 0.05:
+        votes_c = sum(1 for t in tops if _same_family(t, cand))
+        # override only when two or more drum bands agree: one band alone (a bass line,
+        # a shaker) does not define the beat, but a close rival is still shown as alt
+        if votes_c >= 2 and s_c > s_s + 0.05:
             bpm0, rival_family = cand, bpm_sum
             break
-        if s_c > 0.85 * s_s:
+        if s_c > 0.85 * s_s and (rival_family is None or s_c > _family_score(rival_family)):
             rival_family = cand
 
     # 2) octave: climb from the slowest level until off-beats stop carrying kick/snare hits
@@ -274,7 +279,7 @@ def detect_tempo(mix_mono: np.ndarray, sr: int) -> dict:
         octave_confident = False
     if alt is not None and not (70.0 <= alt <= 180.0):
         alt = None   # outside the range people count in (e.g. "134 or 67"): not a useful alternative
-    if alt is None and rival_family is not None:
+    if rival_family is not None:
         # a strong non-octave rival (3:2 etc.): show it in the counted range
         r = rival_family
         while r < 70.0:

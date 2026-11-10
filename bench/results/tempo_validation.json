@@ -1,5 +1,5 @@
 {
- "acc1": 0.8636363636363636,
+ "acc1": 0.88,
  "acc2": 1.0,
  "shown": 1.0,
  "rows": [
@@ -79,7 +79,7 @@
    "style": "hip_hop",
    "true": 88,
    "est": 88.0,
-   "alt": 176.0,
+   "alt": 117.5,
    "acc1": true,
    "acc2": true,
    "shown": true
@@ -106,7 +106,7 @@
    "style": "trap",
    "true": 70,
    "est": 70.0,
-   "alt": 140.0,
+   "alt": 112.0,
    "acc1": true,
    "acc2": true,
    "shown": true
@@ -196,6 +196,33 @@
    "style": "rock_8ths",
    "true": 96,
    "est": 96.0,
+   "alt": null,
+   "acc1": true,
+   "acc2": true,
+   "shown": true
+  },
+  {
+   "style": "shuffle_triplets",
+   "true": 94,
+   "est": 93.96,
+   "alt": 141.5,
+   "acc1": true,
+   "acc2": true,
+   "shown": true
+  },
+  {
+   "style": "shuffle_triplets",
+   "true": 84,
+   "est": 83.99,
+   "alt": 126.0,
+   "acc1": true,
+   "acc2": true,
+   "shown": true
+  },
+  {
+   "style": "shuffle_triplets",
+   "true": 108,
+   "est": 108.0,
    "alt": null,
    "acc1": true,
    "acc2": true,

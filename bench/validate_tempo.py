@@ -54,6 +54,9 @@ STYLES = {
     "waltz_3_4":     dict(steps=12, kick=[0], snare=[4, 8], hat=[0, 2, 4, 6, 8, 10]),
     "ballad_no_kick": dict(steps=16, kick=[], snare=[4, 12], hat=[0, 4, 8, 12]),
     "rock_8ths":     dict(steps=16, kick=[0, 6, 8], snare=[4, 12], hat=[0, 2, 4, 6, 8, 10, 12, 14]),
+    # 4/4 with a triplet grid (3 steps per beat): triplet hats + a triplet "body" ghost note.
+    # Bar splits in 4 (true) or 3/6 (70/140 at 94): the case of the real track "Move! Move! Move!".
+    "shuffle_triplets": dict(steps=12, div=3, kick=[0, 5, 7], snare=[3, 9], hat=list(range(12)), ghost=[2, 5, 8, 11]),
 }
 
 # (style, true tempo in BPM = quarter-note beats per minute)
@@ -67,6 +70,7 @@ CASES = [
     ("waltz_3_4", 90), ("waltz_3_4", 150),
     ("ballad_no_kick", 66), ("ballad_no_kick", 80),
     ("rock_8ths", 110), ("rock_8ths", 160), ("rock_8ths", 96),
+    ("shuffle_triplets", 94), ("shuffle_triplets", 84), ("shuffle_triplets", 108),
 ]
 
 
@@ -75,7 +79,7 @@ def render(style, bpm, seconds=40.0, sr=SR, seed=0):
     p = STYLES[style]
     n = int(seconds * sr)
     x = np.zeros(n + sr)
-    step_s = 60.0 / bpm / 4.0           # 16th note
+    step_s = 60.0 / bpm / p.get("div", 4)   # 16th note (or triplet 8th when div=3)
     kick, snare = _kick(sr), _snare(sr, rng)
     total_steps = int(seconds / step_s)
     for k in range(total_steps):
@@ -86,6 +90,9 @@ def render(style, bpm, seconds=40.0, sr=SR, seed=0):
             x[i:i + len(kick)] += kick[: len(x) - i]
         if s in p["snare"]:
             x[i:i + len(snare)] += snare[: len(x) - i]
+        if s in p.get("ghost", []):
+            g = 0.35 * snare
+            x[i:i + len(g)] += g[: len(x) - i]
         if s in p["hat"]:
             h = _hat(sr, rng) * (1.0 if s % 4 == 0 else 0.7)
             x[i:i + len(h)] += h[: len(x) - i]
