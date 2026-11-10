@@ -118,4 +118,5 @@ The measurement bench is already in place to check each of these with the same m
 The numbers in this article are measurements. The judgement of the sound is mine: it is how I hear PHARMAKON 3.2 and why I built it this way. Load a track, open the certificate, and listen.
 
 ---
+*Original publication on X:* [https://x.com/LexGerek/status/2120167917488676895](https://x.com/LexGerek/status/2120167917488676895)  
 *Repository:* [https://github.com/alex-gerek/PHARMAKON](https://github.com/alex-gerek/PHARMAKON)
