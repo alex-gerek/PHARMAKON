@@ -2247,6 +2247,14 @@ def generate_track_map_html(track_map, target_path=""):
 
     seg_html_list = []
     cards_html_list = []
+    _seen_tags = []
+    for _s in sections:
+        _t = _s.get('tag')
+        if _t and _t not in [t for t, _ in _seen_tags]:
+            _seen_tags.append((_t, _s.get('color', tag_colors.get(_t, '#38bdf8'))))
+    legend_html = "".join(f'<span class="tm-legend-chip" style="color:{c};">&#9632; {t}</span>' for t, c in _seen_tags)
+    _alt = track_map.get('tempo_alt_bpm')
+    alt_txt = f" (or {_alt:.1f})" if isinstance(_alt, (int, float)) else ""
 
     for s in sections:
         idx = s['section_index']
@@ -2319,20 +2327,14 @@ def generate_track_map_html(track_map, target_path=""):
         <div style="display:flex; align-items:center; gap:10px;">
           <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#10b981; box-shadow:0 0 8px #10b981;"></span>
           <div>
-            <div style="font-size:12px; font-weight:800; letter-spacing:1.5px; color:#fff; font-family:monospace;">PHARMAKON 3.0 TRACK INTELLIGENCE MAP</div>
+            <div style="font-size:12px; font-weight:800; letter-spacing:1.5px; color:#fff; font-family:monospace;">PHARMAKON 3.2 TRACK INTELLIGENCE MAP</div>
             <div style="font-size:10px; font-family:monospace; color:#94a3b8; margin-top:2px;">
-              TEMPO: <span style="color:#38bdf8;">{bpm:.1f} BPM</span> &bull; RHYTHM MESH: <span style="color:#fff;">4/4</span> &bull; PHRASE SECTORS: <span style="color:#f59e0b;">{len(sections)}</span> &bull; TOTAL DURATION: <span style="color:#fff;">{dur:.1f}s</span> ({total_kicks} KICKS)
+              TEMPO: <span style="color:#38bdf8;">{bpm:.1f} BPM{alt_txt}</span> &bull; RHYTHM MESH: <span style="color:#fff;">4/4</span> &bull; PHRASE SECTORS: <span style="color:#f59e0b;">{len(sections)}</span> &bull; TOTAL DURATION: <span style="color:#fff;">{dur:.1f}s</span> ({total_kicks} KICKS)
             </div>
           </div>
         </div>
         <div class="tm-legend">
-          <span class="tm-legend-chip" style="color:#f59e0b;">&#9632; INTRO</span>
-          <span class="tm-legend-chip" style="color:#f43f5e;">&#9632; DROP</span>
-          <span class="tm-legend-chip" style="color:#0ea5e9;">&#9632; GROOVE</span>
-          <span class="tm-legend-chip" style="color:#6366f1;">&#9632; INTERLUDE</span>
-          <span class="tm-legend-chip" style="color:#10b981;">&#9632; BREAKDOWN</span>
-          <span class="tm-legend-chip" style="color:#f97316;">&#9632; BUILDUP</span>
-          <span class="tm-legend-chip" style="color:#a855f7;">&#9632; OUTRO</span>
+          {legend_html}
         </div>
       </div>
 
@@ -2372,6 +2374,7 @@ def generate_track_map_html(track_map, target_path=""):
               <option value="Drop">Drop</option>
               <option value="Breakdown">Breakdown</option>
               <option value="Buildup">Buildup</option>
+              <option value="Bridge">Bridge</option>
               <option value="Interlude">Interlude</option>
               <option value="Outro">Outro</option>
               <option value="Section">Section (Neutral)</option>

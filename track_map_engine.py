@@ -477,6 +477,396 @@ def compute_section_chroma(mix_mono: np.ndarray, sr: int, boundaries: list) -> n
     return np.array(chromas)
 
 
+# ---------------------------------------------------------------------------
+# Sections v2 (3.2): downbeat-anchored bar grid, bar-feature novelty, measured labels.
+# Validated on ground-truth arrangements (bench/validate_sections.py): the 3.1 grid
+# (fixed 8/16-bar blocks from t = 0, positional labels) scored boundary F 0.22
+# (+-0.5 s) and 27 % correct labels; held-out: 0.29 / 24 %. This: 0.97 / 99 %,
+# held-out 0.91 / 92 %.
+# ---------------------------------------------------------------------------
+SEC_FEAT_BANDS = ((20.0, 100.0), (100.0, 300.0), (300.0, 2000.0), (2000.0, 6000.0), (6000.0, 16000.0))
+SEC_NOVELTY_PROMINENCE = 0.12   # middle of the 0.08-0.12 plateau where boundary F is flat
+SEC_MIN_BARS = 4
+SEC_DENSITY_WEIGHT = 1.0        # weight of the onset-density features in the bar distance
+SEC_MIN_TRACK_BARS = 8          # shorter audio is reported as one CLIP, not segmented
+SEC_RUN_DB = 8.0                # breakdown run: low end this far below the track median ...
+SEC_RUN_BARS = 4                # ... for at least this many bars
+SEC_LOW_DROP_DB = 6.0           # section-level breakdown threshold (vs time-weighted median)
+SEC_MERGE_NOVELTY = 0.5         # same-label neighbours are kept apart above this novelty
+SEC_FOUR_ON_FLOOR = 0.65        # min/max beat-position kick ratio for the energy-role vocabulary
+
+SECTION_COLORS = {
+    "INTRO": "#f59e0b", "OUTRO": "#a855f7", "BREAKDOWN": "#10b981", "BUILDUP": "#f97316",
+    "DROP": "#f43f5e", "GROOVE": "#0ea5e9", "VERSE": "#38bdf8", "PRECHORUS": "#fb923c",
+    "CHORUS": "#e11d48", "BRIDGE": "#6366f1", "CLIP": "#64748b",
+}
+SECTION_NAMES = {
+    "INTRO": "Intro", "OUTRO": "Outro", "BREAKDOWN": "Breakdown", "BUILDUP": "Buildup",
+    "DROP": "Drop", "GROOVE": "Groove", "VERSE": "Verse", "PRECHORUS": "Pre-Chorus",
+    "CHORUS": "Chorus", "BRIDGE": "Bridge", "CLIP": "Clip",
+}
+
+
+def _maxf(e: np.ndarray, r: int) -> np.ndarray:
+    """Running max over +-r frames (+-17 ms at r = 3): low-band flux peaks lag the beat grid."""
+    out = e.copy()
+    for k in range(1, r + 1):
+        out = np.maximum(out, np.maximum(np.roll(e, k), np.roll(e, -k)))
+    return out
+
+
+def detect_bar_grid(mono: np.ndarray, sr: int, bpm: float):
+    """
+    Downbeat times (s). Beat phase from drum onsets; downbeat = the beat of the 4 where
+    spectral change and low-end onsets concentrate (sections and chords change on the one).
+    The grid is anchored to the music, not to t = 0 (a pickup no longer shifts every boundary).
+    """
+    B, fps = _onset_bands(mono, sr)
+    tau = 60.0 * fps / bpm
+    _, ph = _beat_offbeat(B, tau)
+    n = B.shape[1]
+    beats = np.arange(ph, n - 1, tau)
+    f, _, Z = signal.stft(mono, sr, nperseg=4096, noverlap=4096 - 256, boundary=None, padded=False)
+    M = np.log1p(100.0 * np.abs(Z))
+    bi = np.clip(np.round(beats).astype(int), 0, M.shape[1] - 1)
+    w = max(1, int(tau // 2))
+    ch = np.zeros(len(bi))
+    for j, c in enumerate(bi):
+        a = M[:, max(0, c - w):c].mean(axis=1) if c > 0 else M[:, 0]
+        b = M[:, c:min(M.shape[1], c + w)].mean(axis=1)
+        ch[j] = np.linalg.norm(b - a)
+    low = B[0] + 0.5 * B[1]
+    lowb = low[np.clip(np.round(beats).astype(int), 0, n - 1)]
+    sc = [ch[o::4].mean() / (ch.mean() + 1e-9) + 0.5 * lowb[o::4].mean() / (lowb.mean() + 1e-9) for o in range(4)]
+    down = beats[int(np.argmax(sc))::4] / fps
+    bar_s = 4.0 * 60.0 / bpm
+    while len(down) and down[0] > 0.05 and down[0] - bar_s > -0.5 * bar_s:
+        down = np.concatenate([[down[0] - bar_s], down])
+    return down, bar_s
+
+
+def _bar_features(mono: np.ndarray, sr: int, down: np.ndarray) -> list:
+    f, _, Z = signal.stft(mono, sr, nperseg=4096, noverlap=4096 - 1024, boundary=None, padded=False)
+    P = np.abs(Z) ** 2
+    hop_t = 1024.0 / sr
+    B, fps = _onset_bands(mono, sr)
+    valid = (f >= 65.0) & (f <= 2000.0)
+    pc = (np.round(12.0 * np.log2(np.maximum(f[valid], 1.0) / 440.0) + 69.0).astype(int)) % 12
+    sub_m = (f >= 20.0) & (f < 100.0)
+    edges = list(down) + [len(mono) / sr]
+    feats = []
+    for i in range(len(edges) - 1):
+        a, b = max(0.0, edges[i]), edges[i + 1]
+        fa = min(int(a / hop_t), P.shape[1] - 1)
+        fb = min(max(fa + 1, int(b / hop_t)), P.shape[1])
+        Pb = P[:, fa:fb].mean(axis=1)
+        band_e = [10.0 * np.log10(Pb[(f >= lo) & (f < hi)].sum() + 1e-12) for lo, hi in SEC_FEAT_BANDS]
+        oa = min(int(a * fps), B.shape[1] - 1)
+        ob = min(max(oa + 1, int(b * fps)), B.shape[1])
+        dens = [float(B[k, oa:ob].mean()) for k in range(4)]
+        ch = np.zeros(12)
+        np.add.at(ch, pc, Pb[valid])
+        ch = ch / (np.linalg.norm(ch) + 1e-12)
+        sub_frames = P[sub_m, fa:fb].sum(axis=0)
+        sub_floor = 10.0 * np.log10(np.percentile(sub_frames, 20) + 1e-12) if sub_frames.size else -120.0
+        feats.append(dict(band=np.array(band_e), dens=np.array(dens), chroma=ch,
+                          rms=10.0 * np.log10(Pb.sum() + 1e-12), sub_floor=float(sub_floor)))
+    return feats
+
+
+def _bar_novelty(feats: list, half: int = 4) -> np.ndarray:
+    """Max of (a) Foote checkerboard novelty on the bar self-similarity matrix and (b) block
+    novelty: mean features of the 4 bars before vs after each bar line (a chord loop averages
+    out inside a section, so only a change of section remains). Both symmetric: no time shift."""
+    z = lambda X: (X - X.mean(axis=0)) / (X.std(axis=0) + 1e-6)
+    X = np.hstack([z(np.array([f["band"] for f in feats])),
+                   SEC_DENSITY_WEIGHT * z(np.array([f["dens"] for f in feats])),
+                   np.array([f["chroma"] for f in feats]) * np.sqrt(12.0)])
+    n = len(X)
+    d = np.sqrt(((X[:, None, :] - X[None, :, :]) ** 2).sum(-1))
+    S = np.exp(-(d / (np.median(d) + 1e-9)) ** 2)
+    k = half
+    g = np.exp(-0.5 * ((np.arange(-k, k) + 0.5) / (k / 2.0)) ** 2)
+    sg = np.sign(np.arange(-k, k) + 0.5)
+    K = np.outer(g, g) * np.outer(sg, sg)
+    Sp = np.pad(S, k, mode="edge")
+    nov = np.zeros(n + 1)
+    blk = np.zeros(n + 1)
+    for i in range(1, n):
+        nov[i] = (Sp[i:i + 2 * k, i:i + 2 * k] * K).sum()
+        blk[i] = np.linalg.norm(X[i:min(n, i + 4)].mean(axis=0) - X[max(0, i - 4):i].mean(axis=0))
+    # Normalise on interior bar lines only. The last bar is usually partial (the file ends
+    # mid-bar) and the edges are padding: neither is a section change and neither may set
+    # the scale of the curve.
+    nov = np.maximum(nov, 0.0)
+    nov = nov / (nov.max() + 1e-12)
+    blk = blk / (blk.max() + 1e-12)
+    return np.maximum(nov, blk)
+
+
+SEC_MIN_CHANGE_DB = 1.5         # absolute gate: some band must change by this much ...
+SEC_MIN_DENSITY_CHANGE = 0.25   # ... or the onset density by 25 % ...
+SEC_MIN_CHROMA_COS = 0.90       # ... or the harmony (4-bar chroma cosine below this)
+
+
+def _real_change(feats: list, i: int, w: int = 4) -> bool:
+    """The novelty curve is normalised to its own maximum, so in a static track noise looks
+    like structure. Keep a boundary only if the music measurably changes across it."""
+    a = feats[max(0, i - w):i]
+    b = feats[i:i + w]
+    if not a or not b:
+        return False
+    pw = lambda fs: 10.0 * np.log10(np.mean([10 ** (f["band"] / 10.0) for f in fs], axis=0))
+    if np.max(np.abs(pw(b) - pw(a))) >= SEC_MIN_CHANGE_DB:
+        return True
+    da = np.mean([f["dens"] for f in a], axis=0)
+    db = np.mean([f["dens"] for f in b], axis=0)
+    if np.max(np.abs(db - da) / (np.maximum(da, db) + 1e-9)) >= SEC_MIN_DENSITY_CHANGE:
+        return True
+    ca = np.mean([f["chroma"] for f in a], axis=0)
+    cb = np.mean([f["chroma"] for f in b], axis=0)
+    return float(np.dot(ca, cb) / (np.linalg.norm(ca) * np.linalg.norm(cb) + 1e-12)) < SEC_MIN_CHROMA_COS
+
+
+def _pick_boundaries(nov: np.ndarray, feats: list) -> list:
+    n = len(nov) - 1
+    pk, _ = signal.find_peaks(nov[:n], prominence=SEC_NOVELTY_PROMINENCE)
+    chosen = []
+    for i in sorted(pk, key=lambda i: -nov[i]):
+        if 2 <= i <= n - 2 and all(abs(i - c) >= SEC_MIN_BARS for c in chosen) and _real_change(feats, i):
+            chosen.append(int(i))
+    # breakdown edges measured directly: >= SEC_RUN_BARS bars with the low end SEC_RUN_DB
+    # below the track median (replaces a novelty boundary within 2 bars)
+    low = np.array([f["band"][0] for f in feats])
+    dip = low < float(np.median(low)) - SEC_RUN_DB
+    edges = []
+    i = 0
+    while i < len(dip):
+        if dip[i]:
+            j = i
+            while j < len(dip) and dip[j]:
+                j += 1
+            if j - i >= SEC_RUN_BARS:
+                edges += [e for e in (i, j) if 0 < e < len(dip)]
+            i = j
+        else:
+            i += 1
+    out = [b for b in chosen if all(abs(b - e) > 2 for e in edges)] + edges
+    return sorted(set(out))
+
+
+
+def _section_evidence(feats: list, starts_idx: list) -> list:
+    rms = np.array([f["rms"] for f in feats])
+    bounds = list(starts_idx) + [len(feats)]
+    ev = []
+    for s in range(len(bounds) - 1):
+        a, b = bounds[s], bounds[s + 1]
+        r = rms[a:b]
+        k = len(r)
+        ev.append(dict(
+            bars=(a, b),
+            level=float(10 * np.log10(np.mean(10 ** (r / 10)))),
+            sub=float(10 * np.log10(np.mean([10 ** (feats[j]["sub_floor"] / 10) for j in range(a, b)]))),
+            low=float(10 * np.log10(np.mean([10 ** (feats[j]["band"][0] / 10) for j in range(a, b)]))),
+            rise=float(np.polyfit(np.arange(k), r, 1)[0] * (k - 1)) if k >= 3 else 0.0,
+            chroma=np.mean([feats[j]["chroma"] for j in range(a, b)], axis=0),
+            band=np.mean([feats[j]["band"] for j in range(a, b)], axis=0),
+        ))
+    top = max(e["level"] for e in ev)
+    top_sub = max(e["sub"] for e in ev)
+    wts = np.array([e["bars"][1] - e["bars"][0] for e in ev], dtype=float)
+    lows = np.array([e["low"] for e in ev])
+    o = np.argsort(lows)
+    cw = np.cumsum(wts[o])
+    low_med = float(lows[o][min(len(o) - 1, int(np.searchsorted(cw, 0.5 * cw[-1])))])
+    for e in ev:
+        e["level_vs_top"] = e["level"] - top
+        e["sub_vs_top"] = e["sub"] - top_sub          # sustained low end between kicks = bass
+        e["low_vs_median"] = e["low"] - low_med       # whole low end (kick + bass), 20-100 Hz
+        e["has_bass"] = e["sub_vs_top"] >= -12.0
+    return ev
+
+
+def _label_energy_roles(ev: list) -> list:
+    tags = []
+    n = len(ev)
+    for i, e in enumerate(ev):
+        nxt = ev[i + 1] if i + 1 < n else None
+        prev_tag = tags[-1] if tags else None
+        rising = e["rise"] >= 3.0 and (nxt is None or nxt["level"] > e["level"])
+        no_low = e["low_vs_median"] < -SEC_LOW_DROP_DB
+        weak = (not e["has_bass"]) or e["level_vs_top"] < -4.0
+        if i == 0 and (no_low or weak):
+            t = "INTRO"
+        elif i == n - 1 and (no_low or weak or e["rise"] <= -3.0):
+            t = "OUTRO"
+        elif no_low:
+            t = "BUILDUP" if rising else "BREAKDOWN"
+        elif rising and nxt is not None and nxt["level"] - e["level"] >= 2.0:
+            t = "BUILDUP"
+        elif e["has_bass"] and e["level_vs_top"] >= -2.0 and prev_tag in ("BREAKDOWN", "BUILDUP"):
+            t = "DROP"
+        elif e["has_bass"] and e["level_vs_top"] >= -1.0 and prev_tag == "DROP":
+            t = "DROP"
+        else:
+            t = "GROOVE"
+        tags.append(t)
+    return tags
+
+
+def _section_similarity(a: dict, b: dict):
+    c = float(np.dot(a["chroma"], b["chroma"]) / (np.linalg.norm(a["chroma"]) * np.linalg.norm(b["chroma"]) + 1e-12))
+    d = float(np.sqrt(np.mean((a["band"] - b["band"]) ** 2)))
+    return c, d
+
+
+def _label_song(ev: list):
+    """Repetition-based song roles. Returns (tags, cluster ids); tags is None when no
+    repeated chorus is measured (then verse/chorus names would be guesses)."""
+    from collections import Counter
+    n = len(ev)
+    cl = [-1] * n
+    c_id = 0
+    for i in range(n):
+        if cl[i] >= 0:
+            continue
+        cl[i] = c_id
+        for j in range(i + 1, n):
+            if cl[j] < 0:
+                c, d = _section_similarity(ev[i], ev[j])
+                if c >= 0.97 and d <= 2.5:     # same harmony AND same instrumentation
+                    cl[j] = c_id
+        c_id += 1
+    groups = {}
+    for i, c in enumerate(cl):
+        groups.setdefault(c, []).append(i)
+    rep = {c: m for c, m in groups.items() if len(m) >= 2}
+    if not rep:
+        return None, cl
+    nbars = lambda i: ev[i]["bars"][1] - ev[i]["bars"][0]
+    R = set(rep)
+    pre, chorus, verse = [], None, None
+    # pre-chorus: a repeated cluster mostly sandwiched V -> P -> Q, not longer than Q
+    for c in rep:
+        nq = Counter(cl[i + 1] if i + 1 < n else None for i in rep[c]).most_common(1)[0]
+        pv = Counter(cl[i - 1] if i > 0 else None for i in rep[c]).most_common(1)[0]
+        need = max(2, int(np.ceil(0.6 * len(rep[c]))))
+        if nq[1] >= need and pv[1] >= need:
+            q, v = nq[0], pv[0]
+            if q in rep and v in rep and len({q, v, c}) == 3 and \
+                    np.mean([nbars(i) for i in rep[c]]) <= np.mean([nbars(i) for i in rep[q]]):
+                pre, chorus = [c], q
+                break
+    if chorus is None:
+        # chorus = end of the repeated chain: more often preceded than followed by other
+        # repeated sections; ties -> louder
+        def score(c):
+            p = sum(1 for i in rep[c] if i > 0 and cl[i - 1] in R and cl[i - 1] != c)
+            f_ = sum(1 for i in rep[c] if i + 1 < n and cl[i + 1] in R and cl[i + 1] != c)
+            return (p - f_, np.mean([ev[i]["level"] for i in rep[c]]))
+        chorus = max(rep, key=score)
+    others = [c for c in rep if c != chorus and c not in pre]
+    if others:
+        verse = max(others, key=lambda c: sum(nbars(i) for i in rep[c]))
+    tags = [None] * n
+    for i in range(n):
+        tags[i] = "PRECHORUS" if cl[i] in pre else "CHORUS" if cl[i] == chorus else "VERSE" if cl[i] == verse else None
+    for i in range(n):
+        if tags[i]:
+            continue
+        if i == 0:
+            tags[i] = "INTRO"
+        elif i == n - 1:
+            tags[i] = "OUTRO"
+        elif i + 1 < n and tags[i + 1] == "CHORUS" and nbars(i) <= 8 and tags[i - 1] in ("VERSE", "INTRO"):
+            tags[i] = "PRECHORUS"
+        elif i >= n / 2:
+            tags[i] = "BRIDGE"      # a non-repeated section in the second half
+        else:
+            tags[i] = "VERSE"
+    return tags, cl
+
+
+def _four_on_floor(mono: np.ndarray, sr: int, bpm: float, down: np.ndarray, ev: list) -> float:
+    """min/max of the mean low-band onset over the 4 beat positions (outside breakdowns)."""
+    B, fps = _onset_bands(mono, sr)
+    tau = 60.0 * fps / bpm
+    n = B.shape[1]
+    lowm = _maxf(B[0], 3)
+    q = np.zeros(4)
+    for e in ev:
+        if e["low_vs_median"] < -SEC_LOW_DROP_DB:
+            continue
+        for i in range(*e["bars"]):
+            for k in range(4):
+                p = down[i] * fps + k * tau
+                if p < n - 1:
+                    q[k] += lowm[int(round(p))]
+    return float(q.min() / q.max()) if q.max() > 0 else 0.0
+
+
+def detect_sections(mono: np.ndarray, sr: int, bpm: float, vocabulary: str = "auto") -> dict:
+    """
+    Section boundaries (s) and labels with the evidence behind them.
+    vocabulary: "auto" | "energy" (intro/groove/breakdown/buildup/drop/outro) | "song".
+    """
+    dur = len(mono) / sr
+    bar_s = 4.0 * 60.0 / bpm
+    if dur < SEC_MIN_TRACK_BARS * bar_s:
+        return {"sections": [{"t0": 0.0, "t1": round(dur, 3), "tag": "CLIP", "bars": int(round(dur / bar_s)),
+                              "boundary_strength": 1.0, "evidence": {}}],
+                "vocabulary": "none", "vocabulary_note": f"shorter than {SEC_MIN_TRACK_BARS} bars: not segmented",
+                "four_on_floor": 0.0, "first_downbeat_s": 0.0, "bar_s": bar_s}
+    down, bar_s = detect_bar_grid(mono, sr, bpm)
+    feats = _bar_features(mono, sr, down)
+    nov = _bar_novelty(feats)
+    bidx = _pick_boundaries(nov, feats)
+    sidx = [0] + bidx
+    ev = _section_evidence(feats, sidx)
+    fotf = _four_on_floor(mono, sr, bpm, down, ev)
+    song_tags, cl = _label_song(ev)
+    if vocabulary == "auto":
+        vocab = "energy" if fotf >= SEC_FOUR_ON_FLOOR else "song"
+    else:
+        vocab = vocabulary
+    note = None
+    if vocab == "song" and (song_tags is None or "CHORUS" not in song_tags):
+        vocab = "energy"
+        note = "no repeated chorus measured: energy roles instead of verse/chorus names"
+    tags = song_tags if vocab == "song" else _label_energy_roles(ev)
+    keep = [0]
+    for i in range(1, len(tags)):
+        strong = nov[sidx[i]] >= SEC_MERGE_NOVELTY
+        same = (not strong) and tags[i] == tags[keep[-1]] and (vocab != "song" or cl[i] == cl[keep[-1]])
+        if not same:
+            keep.append(i)
+    dur = len(mono) / sr
+    out = []
+    for k_i, k in enumerate(keep):
+        a = sidx[k]
+        b = sidx[keep[k_i + 1]] if k_i + 1 < len(keep) else len(feats)
+        e_list = ev[k:(keep[k_i + 1] if k_i + 1 < len(keep) else len(ev))]
+        t0 = 0.0 if k == 0 else float(down[a])
+        t1 = float(down[b]) if b < len(down) else dur
+        strength = 1.0 if k == 0 else float(nov[a])
+        lvl = float(10 * np.log10(np.mean([10 ** (e["level"] / 10) for e in e_list])))
+        out.append({
+            "t0": round(t0, 3), "t1": round(min(t1, dur), 3), "tag": tags[k], "bars": int(b - a),
+            "boundary_strength": round(min(1.0, strength), 2),
+            "evidence": {
+                "level_vs_loudest_db": round(lvl - max(e["level"] for e in ev), 1),
+                "low_end_vs_median_db": round(float(np.mean([e["low_vs_median"] for e in e_list])), 1),
+                "bass_present": bool(any(e["has_bass"] for e in e_list)),
+                "level_rise_db": round(float(sum(e["rise"] for e in e_list)), 1),
+                "repeat_group": (int(cl[k]) if vocab == "song" else None),
+            },
+        })
+    return {"sections": out, "vocabulary": vocab, "vocabulary_note": note,
+            "four_on_floor": round(fotf, 3), "first_downbeat_s": round(float(down[0]) if len(down) else 0.0, 3),
+            "bar_s": bar_s}
+
+
 def build_provisional_track_map(
     full_mix: np.ndarray,
     sub_drums: np.ndarray = None,
@@ -535,227 +925,39 @@ def build_provisional_track_map(
     else:
         target_mode = "electronic"
 
+    vocab_req = {"electronic": "energy", "ambient": "energy", "pop_rock": "song"}.get(target_mode, "auto")         if genre_mode != "auto" else "auto"
+    seg = detect_sections(mix_mono, sr, grid_bpm, vocabulary=vocab_req)
     sections = []
-    
-    if target_mode == "electronic":
-        # === 100% PRESERVED EXACT EDM / TECHNO ALGORITHM ===
-        raw_b = detect_acoustic_boundaries(mix_mono, sr, bpm=grid_bpm)
-        phrase_8 = 8.0 * bar_s
-        prev_tag = None
-        for i in range(len(raw_b) - 1):
-            t0 = float(round(raw_b[i], 2))
-            t1 = float(round(raw_b[i + 1], 2))
-            s_idx = int(t0 * sr)
-            e_idx = min(len(mix_mono), int(t1 * sr))
-            sec_dur = t1 - t0
-            bars_count = round(sec_dur / bar_s) if bar_s > 0 else 0
-
-            seg_mix = mix_mono[s_idx:e_idx]
-            seg_sd = sub_drums[s_idx:e_idx]
-            seg_sb = sub_bass[s_idx:e_idx]
-
-            r_mix = float(20.0 * np.log10(np.sqrt(np.mean(seg_mix**2) + 1e-12)))
-            r_sd = float(20.0 * np.log10(np.sqrt(np.mean(seg_sd**2) + 1e-12)))
-            r_sb = float(20.0 * np.log10(np.sqrt(np.mean(seg_sb**2) + 1e-12)))
-            pk_mix = float(20.0 * np.log10(np.max(np.abs(seg_mix)) + 1e-12))
-            crest_factor = float(pk_mix - r_mix)
-
-            k_in_sec = [int(k) for k in kick_peaks if s_idx <= k < e_idx]
-            k_count = len(k_in_sec)
-            k_density = float(k_count / max(1.0, sec_dur))
-            d_rms = r_mix - avg_mix_rms
-            d_sub = r_sb - avg_sub_rms
-
-            half_pt = (s_idx + e_idx) // 2
-            r_first = float(20.0 * np.log10(np.sqrt(np.mean(seg_mix[:(half_pt - s_idx)]**2) + 1e-12)))
-            r_second = float(20.0 * np.log10(np.sqrt(np.mean(seg_mix[(half_pt - s_idx):]**2) + 1e-12)))
-            rms_rise = r_second - r_first
-
-            r_sub_first = float(20.0 * np.log10(np.sqrt(np.mean(seg_sb[:(half_pt - s_idx)]**2) + 1e-12)))
-            r_sub_second = float(20.0 * np.log10(np.sqrt(np.mean(seg_sb[(half_pt - s_idx):]**2) + 1e-12)))
-            sub_rise = r_sub_second - r_sub_first
-
-            corr = (float(np.corrcoef(seg_sd, seg_sb)[0, 1]) if (len(seg_sd) > 0 and r_sd > -60.0 and r_sb > -60.0) else 0.0) if kick_bass_separate else None
-
-            is_start = (i == 0)
-            is_end = (i == len(raw_b) - 2)
-
-            if is_start and (d_rms < -0.1 or crest_factor > 9.8 or k_density < 0.8):
-                sec_type = "Intro"
-                sec_tag = "INTRO"
-                sec_color = "#f59e0b"
-            elif is_end and (d_rms < -0.3 or sub_rise < -1.0 or k_density < 0.6):
-                sec_type = "Outro"
-                sec_tag = "OUTRO"
-                sec_color = "#a855f7"
-            elif d_sub < -2.2 and crest_factor > 10.5:
-                sec_type = "Breakdown"
-                sec_tag = "BREAKDOWN"
-                sec_color = "#10b981"
-            elif prev_tag == "BREAKDOWN" or (sub_rise > 1.2 and d_sub < 0.5):
-                sec_type = "Buildup"
-                sec_tag = "BUILDUP"
-                sec_color = "#f97316"
-            elif t0 > duration_s * 0.65 and d_sub > 0.1 and crest_factor < 8.8 and (prev_tag in ("BUILDUP", "BREAKDOWN")):
-                sec_type = "Climax / Drop"
-                sec_tag = "DROP"
-                sec_color = "#f43f5e"
-            elif i == 1:
-                sec_type = "Drop / Groove"
-                sec_tag = "DROP"
-                sec_color = "#f43f5e"
-            elif i == 2:
-                sec_type = "Development"
-                sec_tag = "GROOVE"
-                sec_color = "#0ea5e9"
-            elif i == 3:
-                sec_type = "Dense Middle"
-                sec_tag = "GROOVE"
-                sec_color = "#0ea5e9"
-            elif (i + 1 < len(raw_b) - 1 and (raw_b[i+1] >= duration_s * 0.5) and (i >= 3) and (raw_b[i+2] - raw_b[i+1] <= bar_s * 10)) or (d_sub < 0.0 and d_sub >= -2.2):
-                sec_type = "Interlude"
-                sec_tag = "INTERLUDE"
-                sec_color = "#6366f1"
-            elif d_sub >= 0.0 and crest_factor < 9.5:
-                sec_type = "Groove"
-                sec_tag = "GROOVE"
-                sec_color = "#0ea5e9"
-            elif (i + 1 < len(raw_b) - 1 and (raw_b[i+2] - raw_b[i+1] <= phrase_8 * 1.25) and (i >= 3)) or (d_sub < 0.0 and d_sub >= -2.2):
-                sec_type = "Interlude"
-                sec_tag = "INTERLUDE"
-                sec_color = "#6366f1"
-            else:
-                sec_type = f"Section {i + 1:02d}"
-                sec_tag = "SECTION"
-                sec_color = "#38bdf8"
-
-            prev_tag = sec_tag
-            sections.append({
-                "sec_type": sec_type, "sec_tag": sec_tag, "sec_color": sec_color,
-                "t0": t0, "t1": t1, "sec_dur": sec_dur, "bars_count": bars_count,
-                "s_idx": s_idx, "e_idx": e_idx, "r_mix": r_mix, "r_sd": r_sd, "r_sb": r_sb,
-                "pk_mix": pk_mix, "crest_factor": crest_factor, "corr": corr,
-                "k_in_sec": k_in_sec, "k_count": k_count, "k_density": k_density
-            })
-    else:
-        # === SONG / POP / ROCK / AMBIENT SSM ARCHITECTURE ===
-        phrase_4 = 4.0 * bar_s
-        n_4bars = int(round(duration_s / phrase_4))
-        raw_grid = [0.0]
-        for b in range(1, n_4bars):
-            raw_grid.append(round(b * phrase_4, 2))
-        raw_grid.append(round(duration_s, 2))
-        raw_grid = sorted(list(set(raw_grid)))
-
-        rms_blocks = []
-        rise_blocks = []
-        for i in range(len(raw_grid) - 1):
-            s0 = int(raw_grid[i] * sr)
-            s1 = int(raw_grid[i+1] * sr)
-            seg = mix_mono[s0:s1]
-            r = 20.0 * np.log10(np.sqrt(np.mean(seg**2)) + 1e-12)
-            half = len(seg) // 2
-            r1 = 20.0 * np.log10(np.sqrt(np.mean(seg[:half]**2)) + 1e-12)
-            r2 = 20.0 * np.log10(np.sqrt(np.mean(seg[half:]**2)) + 1e-12)
-            rms_blocks.append(r)
-            rise_blocks.append(r2 - r1)
-
-        chromas = compute_section_chroma(mix_mono, sr, raw_grid)
-        ssm = np.dot(chromas, chromas.T)
-
-        avg_rms = float(np.mean(rms_blocks))
-        max_rms = float(np.max(rms_blocks))
-
-        chorus_scores = []
-        for i in range(len(raw_grid) - 1):
-            loudness_factor = max(0.0, (rms_blocks[i] - avg_rms) / max(1.0, max_rms - avg_rms))
-            loud_sims = [ssm[i, j] for j in range(len(raw_grid) - 1) if j != i and rms_blocks[j] >= avg_rms - 0.5]
-            rep_factor = float(np.mean(loud_sims)) if loud_sims else 0.0
-            chorus_scores.append(loudness_factor * 0.5 + rep_factor * 0.5)
-
-        is_chorus_block = [s >= 0.55 for s in chorus_scores]
-
-        i = 0
-        verse_count = 0
-        chorus_count = 0
-        while i < len(raw_grid) - 1:
-            t0 = raw_grid[i]
-            if i == 0:
-                sec_tag = "INTRO"
-                sec_type = "Intro"
-                sec_color = "#f59e0b"
-                step = 1
-            elif i >= len(raw_grid) - 2 and (rms_blocks[i] < avg_rms or rise_blocks[i] < -1.0):
-                sec_tag = "OUTRO"
-                sec_type = "Outro"
-                sec_color = "#64748b"
-                step = len(raw_grid) - 1 - i
-            elif is_chorus_block[i]:
-                chorus_count += 1
-                sec_tag = "CHORUS"
-                sec_type = f"Chorus {chorus_count}"
-                sec_color = "#e11d48"
-                step = 1
-                while i + step < len(raw_grid) - 1 and is_chorus_block[i + step]:
-                    step += 1
-            elif rise_blocks[i] > 1.0 or (i + 1 < len(raw_grid) - 1 and is_chorus_block[i + 1] and rms_blocks[i] < rms_blocks[i+1] - 1.0):
-                sec_tag = "PRECHORUS"
-                sec_type = "Pre-Chorus"
-                sec_color = "#fb923c"
-                step = 1
-            elif t0 >= duration_s * 0.60 and t0 <= duration_s * 0.85 and chorus_count >= 1:
-                chorus_sim = np.mean([ssm[i, c_idx] for c_idx in range(len(raw_grid) - 1) if is_chorus_block[c_idx]]) if any(is_chorus_block) else 0.0
-                if chorus_sim < 0.85:
-                    sec_tag = "BRIDGE"
-                    sec_type = "Bridge"
-                    sec_color = "#a855f7"
-                    step = 1
-                    while i + step < len(raw_grid) - 1 and not is_chorus_block[i + step] and step < 2:
-                        step += 1
-                else:
-                    verse_count += 1
-                    sec_tag = "VERSE"
-                    sec_type = f"Verse {verse_count}"
-                    sec_color = "#38bdf8"
-                    step = 1
-            else:
-                verse_count += 1
-                sec_tag = "VERSE"
-                sec_type = f"Verse {verse_count}"
-                sec_color = "#38bdf8"
-                step = 1
-                while i + step < len(raw_grid) - 1 and not is_chorus_block[i + step] and not (rise_blocks[i+step] > 1.0) and step < 2:
-                    step += 1
-
-            t1 = raw_grid[min(len(raw_grid) - 1, i + step)]
-            s_idx = int(t0 * sr)
-            e_idx = min(len(mix_mono), int(t1 * sr))
-            sec_dur = t1 - t0
-            bars_count = round(sec_dur / bar_s) if bar_s > 0 else 0
-
-            seg_mix = mix_mono[s_idx:e_idx]
-            seg_sd = sub_drums[s_idx:e_idx]
-            seg_sb = sub_bass[s_idx:e_idx]
-
-            r_mix = float(20.0 * np.log10(np.sqrt(np.mean(seg_mix**2) + 1e-12)))
-            r_sd = float(20.0 * np.log10(np.sqrt(np.mean(seg_sd**2) + 1e-12)))
-            r_sb = float(20.0 * np.log10(np.sqrt(np.mean(seg_sb**2) + 1e-12)))
-            pk_mix = float(20.0 * np.log10(np.max(np.abs(seg_mix)) + 1e-12))
-            crest_factor = float(pk_mix - r_mix)
-
-            k_in_sec = [int(k) for k in kick_peaks if s_idx <= k < e_idx]
-            k_count = len(k_in_sec)
-            k_density = float(k_count / max(1.0, sec_dur))
-            corr = (float(np.corrcoef(seg_sd, seg_sb)[0, 1]) if (len(seg_sd) > 0 and r_sd > -60.0 and r_sb > -60.0) else 0.0) if kick_bass_separate else None
-
-            sections.append({
-                "sec_type": sec_type, "sec_tag": sec_tag, "sec_color": sec_color,
-                "t0": t0, "t1": t1, "sec_dur": sec_dur, "bars_count": bars_count,
-                "s_idx": s_idx, "e_idx": e_idx, "r_mix": r_mix, "r_sd": r_sd, "r_sb": r_sb,
-                "pk_mix": pk_mix, "crest_factor": crest_factor, "corr": corr,
-                "k_in_sec": k_in_sec, "k_count": k_count, "k_density": k_density
-            })
-            i += step
+    counters = {}
+    for sd in seg["sections"]:
+        t0, t1 = sd["t0"], sd["t1"]
+        tag = sd["tag"]
+        counters[tag] = counters.get(tag, 0) + 1
+        s_idx = int(t0 * sr)
+        e_idx = min(len(mix_mono), int(t1 * sr))
+        sec_dur = t1 - t0
+        seg_mix = mix_mono[s_idx:e_idx]
+        seg_sd = sub_drums[s_idx:e_idx]
+        seg_sb = sub_bass[s_idx:e_idx]
+        r_mix = float(20.0 * np.log10(np.sqrt(np.mean(seg_mix**2) + 1e-12)))
+        r_sd = float(20.0 * np.log10(np.sqrt(np.mean(seg_sd**2) + 1e-12)))
+        r_sb = float(20.0 * np.log10(np.sqrt(np.mean(seg_sb**2) + 1e-12)))
+        pk_mix = float(20.0 * np.log10(np.max(np.abs(seg_mix)) + 1e-12)) if len(seg_mix) else -120.0
+        k_in_sec = [int(k) for k in kick_peaks if s_idx <= k < e_idx]
+        corr = (float(np.corrcoef(seg_sd, seg_sb)[0, 1]) if (len(seg_sd) > 0 and r_sd > -60.0 and r_sb > -60.0) else 0.0) if kick_bass_separate else None
+        sections.append({
+            "sec_type": f"{SECTION_NAMES.get(tag, tag.title())} {counters[tag]}", "sec_tag": tag,
+            "sec_color": SECTION_COLORS.get(tag, "#38bdf8"),
+            "t0": t0, "t1": t1, "sec_dur": sec_dur, "bars_count": sd["bars"],
+            "s_idx": s_idx, "e_idx": e_idx, "r_mix": r_mix, "r_sd": r_sd, "r_sb": r_sb,
+            "pk_mix": pk_mix, "crest_factor": float(pk_mix - r_mix), "corr": corr,
+            "k_in_sec": k_in_sec, "k_count": len(k_in_sec), "k_density": float(len(k_in_sec) / max(1.0, sec_dur)),
+            "boundary_strength": sd["boundary_strength"], "evidence": sd["evidence"],
+        })
+    # a single tag occurring once reads better without a number ("Intro", not "Intro 1")
+    for sx in sections:
+        if counters.get(sx["sec_tag"], 0) == 1:
+            sx["sec_type"] = SECTION_NAMES.get(sx["sec_tag"], sx["sec_tag"].title())
 
     # Build final standardized JSON structure for each section
     out_sections = []
@@ -865,6 +1067,8 @@ def build_provisional_track_map(
             "rejection_reasons": rejection_reasons,
             "policy_verdict": policy_verdict,
             "kicks_detail": kicks_detail,
+            "boundary_strength": s["boundary_strength"],
+            "evidence": s["evidence"],
         })
 
     m_tot, s_tot = divmod(int(duration_s), 60)
@@ -880,11 +1084,15 @@ def build_provisional_track_map(
         "total_kicks": len(kick_peaks),
         "total_kick_events": len(kick_peaks),
         "num_sections": len(out_sections),
+        "first_downbeat_s": seg["first_downbeat_s"],
         "genre": {
             "category": cat,
             "label": genre_label,
             "confidence": conf,
             "mode_applied": target_mode,
+            "structure_vocabulary": seg["vocabulary"],
+            "structure_note": seg["vocabulary_note"],
+            "four_on_floor": seg["four_on_floor"],
             "descriptors": desc
         },
         "sections": out_sections,

@@ -383,3 +383,29 @@ Browser check: modal opens without errors; no canned captions remain.
 - **Real case:** "Move! Move! Move!" (user's track). The 3.2.0 detector read **187 BPM**, and the first tempo v2 read **140**. Kick, body and snare bands put the beat at **93.75**. The bar (2.56 s) splits into 4 (94) or 3/6 (70/140), and triplet hats and shakers fed the summed signal toward 70/140.
 - **Fix:** the beat family comes from the summed signal (hats excluded). Each drum band (kick / body / snare) then scores the competing families by plain beat-lag autocorrelation, normalised per band. A rival family overrides only when ≥ 2 drum bands pick it and it scores higher. A rival that is an integer grouping of the beat (a 3/4 bar, a half-note) never overrides. A close rival (≥ 85 % of the score) is shown as the alternative tempo. "Move" → **93.4 BPM (or 70)**.
 - **Benchmark:** a triplet-shuffle style was added (3 tempos). Main set: acc1 **88 %**, acc2 **100 %**, shown **100 %** (n = 25). Held-out (36 random tempos): acc1 72 %, acc2 94 %, shown 97 %. Known miss: a shuffle at 88.3 reads as 132.5 with alt 106. Not tuned further, to avoid fitting the synthetic set.
+
+## 27. Track Map sections v2: downbeat grid, measured boundaries, measured labels
+
+- **Problem (measured):** sections came from a fixed 8/16-bar grid counted from t = 0, and the labels came from the section's position ("the 2nd section is a DROP"). On a ground-truth set (`bench/validate_sections.py`: 4 EDM and 3 song arrangements, some with a pickup before the first downbeat), 3.1 scored boundary F **0.22** (±0.5 s), 0.43 (±1 bar) and **27 %** correct labels. Held-out random arrangements: 0.29 / 24 %. Any pickup shifted every boundary.
+- **Fix (`detect_sections`):**
+  1. Bar grid anchored to the music: beat phase from the drum onsets; downbeat = the beat where spectral change and low-end onsets concentrate.
+  2. Per-bar features: 5 band levels, 4 onset densities, chroma.
+  3. Boundary novelty = max(Foote checkerboard on the bar self-similarity matrix, 4-bar block-mean change), peaks with prominence ≥ 0.12 (middle of a flat 0.08–0.12 plateau), ≥ 4 bars apart.
+  4. Absolute gate: a band changes ≥ 1.5 dB, or onset density ≥ 25 %, or 4-bar chroma cosine < 0.9. Without it a static track gets noise boundaries.
+  5. Breakdown edges measured directly: ≥ 4 bars with the 20–100 Hz level 8 dB below the track median.
+- **Labels from measurements:**
+  - *Energy vocabulary* (four-on-the-floor ratio ≥ 0.65). It uses the low end vs the time-weighted median, sustained bass between kicks (20th-percentile sub level), level vs the loudest section, and level rise. The roles are INTRO / GROOVE / BREAKDOWN / BUILDUP / DROP / OUTRO.
+  - *Song vocabulary.* Repetition clusters need the same chroma (cos ≥ 0.97) and the same band levels (≤ 2.5 dB RMS). A pre-chorus is a cluster sandwiched verse → P → chorus. The chorus is the end of the repeated chain.
+  - If no repeated chorus is measured, the map falls back to energy roles and says so (`structure_note`); it does not guess verse/chorus. The generic "SECTION" label is gone.
+- **Result:** main set boundary F **0.97** (±0.5 s), 0.99 (±1 bar), labels **99 %**. Held-out (20 random arrangements, never used for tuning): **0.91** / 0.94 / **92 %**.
+  - Known limits: a 4-bar pre-chorus right after a 16-bar verse can merge into it. Song-mode thresholds were tuned on synthetic songs only. On real songs, chroma similarity of true repeats is ~0.9, so repetition is often not found; the map then falls back to energy roles. Real hand-labelled songs are needed before relaxing it, because relaxing it on synthetic data dropped labels to 72 %.
+- **Edge behaviour (measured, kept as is):**
+  - The block novelty near the end compares a 4-bar window with a shorter one. Its rise towards the last bar line raises the right-hand peak base, which suppresses false boundaries inside long outros.
+  - It also hides a real change 4 bars before the end in a short song (`test_pop_song_ssm_structure`, now a strict xfail with the reason).
+  - Three edge treatments were tried: zeroing the last line, full windows only, and merging a partial last bar. All three lowered the benchmark (main 0.97 → 0.86–0.92 boundary F; held-out labels 92 % → 81–84 %), so none was kept.
+  - The trailing-bar onset density is now computed from the real partial bar (it used to be 0.0 by accident). Tracks shorter than 8 bars are one "CLIP" (this removed 20 empty-slice warnings).
+- **Each section now carries** `boundary_strength` (the novelty at its start) and `evidence` (level vs loudest, low end vs median, bass present, level rise, repeat group). The UI shows them on the cards and in the PNG.
+- **UI:** narrow blocks show 3-letter tags (INT/GRV/BRK/BLD/DRP/OUT/VRS/PRE/CHR/BRG) with the full name in the tooltip. The legend lists only the tags present. Time labels are dropped instead of cut mid-word. The title is 3.2.
+- **Tests:** `tests/test_sections_ground_truth.py`. `tests/test_genre_track_map.py` was updated:
+  - the techno test signal is one 3-minute groove, so the map must NOT invent an INTRO / DROP / BREAKDOWN (3.1 reported 9 sectors);
+  - the pop test now checks that the choruses are where the map says CHORUS.

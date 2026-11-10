@@ -2997,18 +2997,19 @@ function openMasteringReportModal() {
         const sIdx = s.sec_index || s.section_index || 1;
         const durS = s.duration_s || 1.0;
         const c = s.color || '#0ea5e9';
-        const tag = s.sec_tag || s.tag || 'SECTION';
+        const frac = durS / dur;
+        const tag = tmTagFor(s, frac);
         const timeStr = s.time_str || (s.start_str && s.end_str ? `${s.start_str} - ${s.end_str}` : `${(s.start_s||0).toFixed(1)}s`);
-        return `<div onclick="inspectTrackMapSection(${sIdx})" title="${s.name}: ${timeStr} (Click to inspect)" style="flex:${durS}; border:1px solid ${c}; border-radius:3px; background:linear-gradient(180deg, ${c}33 0%, ${c}11 100%); display:flex; flex-direction:column; align-items:center; justify-content:center; padding:3px 2px; overflow:hidden; min-width:24px; cursor:pointer; transition:all 0.15s ease;" onmouseover="this.style.boxShadow='0 0 10px ${c}'; this.style.borderColor='#fff';" onmouseout="this.style.boxShadow='none'; this.style.borderColor='${c}';">
+        return `<div onclick="inspectTrackMapSection(${sIdx})" title="${s.name}: ${timeStr} — ${tmEvidenceText(s)} (click to inspect)" style="flex:${durS}; border:1px solid ${c}; border-radius:3px; background:linear-gradient(180deg, ${c}33 0%, ${c}11 100%); display:flex; flex-direction:column; align-items:center; justify-content:center; padding:3px 2px; overflow:hidden; min-width:24px; cursor:pointer; transition:all 0.15s ease;" onmouseover="this.style.boxShadow='0 0 10px ${c}'; this.style.borderColor='#fff';" onmouseout="this.style.boxShadow='none'; this.style.borderColor='${c}';">
           <span style="font-size:9.5px; font-weight:bold; color:${c}; font-family:var(--font-mono);">${tag}</span>
-          <span style="font-size:8.5px; color:#cbd5e1; font-family:var(--font-mono);">${timeStr}</span>
+          ${frac >= 0.05 ? `<span style="font-size:8.5px; color:#cbd5e1; font-family:var(--font-mono); white-space:nowrap;">${timeStr}</span>` : ''}
         </div>`;
       }).join('');
 
       const cards = tm.sections.map(s => {
         const c = s.color || '#0ea5e9';
         const sIdx = s.sec_index || s.section_index || 1;
-        const tag = s.sec_tag || s.tag || 'SECTION';
+        const tag = s.sec_tag || s.tag || '';
         const timeStr = s.time_str || (s.start_str && s.end_str ? `${s.start_str} - ${s.end_str}` : `${(s.start_s||0).toFixed(1)}s`);
         const kCnt = (s.kick_events_count !== undefined) ? s.kick_events_count : (s.kicks_count || 0);
         const acc = s.events_accepted || 0;
@@ -3022,14 +3023,15 @@ function openMasteringReportModal() {
         return `<div onclick="inspectTrackMapSection(${sIdx})" title="Click to enlarge & inspect section" style="background:#090c13; border:1px solid #1a2233; border-top:3px solid ${c}; border-radius:6px; padding:8px 10px; font-family:var(--font-mono); cursor:pointer; transition:all 0.2s ease; user-select:none;" onmouseover="this.style.transform='translateY(-2px)'; this.style.borderColor='${c}'; this.style.boxShadow='0 4px 14px ${c}33';" onmouseout="this.style.transform='translateY(0)'; this.style.borderColor='#1a2233'; this.style.borderTopColor='${c}'; this.style.boxShadow='none';">
           <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #161e2e; padding-bottom:4px; margin-bottom:6px;">
             <span style="background:${c}26; color:${c}; border:1px solid ${c}66; border-radius:3px; padding:2px 5px; font-size:8.5px; font-weight:bold; letter-spacing:0.5px;">${tag}</span>
-            <span style="font-size:10.5px; font-weight:bold; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:95px;">${nameClean}</span>
+            <span style="font-size:10.5px; font-weight:bold; color:#fff; white-space:nowrap; flex:1; text-align:center; padding:0 4px;">${nameClean}</span>
             <span style="font-size:9px; color:#94a3b8;">${timeStr}</span>
           </div>
           <div style="font-size:9.5px; display:flex; justify-content:space-between; margin-bottom:3px;"><span style="color:#64748b;">CREST:</span><span style="color:#fff; font-weight:bold;">${crest} dB</span></div>
           <div style="font-size:9.5px; display:flex; justify-content:space-between; margin-bottom:3px;"><span style="color:#64748b;">PEAK / RMS:</span><span>${pk} / ${rms}</span></div>
           <div style="font-size:9.5px; display:flex; justify-content:space-between; margin-bottom:3px;"><span style="color:#64748b;">KICKS / PHASE:</span><span style="color:${lockColor}; font-weight:bold;">${lockStat}</span></div>
           <div style="font-size:9.5px; display:flex; justify-content:space-between; margin-bottom:3px;"><span style="color:#64748b;">SUB-CORRELATION:</span><span style="color:#38bdf8;">${(typeof s.sub_correlation_r === 'number') ? s.sub_correlation_r.toFixed(2) + ' r' : '-- (stems only)'}</span></div>
-          <div style="font-size:8.5px; color:${c}; margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">▪ ${s.policy_verdict || ''}</div>
+          <div style="font-size:9px; color:#94a3b8; margin-top:3px;">${tmEvidenceText(s)}</div>
+          <div style="font-size:8.5px; color:${c}; margin-top:3px;">▪ ${s.policy_verdict || ''}</div>
         </div>`;
       }).join('');
 
@@ -3038,22 +3040,17 @@ function openMasteringReportModal() {
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; font-family:var(--font-mono); flex-wrap:wrap; gap:6px;">
             <div style="display:flex; align-items:center; gap:6px;">
               <span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:#10b981; box-shadow:0 0 6px #10b981;"></span>
-              <span style="font-size:10.5px; font-weight:bold; color:#fff; letter-spacing:1px;">PHARMAKON 3.0 TRACK INTELLIGENCE MAP</span>
+              <span style="font-size:10.5px; font-weight:bold; color:#fff; letter-spacing:1px;">PHARMAKON 3.2 TRACK INTELLIGENCE MAP</span>
               <span style="font-size:9.5px; color:#64748b;">${Number(bpmVal).toFixed(1)} BPM${tm.tempo_alt_bpm ? ` (or ${Number(tm.tempo_alt_bpm).toFixed(1)})` : ''} · 4/4 · ${tm.sections.length} SECTORS</span>
             </div>
             <div style="display:flex; gap:6px; font-size:8.5px; font-weight:bold;">
-              <span style="color:#f59e0b;">■ INTRO</span>
-              <span style="color:#f43f5e;">■ DROP</span>
-              <span style="color:#0ea5e9;">■ GROOVE</span>
-              <span style="color:#6366f1;">■ INTERLUDE</span>
-              <span style="color:#10b981;">■ BREAK</span>
-              <span style="color:#f97316;">■ BUILDUP</span>
-              <span style="color:#a855f7;">■ OUTRO</span>
+              ${tmLegendHtml(tm)}
             </div>
           </div>
           <div style="display:flex; height:34px; gap:2px; background:#04060a; border:1px solid #141b27; border-radius:4px; padding:2px; margin-bottom:8px;">
             ${segs}
           </div>
+          ${(tm.genre && tm.genre.structure_note) ? `<div style="font-size:9px; color:#f59e0b; font-family:var(--font-mono); margin-bottom:6px;">${tm.genre.structure_note}</div>` : ''}
           <div id="tmSectionInspector"></div>
           <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:8px;">
             ${cards}
@@ -3138,6 +3135,27 @@ function openReportInNewTab() {
 
 let activeInspectedSection = null;
 
+// --- Track map labels (3.2): short tags for narrow blocks, legend from the tags present ---
+const TM_SHORT_TAG = { INTRO: 'INT', OUTRO: 'OUT', BREAKDOWN: 'BRK', BUILDUP: 'BLD', DROP: 'DRP', GROOVE: 'GRV',
+  VERSE: 'VRS', PRECHORUS: 'PRE', CHORUS: 'CHR', BRIDGE: 'BRG' };
+function tmTagFor(s, frac) {
+  const tag = s.sec_tag || s.tag || '';
+  return (frac < 0.075 && TM_SHORT_TAG[tag]) ? TM_SHORT_TAG[tag] : tag;
+}
+function tmLegendHtml(tm) {
+  const seen = [];
+  (tm.sections || []).forEach(s => { const t = s.sec_tag || s.tag; if (t && !seen.find(x => x[0] === t)) seen.push([t, s.color || '#0ea5e9']); });
+  return seen.map(([t, c]) => `<span style="color:${c};">■ ${t}</span>`).join('');
+}
+function tmEvidenceText(s) {
+  const e = s.evidence || {};
+  const parts = [];
+  if (typeof s.boundary_strength === 'number') parts.push(`boundary ${Math.round(s.boundary_strength * 100)}%`);
+  if (typeof e.low_end_vs_median_db === 'number') parts.push(`low end ${e.low_end_vs_median_db >= 0 ? '+' : ''}${e.low_end_vs_median_db.toFixed(1)} dB`);
+  if (typeof e.level_vs_loudest_db === 'number') parts.push(`level ${e.level_vs_loudest_db.toFixed(1)} dB`);
+  return parts.join(' · ');
+}
+
 function inspectTrackMapSection(secIdx) {
   const tm = lastMetrics?.track_map || (lastMetrics?.sub_sync_summary && lastMetrics?.sub_sync_summary.track_map);
   if (!tm || !tm.sections) return;
@@ -3149,7 +3167,7 @@ function inspectTrackMapSection(secIdx) {
   if (!inspector) return;
 
   const c = s.color || '#0ea5e9';
-  const tag = s.sec_tag || s.tag || 'SECTION';
+  const tag = s.sec_tag || s.tag || '';
   const timeStr = s.time_str || (s.start_str && s.end_str ? `${s.start_str} - ${s.end_str}` : `${(s.start_s||0).toFixed(1)}s`);
   const kCnt = (s.kick_events_count !== undefined) ? s.kick_events_count : (s.kicks_count || 0);
   const acc = s.events_accepted || 0;
@@ -3275,7 +3293,7 @@ async function downloadReportPNG() {
   const diagY = tilesY + 2 * tileH + tileGap + 20;
   const tm = m.track_map || (m.sub_sync_summary && m.sub_sync_summary.track_map);
   const tmSecs = (tm && Array.isArray(tm.sections)) ? tm.sections : [];
-  const TM_COLS = 4, TM_CARD_H = 112, TM_GAP = 10;
+  const TM_COLS = 4, TM_CARD_H = 127, TM_GAP = 10;
   const tmRows = Math.ceil(tmSecs.length / TM_COLS);
   const tmH = tmSecs.length ? 34 + 44 + tmRows * (TM_CARD_H + TM_GAP) + 6 : 0;
   const tmY = diagY + diagH + (diagH ? 16 : 0);
@@ -3429,7 +3447,7 @@ async function downloadReportPNG() {
     ctx.fillStyle = '#64748b';
     ctx.font = '11px monospace';
     ctx.fillText(`${bpm ? Number(bpm).toFixed(1) + ' BPM' + (tm.tempo_alt_bpm ? ` (or ${Number(tm.tempo_alt_bpm).toFixed(1)})` : '') + ' \u2022 ' : ''}${tmSecs.length} SECTORS \u2022 ${Number(tm.total_duration_s || 0).toFixed(1)} s`, PAD + 210, tmY + 22);
-    const secLabel = (sx) => sx.sec_tag || sx.tag || 'SECTION';
+    const secLabel = (sx) => sx.sec_tag || sx.tag || '';
     const secTime = (sx) => sx.time_str || ((sx.start_str && sx.end_str) ? `${sx.start_str}-${sx.end_str}` : `${Number(sx.start_s || 0).toFixed(1)}s`);
     // proportional sections bar
     const barX = PAD + 14, barY = tmY + 34, barW = INNER - 28, barH = 34;
@@ -3442,12 +3460,13 @@ async function downloadReportPNG() {
       ctx.fillRect(bx, barY, w - 2, barH);
       ctx.strokeStyle = c;
       ctx.strokeRect(bx, barY, w - 2, barH);
-      if (w > 46) {
-        ctx.fillStyle = c; ctx.font = 'bold 9px monospace';
-        ctx.fillText(secLabel(sx).slice(0, Math.floor(w / 7)), bx + 4, barY + 14);
-        ctx.fillStyle = '#cbd5e1'; ctx.font = '9px monospace';
-        ctx.fillText(secTime(sx).slice(0, Math.floor(w / 6)), bx + 4, barY + 27);
-      }
+      // whole words only: full tag if it fits, else its 3-letter short form; time only if it fits
+      ctx.fillStyle = c; ctx.font = 'bold 9px monospace';
+      const full = secLabel(sx), short = TM_SHORT_TAG[full] || full;
+      const lab = (ctx.measureText(full).width + 8 <= w) ? full : ((ctx.measureText(short).width + 6 <= w) ? short : '');
+      if (lab) ctx.fillText(lab, bx + 4, barY + 14);
+      ctx.fillStyle = '#cbd5e1'; ctx.font = '9px monospace';
+      if (ctx.measureText(secTime(sx)).width + 8 <= w) ctx.fillText(secTime(sx), bx + 4, barY + 27);
       bx += w;
     });
     // section cards
@@ -3472,6 +3491,7 @@ async function downloadReportPNG() {
         ['PEAK / RMS', `${num(sx.peak_mix_dbfs !== undefined ? sx.peak_mix_dbfs : sx.peak_dbfs, 1)} / ${num(sx.rms_mix_dbfs, 1)} dBFS`],
         ['KICKS / PHASE', (acc + rej > 0) ? `${acc} / ${kCnt} locked` : `${kCnt} kicks`],
         ['KICK-BASS CORR', (typeof sx.sub_correlation_r === 'number') ? `${sx.sub_correlation_r.toFixed(2)} r` : '-- (stems only)'],
+        ['BOUNDARY / LOW END', `${typeof sx.boundary_strength === 'number' ? Math.round(sx.boundary_strength * 100) + '%' : '--'} / ${sx.evidence && typeof sx.evidence.low_end_vs_median_db === 'number' ? (sx.evidence.low_end_vs_median_db >= 0 ? '+' : '') + sx.evidence.low_end_vs_median_db.toFixed(1) + ' dB' : '--'}`],
       ];
       rowsTxt.forEach(([k, v], j) => {
         const yy = cy + 40 + j * 15;

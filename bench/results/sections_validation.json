@@ -1,0 +1,362 @@
+{
+ "mean": {
+  "hr05": 0.9700680272108845,
+  "hr3": 0.9904761904761905,
+  "bar_f": 0.9904761904761905,
+  "label_acc": 0.9869940695203085,
+  "generic": 0.0
+ },
+ "rows": [
+  {
+   "hr05": 1.0,
+   "hr3": 1.0,
+   "bar_f": 1.0,
+   "label_acc": 1.0,
+   "generic": 0.0,
+   "n_est": 6,
+   "n_ref": 6,
+   "name": "edm_classic",
+   "est_tags": [
+    "INTRO",
+    "GROOVE",
+    "BREAKDOWN",
+    "BUILDUP",
+    "DROP",
+    "OUTRO"
+   ],
+   "est_starts": [
+    0.0,
+    30.0,
+    60.0,
+    90.0,
+    105.0,
+    165.0
+   ],
+   "ref_tags": [
+    "INTRO",
+    "GROOVE",
+    "BREAKDOWN",
+    "BUILDUP",
+    "DROP",
+    "OUTRO"
+   ],
+   "ref_starts": [
+    0.0,
+    30.0,
+    60.0,
+    90.0,
+    105.0,
+    165.0
+   ],
+   "bpm_est": 128.0
+  },
+  {
+   "hr05": 1.0,
+   "hr3": 1.0,
+   "bar_f": 1.0,
+   "label_acc": 0.9979814291481631,
+   "generic": 0.0,
+   "n_est": 9,
+   "n_ref": 9,
+   "name": "edm_pickup",
+   "est_tags": [
+    "INTRO",
+    "GROOVE",
+    "BREAKDOWN",
+    "BUILDUP",
+    "DROP",
+    "BREAKDOWN",
+    "BUILDUP",
+    "DROP",
+    "OUTRO"
+   ],
+   "est_starts": [
+    0.0,
+    31.7,
+    93.6,
+    109.1,
+    124.6,
+    155.5,
+    171.0,
+    186.5,
+    217.5
+   ],
+   "ref_tags": [
+    "INTRO",
+    "GROOVE",
+    "BREAKDOWN",
+    "BUILDUP",
+    "DROP",
+    "BREAKDOWN",
+    "BUILDUP",
+    "DROP",
+    "OUTRO"
+   ],
+   "ref_starts": [
+    0.7,
+    31.7,
+    93.6,
+    109.1,
+    124.6,
+    155.6,
+    171.1,
+    186.5,
+    217.5
+   ],
+   "bpm_est": 124.0
+  },
+  {
+   "hr05": 0.8571428571428571,
+   "hr3": 1.0,
+   "bar_f": 1.0,
+   "label_acc": 0.9880239520958084,
+   "generic": 0.0,
+   "n_est": 8,
+   "n_ref": 8,
+   "name": "edm_short_intro",
+   "est_tags": [
+    "INTRO",
+    "GROOVE",
+    "BUILDUP",
+    "DROP",
+    "BREAKDOWN",
+    "BUILDUP",
+    "DROP",
+    "OUTRO"
+   ],
+   "est_starts": [
+    0.0,
+    15.8,
+    43.6,
+    57.5,
+    85.3,
+    114.9,
+    127.1,
+    154.9
+   ],
+   "ref_tags": [
+    "INTRO",
+    "GROOVE",
+    "BUILDUP",
+    "DROP",
+    "BREAKDOWN",
+    "BUILDUP",
+    "DROP",
+    "OUTRO"
+   ],
+   "ref_starts": [
+    1.9,
+    15.8,
+    43.6,
+    57.6,
+    85.4,
+    113.2,
+    127.1,
+    154.9
+   ],
+   "bpm_est": 138.0
+  },
+  {
+   "hr05": 1.0,
+   "hr3": 1.0,
+   "bar_f": 1.0,
+   "label_acc": 0.9996181748759069,
+   "generic": 0.0,
+   "n_est": 5,
+   "n_ref": 5,
+   "name": "techno_long",
+   "est_tags": [
+    "INTRO",
+    "GROOVE",
+    "BREAKDOWN",
+    "DROP",
+    "OUTRO"
+   ],
+   "est_starts": [
+    0.0,
+    58.1,
+    116.3,
+    145.4,
+    203.6
+   ],
+   "ref_tags": [
+    "INTRO",
+    "GROOVE",
+    "BREAKDOWN",
+    "DROP",
+    "OUTRO"
+   ],
+   "ref_starts": [
+    0.0,
+    58.2,
+    116.4,
+    145.5,
+    203.6
+   ],
+   "bpm_est": 132.0
+  },
+  {
+   "hr05": 1.0,
+   "hr3": 1.0,
+   "bar_f": 1.0,
+   "label_acc": 1.0,
+   "generic": 0.0,
+   "n_est": 10,
+   "n_ref": 10,
+   "name": "pop_basic",
+   "est_tags": [
+    "INTRO",
+    "VERSE",
+    "PRECHORUS",
+    "CHORUS",
+    "VERSE",
+    "PRECHORUS",
+    "CHORUS",
+    "BRIDGE",
+    "CHORUS",
+    "OUTRO"
+   ],
+   "est_starts": [
+    0.0,
+    9.6,
+    28.8,
+    38.4,
+    57.6,
+    76.8,
+    86.4,
+    105.6,
+    124.8,
+    144.0
+   ],
+   "ref_tags": [
+    "INTRO",
+    "VERSE",
+    "PRECHORUS",
+    "CHORUS",
+    "VERSE",
+    "PRECHORUS",
+    "CHORUS",
+    "BRIDGE",
+    "CHORUS",
+    "OUTRO"
+   ],
+   "ref_starts": [
+    0.0,
+    9.6,
+    28.8,
+    38.4,
+    57.6,
+    76.8,
+    86.4,
+    105.6,
+    124.8,
+    144.0
+   ],
+   "bpm_est": 100.0
+  },
+  {
+   "hr05": 0.9333333333333333,
+   "hr3": 0.9333333333333333,
+   "bar_f": 0.9333333333333333,
+   "label_acc": 0.9233349305222808,
+   "generic": 0.0,
+   "n_est": 9,
+   "n_ref": 8,
+   "name": "pop_pickup",
+   "est_tags": [
+    "INTRO",
+    "VERSE",
+    "VERSE",
+    "CHORUS",
+    "VERSE",
+    "CHORUS",
+    "BRIDGE",
+    "CHORUS",
+    "OUTRO"
+   ],
+   "est_starts": [
+    0.0,
+    6.3,
+    21.9,
+    63.7,
+    84.5,
+    105.4,
+    126.3,
+    147.1,
+    188.9
+   ],
+   "ref_tags": [
+    "INTRO",
+    "VERSE",
+    "CHORUS",
+    "VERSE",
+    "CHORUS",
+    "BRIDGE",
+    "CHORUS",
+    "OUTRO"
+   ],
+   "ref_starts": [
+    1.1,
+    22.0,
+    63.7,
+    84.6,
+    105.4,
+    126.3,
+    147.2,
+    188.9
+   ],
+   "bpm_est": 92.0
+  },
+  {
+   "hr05": 1.0,
+   "hr3": 1.0,
+   "bar_f": 1.0,
+   "label_acc": 1.0,
+   "generic": 0.0,
+   "n_est": 8,
+   "n_ref": 8,
+   "name": "pop_fast",
+   "est_tags": [
+    "INTRO",
+    "VERSE",
+    "CHORUS",
+    "VERSE",
+    "CHORUS",
+    "BRIDGE",
+    "CHORUS",
+    "OUTRO"
+   ],
+   "est_starts": [
+    0.0,
+    8.4,
+    24.4,
+    40.4,
+    56.4,
+    72.4,
+    80.4,
+    96.4
+   ],
+   "ref_tags": [
+    "INTRO",
+    "VERSE",
+    "CHORUS",
+    "VERSE",
+    "CHORUS",
+    "BRIDGE",
+    "CHORUS",
+    "OUTRO"
+   ],
+   "ref_starts": [
+    0.4,
+    8.4,
+    24.4,
+    40.4,
+    56.4,
+    72.4,
+    80.4,
+    96.4
+   ],
+   "bpm_est": 120.0
+  }
+ ]
+}
