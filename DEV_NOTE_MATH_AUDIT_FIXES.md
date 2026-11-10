@@ -423,3 +423,9 @@ Browser check: modal opens without errors; no canned captions remain.
   - In a dense full mix the count stays an **estimate**: the map sets `kicks_source = "mix_estimate"` and the UI, PNG and HTML label it "KICKS (EST.)". With a drum stem the count comes from the stem.
 - **Tried and rejected:** a pitch-sweep test (zero-crossing frequency of the first 20 ms vs 40–80 ms; kicks 1.6–2.5×, bass ≈ 1.1×). On real mixes it removed true kicks: recall 0.68 / 0.13 / 0.16.
 - **Genre family** now comes from the same measurement as the section vocabulary: low-end onset evenness over the 4 beat positions (≥ 0.65 = four-on-the-floor). The 3.1 rule used the kick count, which a sustained bass under the kick can hide (the static-techno test).
+
+## 29. Live-patched 3.0 clients lost the Track Map
+
+Verified end to end on a clean copy of the 3.0.0 portable build. It auto-updates from master to 3.2.0 and the 6 patched files are byte-identical to master. Processing works (Clean Chain 3.2, −1.19 dBTP, master and report written), but the Track Map was missing. The 3.0 updater can live-patch `remaster_engine.py` and the GUI, not `track_map_engine.py`, so the new engine called the bundled 3.0 map, which failed with `name 'phrase_8' is not defined` (caught and logged as a warning).
+
+**Fix:** `remaster_engine._track_map_module()` uses the loaded `track_map_engine` only if it has sections v2 (`detect_sections`). Otherwise it loads the `track_map_engine.py` patched in next to `remaster_engine.py`. Re-checked on the same 3.0 copy: map present (131.1 BPM, 12 sections, kicks labelled as a mix estimate). `remaster_engine.py` changed, so it needs a re-signed manifest (see the release tool fix).

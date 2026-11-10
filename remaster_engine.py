@@ -1941,6 +1941,38 @@ def resolve_sub_sync_config(params=None):
     }
 
 
+def _track_map_module():
+    """
+    The Track Map engine that matches this remaster_engine.
+
+    Frozen 3.0.x builds live-patch remaster_engine.py and the GUI but keep their bundled
+    3.0 track_map_engine (the 3.0 updater cannot swap that module). The patched engine
+    then called the old map and lost it ("name 'phrase_8' is not defined"). If the loaded
+    module predates sections v2, load the track_map_engine.py that was patched in next
+    to this file instead.
+    """
+    import importlib
+    import importlib.util
+    tm = sys.modules.get("track_map_engine")
+    if tm is None:
+        try:
+            tm = importlib.import_module("track_map_engine")
+        except Exception:
+            tm = None
+    if tm is not None and hasattr(tm, "detect_sections"):
+        return tm
+    cand = os.path.join(os.path.dirname(os.path.abspath(__file__)), "track_map_engine.py")
+    if os.path.exists(cand):
+        spec = importlib.util.spec_from_file_location("track_map_engine", cand)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        sys.modules["track_map_engine"] = mod
+        return mod
+    if tm is None:
+        raise ImportError("track_map_engine not available")
+    return tm
+
+
 def process_audio_array(audio, sr, params=None):
     """
     Processes stereo audio in-memory through the full PHARMAKON DSP mastering chain:
@@ -3470,8 +3502,7 @@ def process_single_file(file_path, params=None, open_folder=True):
 
     full_mix, metrics = process_audio_array(audio, sr, params)
     try:
-        from track_map_engine import build_provisional_track_map
-        metrics['track_map'] = build_provisional_track_map(audio, sr=sr)
+        metrics['track_map'] = _track_map_module().build_provisional_track_map(audio, sr=sr)
     except Exception as tm_err:
         print(f"[WARN] Track Map build error for single file: {tm_err}")
 
@@ -3626,7 +3657,7 @@ def process_stems_folder(target_folder, params=None, open_folder=True):
         print("      Sub-Sync: Bypass (Disabled by user configuration)")
     elif effective_mode in ('limiter_aware', 'local_guard'):
         try:
-            from track_map_engine import process_local_sub_sync
+            process_local_sub_sync = _track_map_module().process_local_sub_sync
             bass_proc, sync_summary, _ = process_local_sub_sync(
                 drums_stereo=drums_proc,
                 bass_stereo=bass_proc,
@@ -3792,8 +3823,7 @@ def process_stems_folder(target_folder, params=None, open_folder=True):
         metrics['track_map'] = sub_sync_summary_result['track_map']
     else:
         try:
-            from track_map_engine import build_provisional_track_map
-            metrics['track_map'] = build_provisional_track_map(raw_sum, sr=sr)
+            metrics['track_map'] = _track_map_module().build_provisional_track_map(raw_sum, sr=sr)
         except Exception as tm_err:
             print(f"[WARN] Track Map build error: {tm_err}")
 
