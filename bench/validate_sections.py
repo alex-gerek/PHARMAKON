@@ -72,7 +72,7 @@ def _env(n, tau):
     return np.exp(-np.arange(n) / (tau * SR))
 
 
-def render(kind, bpm, pickup_s, plan, seed=0, sr=SR):
+def render(kind, bpm, pickup_s, plan, seed=0, sr=SR, return_kicks=False):
     rng = np.random.default_rng(seed)
     beat = 60.0 / bpm
     bar = 4 * beat
@@ -93,6 +93,7 @@ def render(kind, bpm, pickup_s, plan, seed=0, sr=SR):
             x[i:i + m] += g * s[:m]
 
     layers_tab = EDM_LAYERS if kind == "edm" else SONG_LAYERS
+    kick_times = []
     truth = []
     t_bar = pickup_s
     bar_idx = 0
@@ -126,6 +127,7 @@ def render(kind, bpm, pickup_s, plan, seed=0, sr=SR):
                 iq = i0 + int(q * beat * sr)
                 if L.get("kick") and (kind == "edm" or q in (0, 2)):
                     add(iq, kick)
+                    kick_times.append(iq / sr)
                 if L.get("hat"):
                     add(iq + int(beat / 2 * sr), hat)
                 if L.get("clap") and q in (1, 3):
@@ -141,6 +143,8 @@ def render(kind, bpm, pickup_s, plan, seed=0, sr=SR):
         add(int((pickup_s - beat) * sr), clap, 0.5)
     x += 0.002 * rng.standard_normal(n)
     x = x / np.max(np.abs(x)) * 0.8
+    if return_kicks:
+        return np.column_stack([x, x]).astype(np.float32), truth, bar, np.array(kick_times)
     return np.column_stack([x, x]).astype(np.float32), truth, bar
 
 

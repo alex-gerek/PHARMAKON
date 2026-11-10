@@ -409,3 +409,17 @@ Browser check: modal opens without errors; no canned captions remain.
 - **Tests:** `tests/test_sections_ground_truth.py`. `tests/test_genre_track_map.py` was updated:
   - the techno test signal is one 3-minute groove, so the map must NOT invent an INTRO / DROP / BREAKDOWN (3.1 reported 9 sectors);
   - the pop test now checks that the choruses are where the map says CHORUS.
+
+## 28. Kick counting in the Track Map (full mix)
+
+- **Problem (measured):** per-section "kicks" were peaks of the |< 100 Hz| envelope at least 0.2 s apart, so bass notes counted as kicks and the time was the envelope peak, not the attack. Real example: "Groove 4" of Club Impact showed 326 kicks in 83 s at 131 BPM (≈ 180 beats). On ground truth (`bench/validate_kicks.py`, every kick sample known) 3.1 scored **F 0.16** (±30 ms) and counted **2.25×** the true number.
+- **Fix (`detect_kick_onsets`):**
+  - A kick is an ≥ 8 dB rise of the 40–200 Hz level within 20 ms that reaches within 15 dB of the track's loud low end.
+  - One kick can show two rises (its pitch sweep beats against the bass note), so rises within 150 ms are one kick.
+  - The onset is where the level first reaches peak − 10 dB. Zero-phase filtering pre-rings, so "first rise above the floor" came 35–90 ms early.
+- **Result:** synthetic **F 0.98**, count ×1.03; held-out F 0.99, ×1.01.
+- **Real music**, against the kicks of the isolated drum stem (Gravity / Bronze Psalter / Vector Pulse, ±60 ms): **0.70 / 0.54 / 0.36**; 3.1 scored 0.04 / 0.38 / 0.36.
+  - A lower rise threshold helps dense real mixes and hurts clean ones; the real-music mean is flat (0.53–0.55 for 4–8 dB), so 8 dB is kept.
+  - In a dense full mix the count stays an **estimate**: the map sets `kicks_source = "mix_estimate"` and the UI, PNG and HTML label it "KICKS (EST.)". With a drum stem the count comes from the stem.
+- **Tried and rejected:** a pitch-sweep test (zero-crossing frequency of the first 20 ms vs 40–80 ms; kicks 1.6–2.5×, bass ≈ 1.1×). On real mixes it removed true kicks: recall 0.68 / 0.13 / 0.16.
+- **Genre family** now comes from the same measurement as the section vocabulary: low-end onset evenness over the 4 beat positions (≥ 0.65 = four-on-the-floor). The 3.1 rule used the kick count, which a sustained bass under the kick can hide (the static-techno test).

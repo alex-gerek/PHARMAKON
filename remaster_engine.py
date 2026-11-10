@@ -2256,6 +2256,8 @@ def generate_track_map_html(track_map, target_path=""):
         if _t and _t not in [t for t, _ in _seen_tags]:
             _seen_tags.append((_t, _s.get('color', tag_colors.get(_t, '#38bdf8'))))
     legend_html = "".join(f'<span class="tm-legend-chip" style="color:{c};">&#9632; {t}</span>' for t, c in _seen_tags)
+    kicks_est = track_map.get('kicks_source') == 'mix_estimate'
+    kick_lbl = "KICKS (EST.)" if kicks_est else "KICKS / PHASE"
     _alt = track_map.get('tempo_alt_bpm')
     alt_txt = f" (or {_alt:.1f})" if isinstance(_alt, (int, float)) else ""
 
@@ -2303,7 +2305,7 @@ def generate_track_map_html(track_map, target_path=""):
                 <span class="tm-val">{s.get('peak_dbfs', 0.0):.1f} / {s.get('rms_mix_dbfs', 0.0):.1f} dBFS</span>
               </div>
               <div class="tm-grid-row">
-                <span class="tm-lbl">KICKS / PHASE</span>
+                <span class="tm-lbl">{kick_lbl}</span>
                 <span class="tm-val" style="color:{lock_color}; font-weight:700;">{lock_stat}</span>
               </div>
               <div class="tm-grid-row">
@@ -2332,7 +2334,7 @@ def generate_track_map_html(track_map, target_path=""):
           <div>
             <div style="font-size:12px; font-weight:800; letter-spacing:1.5px; color:#fff; font-family:monospace;">PHARMAKON 3.2 TRACK INTELLIGENCE MAP</div>
             <div style="font-size:10px; font-family:monospace; color:#94a3b8; margin-top:2px;">
-              TEMPO: <span style="color:#38bdf8;">{bpm:.1f} BPM{alt_txt}</span> &bull; RHYTHM MESH: <span style="color:#fff;">4/4</span> &bull; PHRASE SECTORS: <span style="color:#f59e0b;">{len(sections)}</span> &bull; TOTAL DURATION: <span style="color:#fff;">{dur:.1f}s</span> ({total_kicks} KICKS)
+              TEMPO: <span style="color:#38bdf8;">{bpm:.1f} BPM{alt_txt}</span> &bull; RHYTHM MESH: <span style="color:#fff;">4/4</span> &bull; PHRASE SECTORS: <span style="color:#f59e0b;">{len(sections)}</span> &bull; TOTAL DURATION: <span style="color:#fff;">{dur:.1f}s</span> ({total_kicks} {"KICKS, MIX ESTIMATE" if kicks_est else "KICKS"})
             </div>
           </div>
         </div>

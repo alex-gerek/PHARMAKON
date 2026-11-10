@@ -867,6 +867,53 @@ def detect_sections(mono: np.ndarray, sr: int, bpm: float, vocabulary: str = "au
             "bar_s": bar_s}
 
 
+# ---------------------------------------------------------------------------
+# Kick onsets (3.2). The 3.1 counter took peaks of the |<100 Hz| envelope 0.2 s apart:
+# bass notes counted as kicks and the time was the envelope peak, not the attack.
+# Ground truth (bench/validate_kicks.py): 3.1 F 0.16 with 2.25x the true count;
+# this F 0.98 (count x1.03), held-out F 0.99. Real music, against kicks of the isolated
+# drum stem (3 stem sets): F 0.70 / 0.54 / 0.36 vs 3.1 0.04 / 0.38 / 0.36 (+-60 ms).
+# In a dense full mix the count is an estimate; the UI says so.
+# ---------------------------------------------------------------------------
+KICK_BAND_HZ = (40.0, 200.0)
+KICK_RISE_DB = 8.0          # level rise within 20 ms
+KICK_LEVEL_FLOOR_DB = 15.0  # the rise must reach within this of the loud low end (95th pct)
+KICK_CLUSTER_S = 0.15       # one kick can show two rises (sweep beating with the bass note)
+
+
+def detect_kick_onsets(mono: np.ndarray, sr: int) -> np.ndarray:
+    """Kick attack times (samples) from the 40-200 Hz level: an 8 dB rise within 20 ms that
+    reaches the loud part of the low end; the onset is where the level first gets within
+    10 dB of the attack peak (zero-phase filtering pre-rings, so 'first rise' is too early)."""
+    mono = np.asarray(mono, dtype=float)
+    if len(mono) < int(0.5 * sr):
+        return np.array([], dtype=int)
+    sos = signal.butter(4, [KICK_BAND_HZ[0] / (sr / 2), KICK_BAND_HZ[1] / (sr / 2)], btype="band", output="sos")
+    y = signal.sosfiltfilt(sos, mono)
+    hop = max(1, int(round(0.002 * sr)))
+    win = max(1, int(round(0.010 * sr)))
+    L = 10.0 * np.log10(np.convolve(y * y, np.ones(win) / win, mode="same")[::hop] + 1e-12)
+    fps = sr / hop
+    k = max(1, int(round(0.020 * fps)))
+    rise = np.zeros_like(L)
+    rise[k:] = L[k:] - L[:-k]
+    loud = float(np.percentile(L, 95))
+    pk, _ = signal.find_peaks(rise, height=KICK_RISE_DB)
+    pk = [p for p in pk if L[min(len(L) - 1, p + int(0.02 * fps))] >= loud - KICK_LEVEL_FLOOR_DB]
+    out = []
+    start = None
+    for p in pk:
+        if start is not None and p - start <= int(KICK_CLUSTER_S * fps):
+            continue
+        start = p
+        top = p + int(np.argmax(L[p:p + int(0.04 * fps)])) if p + 2 < len(L) else p
+        s0 = max(0, p - k)
+        seg = L[s0:top + 1]
+        on = s0 + int(np.argmax(seg >= L[top] - 10.0))
+        out.append(int(round(on * hop)))
+    return np.array(out, dtype=int)
+
+
 def build_provisional_track_map(
     full_mix: np.ndarray,
     sub_drums: np.ndarray = None,
@@ -897,18 +944,13 @@ def build_provisional_track_map(
     grid_bpm = bpm * 2.0 if bpm < 80.0 else bpm
     bar_s = (60.0 / grid_bpm) * 4.0
 
-    # Detect kick peaks on sub_drums or low-end onsets
-    if kick_peaks is None or len(kick_peaks) == 0:
-        env = np.abs(sub_drums)
-        win_len = int(round(0.005 * sr))
-        env_smooth = np.convolve(env, np.ones(win_len) / win_len, mode="same")
-        env_max = float(np.max(env_smooth))
-        if env_max > 1e-4:
-            peak_thr = max(0.005, env_max * 0.12)
-            min_dist_samples = int(round(0.20 * sr))
-            kick_peaks, _ = signal.find_peaks(env_smooth, height=peak_thr, distance=min_dist_samples)
-        else:
-            kick_peaks = np.array([])
+    # Kick onsets. Given by the caller (stems mode) -> "drum_stem"; else measured on the
+    # separate drum signal if there is one, otherwise estimated from the full mix.
+    if kick_peaks is not None and len(kick_peaks) > 0:
+        kicks_source = "drum_stem"
+    else:
+        kicks_source = "drum_stem" if kick_bass_separate else "mix_estimate"
+        kick_peaks = detect_kick_onsets(sub_drums if kick_bass_separate else mix_mono, sr)
 
     avg_mix_rms = float(20.0 * np.log10(np.sqrt(np.mean(mix_mono**2) + 1e-12)))
     avg_sub_rms = float(20.0 * np.log10(np.sqrt(np.mean(sub_bass**2) + 1e-12)))
@@ -927,6 +969,19 @@ def build_provisional_track_map(
 
     vocab_req = {"electronic": "energy", "ambient": "energy", "pop_rock": "song"}.get(target_mode, "auto")         if genre_mode != "auto" else "auto"
     seg = detect_sections(mix_mono, sr, grid_bpm, vocabulary=vocab_req)
+    if genre_mode == "auto" and seg["vocabulary"] != "none":
+        # One measurement decides both the genre family and the section vocabulary: the
+        # low-end onset evenness over the 4 beat positions (four-on-the-floor). The 3.1 rule
+        # used the kick COUNT, which a sustained bass under the kick can hide.
+        fotf = seg["four_on_floor"]
+        if fotf >= SEC_FOUR_ON_FLOOR and cat != "electronic":
+            cat, genre_label = "electronic", "Electronic / Techno / Club"
+            conf = float(np.clip(0.70 + 0.30 * fotf, 0.70, 0.99))
+        elif fotf < SEC_FOUR_ON_FLOOR and cat == "electronic":
+            cat, genre_label = "pop_rock", "Pop / Rock / Song"
+            conf = float(np.clip(0.75 + 0.20 * (1.0 - fotf), 0.70, 0.95))
+        desc = dict(desc, four_on_floor_beat_evenness=round(fotf, 3))
+        target_mode = cat
     sections = []
     counters = {}
     for sd in seg["sections"]:
@@ -1082,6 +1137,7 @@ def build_provisional_track_map(
         "tempo_octave_confident": tempo_info["octave_confident"],
         "tempo_pulse_clarity": tempo_info["pulse_clarity"],
         "total_kicks": len(kick_peaks),
+        "kicks_source": kicks_source,
         "total_kick_events": len(kick_peaks),
         "num_sections": len(out_sections),
         "first_downbeat_s": seg["first_downbeat_s"],
