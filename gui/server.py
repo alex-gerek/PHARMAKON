@@ -196,13 +196,29 @@ def get_system_info():
     }
 
 
+def _legacy_updater() -> bool:
+    """True when this server.py was live-patched onto an older frozen auto_updater (3.0.x)
+    that has no signed-update API. Those clients still sync patches at startup; the
+    manual check must not crash with a 500."""
+    return auto_updater is not None and not hasattr(auto_updater, "check_online_updates")
+
+
+def _check_online(timeout: float) -> dict:
+    if _legacy_updater():
+        st = dict(auto_updater.get_cached_status())
+        st.setdefault("signature_verified", False)
+        st["legacy_updater"] = True
+        return st
+    return auto_updater.check_online_updates(timeout)
+
+
 @app.get("/api/update-status")
 async def get_update_status():
     if auto_updater is None:
         return {"state": "offline", "local_version": "3.2.0", "signature_verified": False}
     cached = auto_updater.get_cached_status()
     if cached.get("state") == "idle":
-        return await asyncio.to_thread(auto_updater.check_online_updates, 2.5)
+        return await asyncio.to_thread(_check_online, 2.5)
     return cached
 
 
@@ -211,7 +227,7 @@ async def check_update():
     """Checks for signed release updates without silent modification."""
     if auto_updater is None:
         return {"state": "offline", "local_version": "3.2.0", "signature_verified": False}
-    return await asyncio.to_thread(auto_updater.check_online_updates, 4.0)
+    return await asyncio.to_thread(_check_online, 4.0)
 
 
 @app.post("/api/install-update")
@@ -219,6 +235,8 @@ async def install_update():
     """Installs verified release update upon explicit user click."""
     if auto_updater is None:
         return {"state": "offline", "error": "Auto-updater unavailable"}
+    if _legacy_updater():
+        return {"state": "manual", "error": "This build's updater is too old for signed installs. Download the full PHARMAKON 3.2 build from the GitHub release."}
     return await asyncio.to_thread(auto_updater.install_verified_update, 10.0)
 
 
