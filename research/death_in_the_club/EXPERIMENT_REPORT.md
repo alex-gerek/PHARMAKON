@@ -30,7 +30,7 @@ Our objective is **not** to claim that Sub-Sync is finished or ready for product
 ### Phase 1 — Repository Audit & Baseline Verification
 
 #### 1.1 Existing Sub-Sync Implementations
-An exhaustive audit of the codebase (`C:\Users\User\PHARMAKON` and `C:\Users\User\PHARMAKON_PRO`) revealed:
+An exhaustive audit of the codebase (`PHARMAKON` and `PHARMAKON_PRO`) revealed:
 
 1. **Legacy Sub-Sync Implementation (`align_sub_phase`):**
    - Located in `remaster_engine.py` (lines 840–903).

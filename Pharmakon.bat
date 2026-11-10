@@ -20,8 +20,8 @@ if exist "C:\Python314\python.exe" (
     set "PY_EXE=C:\Python314\python.exe"
     goto :found_python
 )
-if exist "C:\Users\User\AppData\Local\Programs\Python\Python313\python.exe" (
-    set "PY_EXE=C:\Users\User\AppData\Local\Programs\Python\Python313\python.exe"
+if exist "%LOCALAPPDATA%\Programs\Python\Python313\python.exe" (
+    set "PY_EXE=%LOCALAPPDATA%\Programs\Python\Python313\python.exe"
     goto :found_python
 )
 

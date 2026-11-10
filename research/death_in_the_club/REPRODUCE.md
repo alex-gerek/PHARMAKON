@@ -25,7 +25,7 @@ py -3.14 -c "import numpy, scipy, matplotlib, pytest; print('Environment OK!')"
 
 ### 2. Execution Commands
 
-All commands are executed from the repository root: `C:\Users\User\PHARMAKON`.
+All commands are executed from the repository root (`.` or root directory).
 
 #### Step 1: Run the Automated Validation Suites
 Executes the comprehensive test suites validating historical claim reproduction, crossover unity, boundary conditions, prototype safety, and headroom data integrity:

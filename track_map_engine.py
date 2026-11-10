@@ -159,16 +159,73 @@ def detect_tempo(mix_mono: np.ndarray, sr: int) -> dict:
     """
     mono = np.asarray(mix_mono, dtype=float)
     B, fps = _onset_bands(mono, sr)
-    full = B.sum(axis=0)
+    # the beat is carried by kick / body / snare; hats (> 6 kHz) often play subdivisions or
+    # triplets (e.g. 94 BPM with triplet hats reads as 140 when hats vote)
+    full = B[0] + B[1] + B[2]
     full = np.convolve(full, np.array([0.25, 0.5, 0.25]), mode="same")
     A = _acf(full)
 
     # 1) periodicity: comb over beat multiples (finds the right tempo FAMILY, octave-agnostic)
     bpms = np.arange(40.0, 240.0, 0.25)
     taus = 60.0 * fps / bpms
-    comb = sum(_interp(A, k * taus) / k for k in (1, 2, 3, 4))
-    comb = np.where(4.0 * taus < len(A) - 2, comb, -np.inf)
-    bpm0 = float(bpms[int(np.argmax(comb))])
+    valid = 4.0 * taus < len(A) - 2
+
+    def _comb(acf_):
+        c = sum(_interp(acf_, k * taus) / k for k in (1, 2, 3, 4))
+        return np.where(valid, c, -np.inf)
+
+    def _same_family(a, b):
+        r = np.log2(a / b)
+        return abs(r - round(r)) < 0.03
+
+    comb = _comb(A)
+    bpm_sum = float(bpms[int(np.argmax(comb))])
+    # Meter conflict check (e.g. a 2.56 s bar split in 4 = 94 BPM or in 3 = 70/140).
+    # The summed comb can prefer the 3-division because shakers / triplet hats feed it.
+    # Kick, body and snare bands each score both families (best octave member, plain
+    # beat-lag autocorrelation, normalised per band); the drum bands decide. A rival
+    # whose period is an integer multiple of a summed-family beat is only a grouping
+    # (a 3/4 bar, a half-note) and never overrides.
+    band_acf = []
+    for k in range(3):
+        ak = _interp(_acf(np.convolve(B[k], np.array([0.25, 0.5, 0.25]), mode="same")), taus)
+        ak = np.where(valid & (bpms >= TEMPO_MIN_BPM) & (bpms <= TEMPO_MAX_BPM), ak, -np.inf)
+        band_acf.append(ak)
+
+    def _family_score(fb):
+        tot = 0.0
+        for ak in band_acf:
+            top = float(np.max(ak))
+            if top <= 0:
+                continue
+            best = -np.inf
+            for e in range(-3, 4):
+                c = fb * 2.0 ** e
+                if TEMPO_MIN_BPM <= c <= TEMPO_MAX_BPM:
+                    best = max(best, float(ak[int(np.argmin(np.abs(bpms - c)))]))
+            tot += max(0.0, best) / top
+        return tot
+
+    def _is_grouping(slow, fast_family):
+        for e in range(-3, 4):
+            f = fast_family * 2.0 ** e
+            r = f / slow
+            if r >= 1.9 and abs(r - round(r)) < 0.03:
+                return True
+        return False
+
+    rival_family = None
+    bpm0 = bpm_sum
+    for ak in band_acf:
+        cand = float(bpms[int(np.argmax(ak))])
+        if _same_family(cand, bpm_sum) or _is_grouping(cand, bpm_sum):
+            continue
+        s_c, s_s = _family_score(cand), _family_score(bpm_sum)
+        if s_c > s_s + 0.05:
+            bpm0, rival_family = cand, bpm_sum
+            break
+        if s_c > 0.85 * s_s:
+            rival_family = cand
 
     # 2) octave: climb from the slowest level until off-beats stop carrying kick/snare hits
     cands = sorted({bpm0 * 2.0 ** k for k in range(-3, 4) if TEMPO_MIN_BPM <= bpm0 * 2.0 ** k <= TEMPO_MAX_BPM})
@@ -217,6 +274,16 @@ def detect_tempo(mix_mono: np.ndarray, sr: int) -> dict:
         octave_confident = False
     if alt is not None and not (70.0 <= alt <= 180.0):
         alt = None   # outside the range people count in (e.g. "134 or 67"): not a useful alternative
+    if alt is None and rival_family is not None:
+        # a strong non-octave rival (3:2 etc.): show it in the counted range
+        r = rival_family
+        while r < 70.0:
+            r *= 2.0
+        while r > 180.0:
+            r /= 2.0
+        if 70.0 <= r <= 180.0:
+            alt = r
+            octave_confident = False
     pulse = float(np.clip(_interp(A, np.array([tau]))[0], 0.0, 1.0))
     return {
         "bpm": round(float(bpm), 2),

@@ -39,8 +39,8 @@
   },
   {
     "file": "voice-preview.mp3",
-    "master": "C:\\Users\\User\\Downloads\\Remaster\\voice-preview - STUDIO_REMASTER.wav",
-    "delta": "C:\\Users\\User\\Downloads\\Remaster\\voice-preview - DELTA_POISON.wav",
+    "master": "benchmarks\\downloads\\Remaster\\voice-preview - STUDIO_REMASTER.wav",
+    "delta": "benchmarks\\downloads\\Remaster\\voice-preview - DELTA_POISON.wav",
     "true_peak_in": -1.89,
     "true_peak_out": -3.56,
     "lufs_in": -15.61,

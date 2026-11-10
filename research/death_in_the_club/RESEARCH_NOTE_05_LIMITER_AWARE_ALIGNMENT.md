@@ -204,7 +204,7 @@ EXPERIMENTAL_SUB_SYNC_DEFAULTS = {
 ```
 
 ### 5.2 Test Coverage & Quality Gate
-A dedicated test suite was integrated in [`tests/test_limiter_aware_sub_sync.py`](file:///C:/Users/User/PHARMAKON/tests/test_limiter_aware_sub_sync.py):
+A dedicated test suite was integrated in [`tests/test_limiter_aware_sub_sync.py`](../../tests/test_limiter_aware_sub_sync.py):
 * `test_sub_sync_mode_resolution_and_toggles`: Validates mode resolution, safe-bypass, and exception handling.
 * `test_safe_bypass_on_acoustic_and_silent_material`: Proves bit-exact identity output on acoustic/vocal material.
 * `test_destructive_phase_cancellation_recovery`: Proves recovery of cancelled sub fundamentals without peak blowout.
