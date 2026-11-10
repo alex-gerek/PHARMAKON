@@ -2,7 +2,7 @@
   <img src="gui/static/studio_icon.png" width="130" height="130" alt="PHARMAKON Logo">
 </p>
 
-# PHARMAKON 3.0
+# PHARMAKON 3.2
 ## Studio-Grade Audio Antidote, AI De-Harshing, Limiter-Aware Sub-Sync & True-Peak Mastering Console
 ### Created by Lex Gerek // Abbey Road 1974 × Blade Runner 2049
 
@@ -80,6 +80,32 @@ Fusing **Abbey Road 1974** analog tape warmth with **Blade Runner 2049** telemet
 
 ---
 
+## 🌿 Clean Chain — the default sound profile (PHARMAKON 3.2)
+
+**Goal: music you can listen to for hours without fatigue.** PHARMAKON removes the *measurable* defects that make long listening tiring, and leaves matters of taste — tonal balance, character, the author's intent — as close to the original as possible.
+
+We do not claim to measure how tired a particular person gets: thresholds differ from listener to listener. Instead every processing decision follows one rule that holds for **any** listener:
+
+- **Defects** — things that were never part of the music: AI "metallic" resonances, intermodulation distortion, digital aliasing, clicks. PHARMAKON must reduce them and must never increase any of them. If a version has less of every defect, it is better for every listener, whatever their personal threshold (componentwise / Pareto dominance).
+- **Taste** — brightness, tonal balance, density. These belong to the author, so PHARMAKON keeps them within a small tolerance of the original instead of imposing its own "sound".
+
+What the Clean Chain changes compared with Classic 3.1, measured on 14 AI tracks of different genres (techno, trance, pop, acoustic guitar, classical), all loudness-matched:
+
+| | Classic 3.1 | Clean Chain 3.2 |
+|---|---|---|
+| Persistent AI resonances ("metallic" colouring) | left in place; old detector cut **musical notes** by 8–10 dB | removed only where they occur; notes untouched (0/12 false detections) |
+| Added sharpness vs the original | +0.04…+0.08 acum on every track | ≈ 0 (−0.01…+0.01) |
+| Added "air" 10–20 kHz / brilliance 5–10 kHz | +1.5…+2.0 dB / +0.3…+1.7 dB | +0.1…+0.6 dB / −0.3…+0.5 dB |
+| Saturation distortion on music | −30…−38 dB, depending on how hot the source was rendered | −44 dB on every track (calibrated operating level) |
+| Chain intermodulation (SMPTE test) | −24 dB | −33 dB |
+| Dynamics (crest factor) | 11.5 dB | 12.8 dB |
+
+Loudness, the True-Peak ceiling, mono low end and Sub-Sync are unchanged.
+
+**Classic 3.1 switch.** The previous processing remains available bit-for-bit (`SOUND PROFILE → CLASSIC 3.1` in the console, or `classic_31: true` in the parameters). It is brighter and its saturation depends on the source level. Full engineering evidence: `DEV_NOTE_MATH_AUDIT_FIXES.md` (sections 14–19) and `bench/`.
+
+---
+
 ## ⚡ What's New in PHARMAKON 3.0 (Comparison with v2.0)
 
 Compared to PHARMAKON 2.0, version 3.0 represents a major evolutionary leap from static single-track heuristics to **dynamic musical intelligence and transient-guarded mastering**:
@@ -88,7 +114,7 @@ Compared to PHARMAKON 2.0, version 3.0 represents a major evolutionary leap from
    - In v2.0, stem phase alignment was calculated as a single global time-shift across the entire song. In complex arrangements, this static shift frequently overshot True-Peak limits or smeared percussive punch in dense passages.
    - In v3.0, **Local Guard** isolates every individual kick transient (e.g. 134 detected events in our *Vector Pulse* benchmark) and evaluates proposed micro-shifts against a **Virtual Micro-Limiter Cost Function**. If a shift risks transient distortion or excessive headroom loss, the engine executes an **Autonomous Acoustic Safe-Bypass (0 ms)**.
 2. **Real-Time 4x Oversampling True-Peak Limiter Guard**:
-   - Integrated polyphase brickwall ceiling capped at **-0.3 dBFS True-Peak** (EBU R128 / ITU-R BS.1770-5 compliant), guaranteeing that subsequent lossy streaming transcoding (Spotify, Apple Music, YouTube) will not introduce inter-sample clipping distortion.
+   - Integrated polyphase brickwall ceiling, default **-0.3 dBTP** (4x-oversampled True-Peak per ITU-R BS.1770-4 Annex 2). For EBU R128 broadcast delivery and the -1 dBTP recommendation of Spotify / Apple Music, set the ceiling to **-1.0 dBTP**.
 3. **PHARMAKON Track Intelligence Map**:
    - Automated 9-sector structural musical segmentation: **Intro, Drop, Groove, Development, Dense Middle, Interlude, Breakdown, Buildup, Outro**.
    - Musical bar and BPM awareness, dynamic crest factor measurement, sub-bass energy (<100 Hz), and per-section mastering verdicts.
@@ -120,13 +146,15 @@ When mastering stems (Drums + Bass + Vocals + Other), cross-correlation in the <
 
 ### 🛡 5. 4x Polyphase True-Peak Limiter & OOM Streaming Chunking
 A 4x polyphase oversampled lookahead limiter (`scipy.signal.resample_poly`) enforces zero inter-sample clipping across the master bus. Streaming chunking with raised-cosine crossfading prevents memory exhaustion (OOM) on long tracks and DJ sets.
-- Default True-Peak Ceiling: -0.3 dBFS (Compliant with ITU-R BS.1770-5 and streaming broadcast targets).
+- Default True-Peak Ceiling: -0.3 dBTP. Use -1.0 dBTP for EBU R128 broadcast delivery and streaming platform recommendations.
 
-### 📊 6. ITU-R BS.1770-4 / EBU R128 Loudness Metering
-True integrated LUFS calculation featuring dual-stage K-weighting filtering and gated energy integration (-70 LKFS absolute / -10 dB relative gate).
+### 📊 6. ITU-R BS.1770-4 Integrated Loudness Metering
+Integrated LUFS per ITU-R BS.1770-4: two-stage K-weighting (coefficients match the ITU 48 kHz table to machine precision and are derived exactly for any sample rate), 400 ms blocks with 75% overlap, -70 LKFS absolute / -10 LU relative gating.
+- **Verified** against EBU Tech 3341 integrated-loudness test cases 1–5 (±0.1 LU) at 44.1 kHz and 48 kHz — see `tests/test_ebu_tech3341_compliance.py`.
+- Scope: integrated loudness and 4x True-Peak only. Momentary / short-term loudness and Loudness Range (EBU Tech 3342) are not implemented, so PHARMAKON is not a full EBU R128 meter.
 
 ### 📼 7. 4x Polyphase Asymmetric Tape Saturation & 10 Hz DC-Blocker
-Calibrated to Technical Whitepaper v2.6: combines 3.5 kHz HF pre-emphasis, 4x polyphase oversampling, global-asymptote scaled asymmetric `tanh` waveshaping (-38.05 dBc even 2nd-harmonic warmth, aliasing <= -48 dBc), and a 10 Hz recursive one-pole DC-blocker (`|DC| < 1e-7` steady-state in `float32`).
+Calibrated to Technical Whitepaper v2.6: combines 3.5 kHz HF pre-emphasis, 4x polyphase oversampling, global-asymptote scaled asymmetric `tanh` waveshaping (H2 = -38.0 dBc at 0 dBFS / 1 kHz; odd H3 dominates at high levels, even H2 below about -15 dBFS; aliasing <= -48 dBc), and a 10 Hz recursive one-pole DC-blocker (`|DC| < 1e-7` steady-state in `float32`).
 
 ### 🔒 8. Verified 24-Bit PCM_24 Export & Diagnostic Telemetry
 Every rendered studio master, `RAW_SUM`, `DELTA_POISON`, and stem WAV is explicitly written as 24-bit `PCM_24` and verified post-export (`verify_wav_export`) for frame count, sample rate, channel layout, and subtype, backed by non-intrusive `pharmakon.dsp` diagnostic logging.
@@ -164,7 +192,7 @@ Three click-free, phase-aligned auditioning modes:
 Repair isolated defects (such as a screeched AI vocal note at 0:45) without altering the rest of your song:
 1. Drag calipers directly on the waveform to select the damaged segment.
 2. Adjust `IN` and `OUT` points (or click `+3s`, `+5s`).
-3. Render applies a seamless **35ms raised-cosine equal-power crossfade**.
+3. Render applies a seamless **35ms raised-cosine equal-gain crossfade**.
 4. **100% of the audio outside the calipers remains byte-for-byte untouched!**
 
 ---

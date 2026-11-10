@@ -100,14 +100,36 @@ def detect_bpm_and_grid(mix_mono: np.ndarray, sr: int):
     d_sub_env = np.convolve(d_sub_env, np.ones(w_smooth) / w_smooth, mode='same')
 
     hop_onset = int(0.005 * sr)
+    # Real hop duration (220 samples @ 44.1 kHz = 4.989 ms, not 5 ms)
+    hop_sec = hop_onset / float(sr)
     ds = d_sub_env[::hop_onset] - np.mean(d_sub_env[::hop_onset])
-    corr = np.correlate(ds, ds, mode='full')
+    corr = signal.correlate(ds, ds, mode='full')
     corr = corr[len(corr) // 2 :]
 
-    min_lag = int(round((60.0 / 170.0) / 0.005))
-    max_lag = int(round((60.0 / 90.0) / 0.005))
-    best_lag = min_lag + np.argmax(corr[min_lag:max_lag])
-    bpm = float(60.0 / (best_lag * 0.005))
+    min_lag = int(round((60.0 / 170.0) / hop_sec))
+    max_lag = int(round((60.0 / 90.0) / hop_sec))
+    best_lag = min_lag + int(np.argmax(corr[min_lag:max_lag]))
+
+    # Sub-hop precision: parabolic interpolation of the autocorrelation peak.
+    # Integer lags alone quantize e.g. 128 BPM to 127.66 BPM (bar grid drifts
+    # ~0.6 s over 128 bars).
+    def _parabolic_peak(idx):
+        if 0 < idx < len(corr) - 1:
+            c_m, c_0, c_p = corr[idx - 1], corr[idx], corr[idx + 1]
+            denom = c_m - 2.0 * c_0 + c_p
+            if denom < 0.0:
+                return idx + float(np.clip(0.5 * (c_m - c_p) / denom, -0.5, 0.5))
+        return float(idx)
+
+    lag_f = _parabolic_peak(best_lag)
+    # Refine on the 4-beat (bar) autocorrelation peak: the same interpolation
+    # error is divided by 4 when the period is measured over a whole bar.
+    bar_center = int(round(4.0 * lag_f))
+    if bar_center + 4 < len(corr):
+        lo, hi = bar_center - 3, bar_center + 4
+        bar_idx = lo + int(np.argmax(corr[lo:hi]))
+        lag_f = _parabolic_peak(bar_idx) / 4.0
+    bpm = float(60.0 / (lag_f * hop_sec))
 
     if bpm < 100.0 and corr[best_lag // 2] > 0.6 * corr[best_lag]:
         bpm *= 2.0
@@ -299,6 +321,11 @@ def build_provisional_track_map(
     mix_mono = np.mean(ensure_stereo(full_mix), axis=1)
     duration_s = float(len(mix_mono) / sr)
 
+    # Kick-vs-bass sub correlation only exists when separate drum and bass signals are
+    # given (stems mode). For a full mix both defaults are the SAME signal, which would
+    # make the correlation a meaningless constant 1.00 - report None instead.
+    kick_bass_separate = (sub_drums is not None) and (sub_bass is not None) and (sub_bass is not sub_drums)
+
     if sub_drums is None:
         sub_drums = butter_lowpass(mix_mono, 100.0, sr, order=2)
     if sub_bass is None:
@@ -374,7 +401,7 @@ def build_provisional_track_map(
             r_sub_second = float(20.0 * np.log10(np.sqrt(np.mean(seg_sb[(half_pt - s_idx):]**2) + 1e-12)))
             sub_rise = r_sub_second - r_sub_first
 
-            corr = float(np.corrcoef(seg_sd, seg_sb)[0, 1]) if (len(seg_sd) > 0 and r_sd > -60.0 and r_sb > -60.0) else 0.0
+            corr = (float(np.corrcoef(seg_sd, seg_sb)[0, 1]) if (len(seg_sd) > 0 and r_sd > -60.0 and r_sb > -60.0) else 0.0) if kick_bass_separate else None
 
             is_start = (i == 0)
             is_end = (i == len(raw_b) - 2)
@@ -545,7 +572,7 @@ def build_provisional_track_map(
             k_in_sec = [int(k) for k in kick_peaks if s_idx <= k < e_idx]
             k_count = len(k_in_sec)
             k_density = float(k_count / max(1.0, sec_dur))
-            corr = float(np.corrcoef(seg_sd, seg_sb)[0, 1]) if (len(seg_sd) > 0 and r_sd > -60.0 and r_sb > -60.0) else 0.0
+            corr = (float(np.corrcoef(seg_sd, seg_sb)[0, 1]) if (len(seg_sd) > 0 and r_sd > -60.0 and r_sb > -60.0) else 0.0) if kick_bass_separate else None
 
             sections.append({
                 "sec_type": sec_type, "sec_tag": sec_tag, "sec_color": sec_color,
@@ -657,7 +684,7 @@ def build_provisional_track_map(
             "peak_mix_dbfs": round(pk_mix, 2),
             "peak_dbfs": round(pk_mix, 2),
             "crest_factor_db": round(crest_factor, 2),
-            "sub_correlation_r": round(corr, 3),
+            "sub_correlation_r": round(corr, 3) if corr is not None else None,
             "events_accepted": events_acc,
             "events_rejected": events_rej,
             "events_bypassed": events_byp,
@@ -803,6 +830,10 @@ def process_local_sub_sync(
 
         raw_sub_sum = d_sub_win + b_sub_win
         cand_b_sub = np.roll(b_sub_win * best_pol, best_lag)
+        if best_lag > 0:
+            cand_b_sub[:best_lag] = b_sub_win[:best_lag]
+        elif best_lag < 0:
+            cand_b_sub[best_lag:] = b_sub_win[best_lag:]
         cand_sub_sum = d_sub_win + cand_b_sub
 
         rms_raw_sub = float(np.sqrt(np.mean(np.square(raw_sub_sum)) + 1e-12))
@@ -837,8 +868,9 @@ def process_local_sub_sync(
             reason = f"valid_shift (gain={gain_sub_db:+.3f}dB, pk_diff={peak_diff_db:+.3f}dB)"
 
         if decision == "ACCEPT":
-            # Seamless crossfade: raw * (1 - taper) + shifted * taper
-            bass_corrected[w_start:w_end] = raw_b_seg * (1.0 - w_taper) + shifted_b * w_taper
+            # Seamless crossfade onto the current output (not the raw segment), so a
+            # window overlapping a previously corrected kick does not jump back to raw.
+            bass_corrected[w_start:w_end] = bass_corrected[w_start:w_end] * (1.0 - w_taper) + shifted_b * w_taper
             corrected_count += 1
             applied_shifts_ms.append(abs(shift_ms))
 

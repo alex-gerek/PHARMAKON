@@ -413,8 +413,8 @@ def test_stems_mode_unoversampled_vocal_saturation_aliasing_p1_2():
     win = signal.windows.blackmanharris(n)
     x9 = np.sin(2 * np.pi * 9000.0 * t).astype(np.float32)
 
-    # Exact expression from process_stems_folder vocal chain
-    y_voc = (np.tanh(x9 * 1.08) * 0.96).astype(np.float32)
+    # 4X Polyphase oversampled vocal saturation (P1-2 verified)
+    y_voc = re_eng.saturate_vocal_oversampled(x9, sr=sr, drive=1.08, ceiling=0.96, oversample=4)
     spec = np.abs(np.fft.rfft(y_voc.astype(np.float64) * win))
     bin_hz = sr / n
     m_fund = float(np.max(spec[int(round(9000 / bin_hz)) - 3 : int(round(9000 / bin_hz)) + 4]))
@@ -471,11 +471,12 @@ def test_dsp_bit_identical_regression(baseline):
     sig_r = 0.45 * np.sin(2 * np.pi * 55 * t + 0.4) + 0.25 * np.sin(2 * np.pi * 440 * t - 0.2) + 0.18 * np.sin(2 * np.pi * 5200 * t) + 0.02 * rng.standard_normal(len(t))
     synth_stereo = np.column_stack([sig_l, sig_r]).astype(np.float32)
 
-    out_auto, _ = re_eng.process_audio_array(synth_stereo, sr)
+    # Classic 3.1 profile must stay bit-identical to the Stage 1 baseline (Clean Chain is the 3.2 default)
+    out_auto, _ = re_eng.process_audio_array(synth_stereo, sr, {**re_eng.DEFAULT_PARAMS, "classic_31": True})
     assert hashlib.sha256(out_auto.tobytes()).hexdigest() == baseline["dsp_output_hashes"]["synth_pharmakon1_sha256"]
 
     for p_key in ("suno", "udio", "club", "audiophile"):
-        out_p, _ = re_eng.process_audio_array(synth_stereo, sr, {"mode": "pharmakon2", "preset": p_key})
+        out_p, _ = re_eng.process_audio_array(synth_stereo, sr, {"mode": "pharmakon2", "preset": p_key, "classic_31": True})
         assert hashlib.sha256(out_p.tobytes()).hexdigest() == baseline["dsp_output_hashes"][f"synth_preset_{p_key}_sha256"]
 
 
@@ -542,7 +543,7 @@ def test_diagnostic_logging_emits_telemetry_without_changing_audio(tmp_path, cap
     synth_stereo = np.column_stack([sig_l, sig_r]).astype(np.float32)
 
     with caplog.at_level(logging.DEBUG, logger="pharmakon.dsp"):
-        out_logged, _ = re_eng.process_audio_array(synth_stereo, sr)
+        out_logged, _ = re_eng.process_audio_array(synth_stereo, sr, {**re_eng.DEFAULT_PARAMS, "classic_31": True})
 
         in_wav = tmp_path / "diag_track.wav"
         sf.write(in_wav, synth_stereo[:sr], sr, subtype="PCM_24")

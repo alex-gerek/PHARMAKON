@@ -27,7 +27,7 @@ WHAT'S NEW IN PHARMAKON 3.0 (v3.0.0):
   function and transient protection. Prevents destructive inter-sample
   clashing and restores punchy, phase-locked bass.
 - TRUE-PEAK LIMITER GUARD (4x OVERSAMPLING):
-  Dedicated ceiling protection (-0.3 dBFS / EBU R128 compliance) preventing
+  Dedicated ceiling protection (default -0.3 dBTP; -1.0 dBTP for EBU R128) preventing
   inter-sample peak overs on streaming transcoding (Spotify / Apple Music).
 - PHARMAKON TRACK INTELLIGENCE MAP:
   Automatic 9-sector structural musical intelligence (Intro, Drop, Groove,

@@ -1,7 +1,7 @@
 # Inter-Sample Peaks (True-Peak): Why Spotify Distorts Tracks on Smartphones and How 4X Polyphase Oversampling Solves It
 
 **Author:** Lex Gerek (Sound Architect / Engineer)  
-**Project:** PHARMAKON 2.0 Studio Console  
+**Project:** PHARMAKON 3.1 Studio Console  
 **Implementation:** `remaster_engine.py` (`_true_peak_limiter_block`, `target_ceiling_db=-0.3` / `-1.0`)
 
 This is the definitive frontier of modern audio mastering, overlooked by most bedroom producers and disregarded by virtually all generative AI audio platforms.
@@ -59,110 +59,101 @@ For years, many studio workflows relied on a -0.3 dBFS ceiling. However, rigorou
 
 - **Streaming Broadcast Standards: -1.0 dBFS True-Peak**  
   Mandatory across all lossy distribution channels:
-  - **Spotify Master Guidelines:** Explicitly mandates **-1.0 dBFS True-Peak** for masters louder than -14 LUFS (and down to -2.0 dBFS for ultra-compressed club masters).
-  - **Apple Digital Masters (MFiT):** Strict specification of **-1.0 dBFS True-Peak**.
-  - **EBU R128 & ITU-R BS.1770-4:** International broadcast regulations requiring a **-1.0 dBFS True-Peak** ceiling.
+  - **Spotify Loudness Guidelines:** Recommends keeping masters below **-1.0 dBTP**, and below **-2.0 dBTP** for masters louder than -14 LUFS integrated.
+  - **Apple Digital Masters:** Recommends not exceeding **-1.0 dBTP**.
+  - **EBU R128:** European broadcast recommendation with a maximum permitted True-Peak of **-1.0 dBTP**, measured per ITU-R BS.1770-4 (BS.1770 itself defines the measurement, not a ceiling).
 
 A 1.0 dB safety margin fully absorbs MDCT peak regrowth, guaranteeing absolute clarity across all consumer playback hardware.
 
 ---
 
-### 4. The PHARMAKON 2.0 Solution: 4X Polyphase Limiting, Stereo-Link & Peak Regrowth Absorption
+### 4. The PHARMAKON 3.1 Solution: Detect at 4X, Apply at 1X
 
-To intercept hidden sinc arcs before export, PHARMAKON 2.0 deploys an ITU-R BS.1770-4 compliant 4X polyphase True-Peak limiter:
+To intercept hidden sinc arcs before export, PHARMAKON uses a 4X polyphase True-Peak limiter whose peak detection follows the ITU-R BS.1770-4 Annex 2 4X-oversampling method. Version 3.1 rebuilt the limiter around one principle: **oversample to see the peaks, but never resample the music itself.**
 
-1. **4X Polyphase Upsampling (192 kHz):**  
-   The audio stream is upsampled from 48 kHz to 192 kHz via polyphase FIR filters (`signal.resample_poly(audio, up=4, down=1, axis=0)`). Three intermediate sinc-interpolated points are calculated between every pair of samples, making the peak of the analog arc fully visible.
+1. **4X Polyphase Detection (192 kHz at a 48 kHz base):**
+   The signal is upsampled with polyphase FIR filters (`signal.resample_poly(audio, up=4, down=1, axis=0)`), giving three interpolated points between every pair of samples. The upsampled copy is used only to *measure* the analog arc; it is never sent to the output.
 
-2. **100% Stereo-Linked Limiting (Phantom Center Stability):**  
-   Dual Mono limiting causes stereo image destabilization: when a heavy off-center crash or tom hits the right channel, independent compression tilts the phantom center (lead vocal, kick, bass) abruptly to the left. PHARMAKON 2.0 uses a joint channel detector (`np.max(np.abs(audio_4x), axis=1)`) and applies identical gain reduction to both channels, preserving impeccable stereo balance.
+2. **100% Stereo-Linked Gain (Phantom Center Stability):**
+   Dual-mono limiting tilts the phantom center (lead vocal, kick, bass) whenever a hard-panned crash hits one side. The detector takes the maximum over both channels (`np.max(np.abs(audio_4x), axis=1)`) and applies one gain curve to both, so the stereo image cannot shift.
 
-3. **Decimation Peak Regrowth Compensation:**  
-   When downsampling from 192 kHz back to 48 kHz, anti-aliasing decimation filters introduce Gibbs ripple, which can cause peaks to regrow by +0.2 ... +0.4 dB.  
-   PHARMAKON 2.0 incorporates a **0.15 dB internal safety margin** at 4X (`internal_ceiling = target_ceiling * 10^(-0.15/20)`), backed by an instantaneous zero-phase brickwall safety clamp `np.clip(limited_1x, -target_ceiling, target_ceiling)`.
+3. **Gain Computed at 4X, Applied at 1X:**
+   The needed gain is computed on the 4X peaks (plus the 1X sample peaks) with a **0.2 dB internal margin**, held over a 2 ms window, smoothed with a zero-phase 30 Hz filter and bounded by
 
-4. **Lookahead Peak Hold with Asymmetric Release:**  
-   Symmetric smoothing filters (such as `filtfilt`) can round off heavy kick drum attenuation troughs, resulting in transient overshoots. PHARMAKON 2.0 uses a Lookahead Peak Hold via `minimum_filter1d` with asymmetric release smoothing, strictly enforcing:
+$$\text{Gain}_{\text{final}}(t) = \min\big(\text{NeededGain}(t),\ \text{Gain}_{\text{smooth}}(t)\big) \le \text{NeededGain}(t)$$
 
-$$\text{Gain}_{\text{final}}(t) = \min(\text{NeededGain}(t), \text{Gain}_{\text{smooth}}(t)) \le \text{NeededGain}(t)$$
+   The 4X gain curve is then reduced to 1X by **minimum pooling** (each original sample receives the strongest reduction of its four sub-points) and multiplied directly onto the **original 1X samples**. There is no decimation filter in the audio path, so there is no decimation ripple and no "peak regrowth" to absorb.
 
-This guarantees mathematical ceiling compliance on every transient.
+4. **Verification Pass with a Local Guard:**
+   The limited output is measured again at 4X. Only if a residual overshoot remains is a `tanh` guard blended in — locally, on a 15 ms neighbourhood with a 5 ms Hann-smoothed mask — followed by a sample clamp. The reported True-Peak is measured on the **final** output.
 
-5. **Coordination with Integrated LUFS and PLR:**  
-   The -1.0 dBFS True-Peak limiter defines a precise Peak-to-Loudness Ratio (PLR) window:
-   - **Streaming Targets (Spotify / Apple Music / YouTube):** -14 LUFS @ -1.0 dBFS True-Peak (PLR = 13 dB);
-   - **Club & Heavy Rock Masters (PHARMAKON Standard):** -8 ... -6 LUFS @ -1.0 dBFS True-Peak (PLR = 5 ... 7 dB).
-   The PHARMAKON 2.0 diagnostic suite outputs dual compliance metrics:
-   `True-Peak: -1.00 dBFS [PASS]` and `Integrated Loudness: -8.2 LUFS [TARGET REACHED]`.
+5. **Why 3.1 Replaced the 2.0 Limiter (measured):**
+   PHARMAKON 2.0 limited the 4X copy and decimated it back to 1X. Decimation ripple could push 1X samples over the ceiling again, which triggered a `tanh` stage over the **entire file**, and the reported True-Peak was read *before* that last stage. On a 20 s test signal with ten 8 dB overs (ceiling -1.0 dBTP):
+
+   | | Reported TP | Actual TP | Change to audio away from the peaks (±60 ms excluded) |
+   |---|---|---|---|
+   | PHARMAKON 2.0 | -1.15 dBTP | -3.36 dBTP | up to -26.7 dBFS (whole-track saturation) |
+   | PHARMAKON 3.1 | -1.20 dBTP | -1.20 dBTP | -148 dBFS (float rounding: bit-transparent) |
+
+6. **Coordination with Integrated LUFS and PLR:**
+   The ceiling defines the Peak-to-Loudness Ratio (PLR) window:
+   - **Streaming delivery (Spotify / Apple Music / YouTube):** -14 LUFS at -1.0 dBTP (PLR = 13 dB);
+   - **Club & heavy masters (PHARMAKON Standard):** -8 ... -6 LUFS at -1.0 dBTP (PLR = 5 ... 7 dB).
+   Integrated loudness is measured per ITU-R BS.1770-4 and verified against EBU Tech 3341 test cases 1–5 (±0.1 LU).
 
 ```python
 import numpy as np
 from scipy import signal
 from scipy.ndimage import minimum_filter1d
 
-def true_peak_limiter(audio, sr, target_ceiling_db=-1.0, oversample=4):
+def true_peak_limiter_block(audio, sr, target_ceiling_db=-1.0, oversample=4):
     """
-    4X Polyphase True-Peak Brickwall Limiter (ITU-R BS.1770-4 / EBU R128).
-    
-    Key Features:
-    - Universal support for Mono (N,) and Stereo (N, 2);
-    - 100% Stereo-Linked envelope follower: zero phantom center jitter;
-    - Dual-tier ceiling (-1.0 dBFS streaming, -0.3 dBFS studio lossless);
-    - Decimation Peak Regrowth compensation (0.15 dB margin + brickwall clamp).
+    PHARMAKON 3.1 True-Peak limiter (stereo, shape (N, 2)).
+    Detects at 4X, applies the gain at 1X: the audio itself is never resampled.
     """
-    is_1d = audio.ndim == 1
-    if is_1d:
-        audio = audio[:, None]
+    n = len(audio)
+    ceiling = 10.0 ** (target_ceiling_db / 20.0)
 
-    orig_len = len(audio)
-    target_ceiling = 10.0 ** (target_ceiling_db / 20.0)
-
-    # 1. 4X Polyphase upsampling (exposes inter-sample sinc arcs)
+    # 1. 4X polyphase detection (ITU-R BS.1770-4 Annex 2 method), stereo-linked
     audio_4x = signal.resample_poly(audio, up=oversample, down=1, axis=0)
+    peaks_4x = np.max(np.abs(audio_4x), axis=1)
+    peaks_1x = np.repeat(np.max(np.abs(audio), axis=1), oversample)[:len(peaks_4x)]
+    peaks = np.maximum(peaks_4x, peaks_1x)
+
+    # 2. Needed gain with a 0.2 dB internal margin
+    internal = ceiling * 10.0 ** (-0.20 / 20.0)
+    needed = np.minimum(1.0, internal / (peaks + 1e-12))
+
+    # 3. Peak hold (2 ms centered window) + zero-phase 30 Hz smoothing;
+    #    min() guarantees gain <= needed gain on every 4X point
     sr_4x = sr * oversample
+    hold = minimum_filter1d(needed, size=int(0.002 * sr_4x) | 1)
+    b, a = signal.butter(1, 30.0 / (0.5 * sr_4x))
+    gain_4x = np.minimum(needed, signal.filtfilt(b, a, hold))
 
-    peak_4x = float(np.max(np.abs(audio_4x)))
-    if peak_4x <= target_ceiling:
-        true_peak_db = float(20.0 * np.log10(max(1e-9, peak_4x)))
-        out_aud = audio.squeeze() if is_1d else audio
-        return out_aud.astype(np.float32), round(true_peak_db, 2)
+    # 4. Gain envelope -> 1X by minimum pooling, applied to the ORIGINAL samples
+    gain_4x = np.pad(gain_4x, (0, n * oversample - len(gain_4x)), mode='edge')
+    gain_1x = gain_4x[:n * oversample].reshape(n, oversample).min(axis=1)
+    out = audio * gain_1x[:, None]
 
-    # 2. 100% Stereo-Linked peak calculation with 0.15 dB Peak Regrowth margin
-    max_sample_4x = np.max(np.abs(audio_4x), axis=1)
-    internal_ceiling = target_ceiling * (10.0 ** (-0.15 / 20.0))
-    needed_gain = np.minimum(1.0, internal_ceiling / (max_sample_4x + 1e-12))
+    # 5. Verification: re-measure at 4X; a local tanh guard only where needed
+    tp_4x = np.max(np.abs(signal.resample_poly(out, oversample, 1, axis=0)), axis=1)
+    over = (tp_4x[:n * oversample].reshape(n, oversample) > ceiling).any(axis=1)
+    over |= np.max(np.abs(out), axis=1) > ceiling
+    if over.any():
+        k = int(0.015 * sr)
+        mask = np.convolve(over.astype(float), np.ones(2 * k + 1), mode='same') > 0
+        mask = signal.convolve(mask.astype(float), np.hanning(int(0.005 * sr)), mode='same')
+        mask = np.clip(mask / mask.max(), 0.0, 1.0)[:, None]
+        out = out * (1.0 - mask) + np.tanh(out / ceiling) * ceiling * mask
+    out = np.clip(out, -ceiling, ceiling)
 
-    # 3. Lookahead Peak Hold (1.5 ms pre-transient capture)
-    win_size = int(0.0015 * sr_4x) | 1
-    gain_ahead = minimum_filter1d(needed_gain, size=win_size, origin=0)
-
-    # 4. Asymmetric smooth release envelope
-    b_rel, a_rel = signal.butter(1, 30.0 / (0.5 * sr_4x), btype='low')
-    gain_smooth = signal.filtfilt(b_rel, a_rel, gain_ahead)
-    gain_final_4x = np.minimum(needed_gain, gain_smooth)
-
-    # 5. Limiting in the 192 kHz oversampled domain
-    limited_4x = audio_4x * gain_final_4x[:, None]
-
-    # 6. Polyphase downsampling back to 1X and decimation ripple suppression
-    limited_1x = signal.resample_poly(limited_4x, up=1, down=oversample, axis=0)
-    if len(limited_1x) > orig_len:
-        limited_1x = limited_1x[:orig_len]
-    elif len(limited_1x) < orig_len:
-        pad = np.zeros((orig_len - len(limited_1x), limited_1x.shape[1]), dtype=limited_1x.dtype)
-        limited_1x = np.vstack([limited_1x, pad])
-
-    # Final brickwall clamp against residual decimation overshoot
-    limited_1x = np.clip(limited_1x, -target_ceiling, target_ceiling)
-
-    actual_tp = float(np.max(np.abs(limited_4x)))
-    true_peak_db = float(20.0 * np.log10(max(1e-9, actual_tp)))
-    if is_1d:
-        limited_1x = limited_1x.squeeze()
-    return limited_1x.astype(np.float32), round(true_peak_db, 2)
+    # 6. Report the True-Peak of the FINAL output
+    tp = np.max(np.abs(signal.resample_poly(out, oversample, 1, axis=0)))
+    return out.astype(np.float32), round(20.0 * np.log10(max(tp, 1e-9)), 2)
 ```
 
-Masters delivered with verified 4X True-Peak limiting survive lossy streaming encoding intact, preserving dynamic punch, transient precision, and analog warmth across all playback systems.
+A -1.0 dBTP ceiling measured with 4X detection leaves the headroom that streaming platforms recommend for lossy encoding, while the music between the peaks passes through the limiter untouched.
 
 ---
 *Repository:* [https://github.com/alex-gerek/PHARMAKON](https://github.com/alex-gerek/PHARMAKON)

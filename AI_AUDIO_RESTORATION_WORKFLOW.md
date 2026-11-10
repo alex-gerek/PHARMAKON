@@ -71,7 +71,7 @@ PHARMAKON 2.0 addresses each acoustic defect with deterministic, causal, closed-
 - **DSP Action:**
   1. 4X polyphase sinc interpolation detects continuous analog peaks between discrete samples.
   2. Strict ceiling set to $-0.3\text{ dBFS}$ with $1.5\text{ ms}$ lookahead.
-  3. Guarantees 100% compliance with EBU R128 and streaming platform standards (Spotify, Apple Music, YouTube).
+  3. For EBU R128 broadcast delivery and the -1 dBTP recommendation of Spotify / Apple Music, set the ceiling to $-1.0\text{ dBTP}$.
 
 ---
 

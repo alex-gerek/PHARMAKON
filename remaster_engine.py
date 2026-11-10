@@ -6,7 +6,7 @@ Features:
 - Dynamic Anti-AI De-Harshing (Band-isolated envelope follower / dynamic ducker)
 - Auto Spectral Antidote (Welch PSD + Prominence peak detection for AI metallic resonances)
 - True-Peak Brickwall Limiter with 4x Polyphase Oversampling (ISP suppression)
-- ITU-R BS.1770-4 / EBU R128 Integrated LUFS Loudness Metering
+- ITU-R BS.1770-4 Integrated LUFS Loudness Metering (verified against EBU Tech 3341 cases 1-5)
 - Dual-Ballistic Envelope Follower Drum Transient Designer
 - Infrasonic Sub-Cut & True Mono Solidification below crossover
 - 3D Mid-Side Stereo Expansion & Analog Tape Warmth Saturation
@@ -132,12 +132,19 @@ def apply_tape_warmth_v2(audio: np.ndarray,
                          drive: float = 1.05, 
                          bias: float = 0.035, 
                          ceiling: float = 0.98, 
-                         oversample: int = 4) -> np.ndarray:
+                         oversample: int = 4,
+                         deemphasis: bool = False) -> np.ndarray:
     """
     Tape-Inspired Asymmetric Saturation Processor (v2.4).
-    - 3.5 kHz Pre-emphasis HF saturation tilt.
+    - 3.5 kHz HF pre-emphasis (+1.58 dB asymptotic shelf, ~+1.3 dB at 10 kHz).
+      deemphasis=False (legacy default): no de-emphasis - a permanent HF tilt of the stage.
+      deemphasis=True: the exact inverse filter is applied after saturation (tape-style
+      pre/de pair): the HF still drives the saturator harder, but the linear response of
+      the stage is flat.
     - 4X Polyphase oversampling anti-aliasing.
-    - Global-asymptote scaled asymmetric tanh waveshaping (H2 = -38.05 dBc).
+    - Global-asymptote scaled asymmetric tanh waveshaping. 1 kHz, drive 1.05: H2 = -38.0 dBc / H3 = -22.6 dBc
+      at 0 dBFS; H2 = -52.6 dBc / H3 = -56.5 dBc at -18 dBFS (odd H3 dominates at high level,
+      even H2 at low level; see baseline.json tape_stage_telemetry).
     - 10 Hz recursive One-Pole DC Blocker (steady-state |DC| < 1e-7 in float32).
     """
     if drive <= 1.0001 and abs(bias) < 1e-5:
@@ -149,7 +156,7 @@ def apply_tape_warmth_v2(audio: np.ndarray,
 
     n_samples, n_channels = audio.shape
 
-    # 1. High-Frequency Pre-Emphasis (+1.58 dB HF tilt > 3.5 kHz)
+    # 1. High-Frequency Pre-Emphasis (+1.58 dB asymptotic HF shelf above ~3.5 kHz; not de-emphasized)
     sos_hp = signal.butter(1, 3500.0, btype='highpass', fs=sr, output='sos')
     hp_tilt = signal.sosfilt(sos_hp, audio, axis=0)
     audio_pre = audio + 0.20 * hp_tilt
@@ -158,7 +165,7 @@ def apply_tape_warmth_v2(audio: np.ndarray,
     up_sr = sr * oversample
     audio_up = signal.resample_poly(audio_pre, up_sr, sr, axis=0)
 
-    # 3. Global Asymptote-Scaled Saturation (Preserves H2)
+    # 3. Global Asymptote-Scaled Saturation (bias adds even-order H2 on top of tanh odd-order H3)
     u = audio_up * drive
     tanh_b = np.tanh(bias)
     scale = ceiling / (1.0 + tanh_b)
@@ -173,6 +180,16 @@ def apply_tape_warmth_v2(audio: np.ndarray,
         pad_len = n_samples - len(audio_down)
         pad = np.zeros((pad_len, n_channels), dtype=audio_down.dtype)
         audio_down = np.vstack([audio_down, pad])
+
+    # 4b. Matched de-emphasis: exact inverse of H(z) = 1 + 0.2 * HP(z).
+    #     HP = (b0 + b1 z^-1) / (1 + a1 z^-1)  ->  1/H = (1 + a1 z^-1) / ((1 + 0.2 b0) + (a1 + 0.2 b1) z^-1)
+    #     The zero of H lies inside the unit circle (minimum phase), so the inverse is stable
+    #     and cancels both magnitude and phase of the pre-emphasis.
+    if deemphasis:
+        b0, b1, _, _, a1, _ = sos_hp[0]
+        den = np.array([1.0 + 0.2 * b0, a1 + 0.2 * b1])
+        num = np.array([1.0, a1])
+        audio_down = signal.lfilter(num / den[0], den / den[0], audio_down, axis=0)
 
     # 5. One-Pole DC Blocker (10 Hz High-Pass)
     R = 1.0 - (2.0 * np.pi * 10.0 / sr)
@@ -244,45 +261,52 @@ def verify_wav_export(file_path, expected_subtype='PCM_24', expected_sr=None):
         "valid": True,
     }
 
-# 1. ITU-R BS.1770-4 / EBU R128 INTEGRATED LUFS METER
+# 1. ITU-R BS.1770-4 INTEGRATED LUFS METER (EBU TECH 3341 CASES 1-5 VERIFIED)
 # -----------------------------------------------------------------------------
 
 def _get_k_weighting_biquads(sr):
-    """Generates K-weighting biquad coefficients for ITU-R BS.1770-4."""
-    # Stage 1: Pre-filter high shelf (+3.99 dB at 1682 Hz)
+    """
+    K-weighting biquad coefficients for ITU-R BS.1770-4, valid at any sample rate.
+
+    Uses the bilinear (K = tan(pi * f0 / fs)) formulation of the BS.1770 analog
+    prototypes. At 48 kHz it reproduces the coefficient table published in
+    ITU-R BS.1770-4 (Tables 1 and 2) to better than 1e-8; at other rates
+    (44.1 kHz, 96 kHz, ...) it yields the equivalent filters.
+
+    Note: the RBJ "Audio EQ Cookbook" shelf formula must NOT be used with these
+    f0 / Q constants - it does not reproduce the ITU filter (error up to -0.41 dB
+    around 2 kHz, -0.26 LU on the EBU Tech 3341 1 kHz reference tone).
+    """
+    # Stage 1: high-shelf pre-filter (~+4 dB above ~1.7 kHz, head acoustics)
     f0 = 1681.974450955533
-    gain_db = 3.99984385397
-    Q = 0.7071752369274193
-    A = 10.0 ** (gain_db / 40.0)
-    w0 = 2.0 * np.pi * f0 / sr
-    alpha = np.sin(w0) / (2.0 * Q)
-    cos_w = np.cos(w0)
-    sqrt_A = np.sqrt(A)
+    gain_db = 3.999843853973347
+    Q = 0.7071752369554196
+    K = np.tan(np.pi * f0 / sr)
+    Vh = 10.0 ** (gain_db / 20.0)
+    Vb = Vh ** 0.4996667741545416
+    a0 = 1.0 + K / Q + K * K
+    b_shelf = np.array([
+        (Vh + Vb * K / Q + K * K) / a0,
+        2.0 * (K * K - Vh) / a0,
+        (Vh - Vb * K / Q + K * K) / a0,
+    ])
+    a_shelf = np.array([
+        1.0,
+        2.0 * (K * K - 1.0) / a0,
+        (1.0 - K / Q + K * K) / a0,
+    ])
 
-    b0 = A * ((A + 1.0) + (A - 1.0) * cos_w + 2.0 * sqrt_A * alpha)
-    b1 = -2.0 * A * ((A - 1.0) + (A + 1.0) * cos_w)
-    b2 = A * ((A + 1.0) + (A - 1.0) * cos_w - 2.0 * sqrt_A * alpha)
-    a0 = (A + 1.0) - (A - 1.0) * cos_w + 2.0 * sqrt_A * alpha
-    a1 = 2.0 * ((A - 1.0) - (A + 1.0) * cos_w)
-    a2 = (A + 1.0) - (A - 1.0) * cos_w - 2.0 * sqrt_A * alpha
-    b_shelf = np.array([b0, b1, b2]) / a0
-    a_shelf = np.array([a0, a1, a2]) / a0
-
-    # Stage 2: Highpass RLB (38.13 Hz, Q = 0.5003)
+    # Stage 2: RLB high-pass (~38 Hz). ITU numerator is [1, -2, 1] (not normalized).
     f0_hp = 38.13547087602444
     Q_hp = 0.5003270373238773
-    w0_hp = 2.0 * np.pi * f0_hp / sr
-    alpha_hp = np.sin(w0_hp) / (2.0 * Q_hp)
-    cos_w_hp = np.cos(w0_hp)
-
-    b0_hp = (1.0 + cos_w_hp) / 2.0
-    b1_hp = -(1.0 + cos_w_hp)
-    b2_hp = (1.0 + cos_w_hp) / 2.0
-    a0_hp = 1.0 + alpha_hp
-    a1_hp = -2.0 * cos_w_hp
-    a2_hp = 1.0 - alpha_hp
-    b_hp = np.array([b0_hp, b1_hp, b2_hp]) / a0_hp
-    a_hp = np.array([a0_hp, a1_hp, a2_hp]) / a0_hp
+    K_hp = np.tan(np.pi * f0_hp / sr)
+    a0_hp = 1.0 + K_hp / Q_hp + K_hp * K_hp
+    b_hp = np.array([1.0, -2.0, 1.0])
+    a_hp = np.array([
+        1.0,
+        2.0 * (K_hp * K_hp - 1.0) / a0_hp,
+        (1.0 - K_hp / Q_hp + K_hp * K_hp) / a0_hp,
+    ])
 
     return (b_shelf, a_shelf), (b_hp, a_hp)
 
@@ -378,14 +402,203 @@ def detect_harsh_resonances(audio, sr, min_freq=3200, max_freq=7800):
     return 5000.0, 2.8, 0.0
 
 # -----------------------------------------------------------------------------
+# 2b. AUTO ANTIDOTE v2: PERSISTENT RESONANT COLOURING DETECTOR + MATCHED CORRECTION
+# -----------------------------------------------------------------------------
+# v1 above picks the strongest narrow peak of one long-term spectrum - a sustained
+# note is such a peak, so v1 targets notes and misses real resonances
+# (ground truth: 12/12 false positives on clean music, ~0 % recall on injected EQ
+# resonances). v2 separates the two physically:
+#   * a note partial is a spectral LINE (1-3 FFT bins),
+#   * resonant colouring is a BUMP of the envelope (width ~ f/Q).
+# Per 2 s segment (hop 1 s): Welch 8192 -> remove lines with a ~200 Hz running median
+# -> envelope on a 1/96-octave grid -> bump = envelope - 1-octave running median ->
+# bumps >= 1.5 dB, >= 1/24 octave wide -> persistence across segments.
+# Validation: bench/validate_resonance.py (0/12 false positives; 6 dB recall 89 %
+# synthetic / 73 % real tracks; frequency error ~0.5 %; Q estimate +-50 %).
+
+RV2_GRID_PER_OCT = 96
+RV2_SEG_S, RV2_HOP_S = 2.0, 1.0
+RV2_LINE_MEDIAN_HZ = 200.0
+RV2_BASELINE_OCT = 1.0
+RV2_BUMP_MIN_DB = 1.5
+RV2_BUMP_MIN_WIDTH_OCT = 1.0 / 24.0
+RV2_MATCH_BINS = 2
+RV2_PERSIST_MIN = 0.6
+RV2_PROM_MIN = 2.0
+RV2_LINE_MIN_DB = 6.0
+
+
+def _rv2_running_median(v, win):
+    win = max(3, int(win) | 1)
+    pad = win // 2
+    return signal.medfilt(np.pad(v, pad, mode="edge"), win)[pad:-pad]
+
+
+def _rv2_segment_curves(seg, sr, grid):
+    f, p = signal.welch(seg, fs=sr, nperseg=min(8192, len(seg)))
+    pdb = 10.0 * np.log10(np.maximum(p, 1e-20))
+    env_lin = _rv2_running_median(pdb, RV2_LINE_MEDIAN_HZ / (f[1] - f[0]))
+    env = np.interp(grid, f, env_lin)
+    bump = env - _rv2_running_median(env, RV2_BASELINE_OCT * RV2_GRID_PER_OCT)
+    edges = np.sqrt(grid[:-1] * grid[1:])
+    idx = np.searchsorted(edges, f)
+    lines = np.full(len(grid), -99.0)
+    np.maximum.at(lines, idx, pdb - env_lin)
+    return bump, lines
+
+
+def _rv2_q_from_width(width_oct):
+    if width_oct <= 0:
+        return None
+    r = 2.0 ** (width_oct / 2.0)
+    return float(1.0 / (r - 1.0 / r))
+
+
+def detect_resonances_v2(audio, sr, f_lo=2000.0, f_hi=9000.0):
+    """
+    Persistent resonant colouring detector (see block comment above).
+    Returns {'resonances': [{hz, persistence, prominence_db, width_oct, q_est, score}, ...]
+             sorted by score, 'tonal_lines': [...diagnostic...], 'segments': n}.
+    """
+    x = np.asarray(audio, dtype=np.float64)
+    x = x.mean(axis=1) if x.ndim == 2 else x
+    f_max = min(14000.0, 0.45 * sr)
+    grid = np.geomspace(500.0, f_max, int(np.log2(f_max / 500.0) * RV2_GRID_PER_OCT) + 1)
+    band = (grid >= f_lo) & (grid <= f_hi)
+    seg_n, hop_n = int(RV2_SEG_S * sr), int(RV2_HOP_S * sr)
+    if len(x) < seg_n:
+        seg_n = hop_n = len(x)
+    starts = list(range(0, len(x) - seg_n + 1, hop_n))
+    rms = np.array([np.sqrt(np.mean(x[s:s + seg_n] ** 2)) for s in starts])
+    if len(rms) == 0 or rms.max() <= 0:
+        return {"resonances": [], "tonal_lines": [], "segments": 0}
+    active = [s for s, r in zip(starts, rms) if r >= rms.max() * 10 ** (-30 / 20)]
+
+    min_w = RV2_BUMP_MIN_WIDTH_OCT * RV2_GRID_PER_OCT
+    wlen = int(RV2_GRID_PER_OCT * RV2_BASELINE_OCT) | 1
+    P, B, W, L = [], [], [], []
+    for s in active:
+        bump, lines = _rv2_segment_curves(x[s:s + seg_n], sr, grid)
+        pk, props = signal.find_peaks(bump, height=RV2_BUMP_MIN_DB, width=min_w, rel_height=0.5, wlen=wlen)
+        keep = band[pk]
+        pres = np.zeros(len(grid), bool)
+        wid = np.zeros(len(grid))
+        for i, w in zip(pk[keep], props["widths"][keep]):
+            lo, hi = max(0, i - RV2_MATCH_BINS), min(len(grid), i + RV2_MATCH_BINS + 1)
+            pres[lo:hi] = True
+            wid[lo:hi] = np.maximum(wid[lo:hi], w / RV2_GRID_PER_OCT)
+        lp, _ = signal.find_peaks(np.where(band, lines, -99.0), height=RV2_LINE_MIN_DB)
+        lpres = np.zeros(len(grid), bool)
+        for i in lp:
+            lpres[max(0, i - RV2_MATCH_BINS):i + RV2_MATCH_BINS + 1] = True
+        P.append(pres)
+        B.append(bump)
+        W.append(wid)
+        L.append(lpres)
+    P, B, W, L = map(np.array, (P, B, W, L))
+    persistence = P.mean(axis=0)
+    height = np.array([np.median(B[P[:, i], i]) if P[:, i].any() else 0.0 for i in range(len(grid))])
+    width = np.array([np.median(W[P[:, i], i]) if P[:, i].any() else 0.0 for i in range(len(grid))])
+    mask = band & (persistence >= RV2_PERSIST_MIN) & (height >= RV2_PROM_MIN)
+    score = persistence * height
+    cand, _ = signal.find_peaks(np.where(mask, score, 0.0), distance=8)
+    res = [{"hz": round(float(grid[i]), 1),
+            "persistence": round(float(persistence[i]), 3),
+            "prominence_db": round(float(height[i]), 2),
+            "width_oct": round(float(width[i]), 3),
+            "q_est": round(_rv2_q_from_width(width[i]), 1) if width[i] > 0 else None,
+            "score": round(float(score[i]), 3),
+            # per active segment: is this resonance present there (drives local correction)
+            "_presence": [bool(v) for v in P[:, i]]} for i in cand]
+    res.sort(key=lambda d: -d["score"])
+    lpers = L.mean(axis=0)
+    lc, _ = signal.find_peaks(np.where(band & (lpers >= 0.8), lpers, 0.0), distance=8)
+    tonal = sorted([{"hz": round(float(grid[i]), 1), "persistence": round(float(lpers[i]), 3)} for i in lc],
+                   key=lambda d: -d["persistence"])[:10]
+    return {"resonances": res, "tonal_lines": tonal, "segments": int(len(P)),
+            "_seg_starts": [int(s) for s in active], "_seg_n": int(seg_n)}
+
+
+def _peaking_sos(f0, gain_db, q, sr):
+    """RBJ peaking EQ biquad as SOS."""
+    A = 10.0 ** (gain_db / 40.0)
+    w = 2.0 * np.pi * f0 / sr
+    al = np.sin(w) / (2.0 * q)
+    b = np.array([1 + al * A, -2 * np.cos(w), 1 - al * A])
+    a = np.array([1 + al / A, -2 * np.cos(w), 1 - al / A])
+    return np.concatenate([b / a[0], a / a[0]])[np.newaxis, :]
+
+
+def _presence_weight(n_samples, sr, seg_starts, seg_n, presence, fade_s=0.5):
+    """Per-sample weight 0..1: 1 inside segments where the resonance is present, raised-cosine
+    smoothed over fade_s; 0 elsewhere (audio there stays bit-exact)."""
+    w = np.zeros(n_samples)
+    for st, on in zip(seg_starts, presence):
+        if on:
+            w[st:st + seg_n] = 1.0
+    k = max(3, int(fade_s * sr) | 1)
+    win = np.hanning(k)
+    w = signal.fftconvolve(w, win / win.sum(), mode="same")
+    w = np.clip(w, 0.0, 1.0)
+    w[w < 1e-4] = 0.0
+    w[w > 1.0 - 1e-4] = 1.0
+    return w
+
+
+def apply_resonance_correction(audio, sr, resonances, depth=1.0, max_cut_db=8.0, max_bands=3,
+                               q_min=2.0, q_max=16.0, timeline=None):
+    """
+    Matched correction of resonant colouring: a zero-phase peaking cut at each detected
+    resonance with gain = -depth * measured height (capped), Q from the measured width.
+    Zero-phase via sosfiltfilt with half the gain per pass (magnitudes multiply, so the
+    total cut equals the target).
+
+    timeline = {'seg_starts': [...], 'seg_n': n} (from detect_resonances_v2) makes the
+    correction LOCAL in time: y = x + w(t) * (cut(x) - x), w = 1 only in segments where
+    that resonance was detected (its '_presence'), 0.5 s raised-cosine transitions.
+    Because cut(x) is zero-phase, the blend is a smooth time-varying cut depth (no comb
+    filtering), and audio where w = 0 is untouched. Without timeline: static, whole track.
+    Returns (audio, applied_bands).
+    """
+    out = np.asarray(audio, dtype=np.float64)
+    applied = []
+    for r in resonances[:max_bands]:
+        cut = float(min(max_cut_db, depth * r["prominence_db"]))
+        if cut < 0.5:
+            continue
+        q = float(np.clip(r.get("q_est") or 6.0, q_min, q_max))
+        f0 = float(min(r["hz"], 0.45 * sr))
+        cut_sig = signal.sosfiltfilt(_peaking_sos(f0, -cut / 2.0, q, sr), out, axis=0)
+        coverage = 1.0
+        if timeline is not None and r.get("_presence") is not None:
+            w = _presence_weight(len(out), sr, timeline["seg_starts"], timeline["seg_n"], r["_presence"])
+            out = out + w[:, None] * (cut_sig - out) if out.ndim == 2 else out + w * (cut_sig - out)
+            coverage = float(np.mean(w))
+        else:
+            out = cut_sig
+        applied.append({"hz": round(f0, 1), "cut_db": round(cut, 2), "q": round(q, 2),
+                        "time_coverage": round(coverage, 3)})
+    return out.astype(np.float32), applied
+
+# -----------------------------------------------------------------------------
 # 3. DYNAMIC ANTI-AI DE-HARSHING (ENVELOPE-FOLLOWING MULTI-BAND DUCKER)
 # -----------------------------------------------------------------------------
 
-def dynamic_deharsh(audio, sr, center_freq=5000.0, q=2.8, depth=1.0):
+def dynamic_deharsh(audio, sr, center_freq=5000.0, q=2.8, depth=1.0, calibrated=False):
     """
     Dynamic De-Harshing filter: Isolates the harsh resonant frequency band and
-    attenuates it proportionally ONLY when excessive energy is detected.
-    Prevents muffling quiet, soft passages while surgically squashing digital screeches.
+    attenuates it proportionally when excessive energy is detected.
+
+    calibrated=False (legacy, default - the sound of all masters up to 3.1):
+        expected_ratio = bw / (1.35 * f) compares a BANDWIDTH ratio with an
+        AMPLITUDE ratio. Amplitudes of broadband material scale with
+        sqrt(bandwidth), so the expected level is set ~6 dB too low and the
+        band is ducked by ~5.5 dB even on flat white / pink noise with no
+        resonance (a static-like cut plus the dynamic action on top).
+    calibrated=True:
+        expected_ratio = sqrt(bw_harsh / bw_ref) from the actual band edges, so
+        flat-spectrum material is left essentially untouched and ducking only
+        starts when the band genuinely stands out from its surroundings.
     """
     audio = ensure_stereo(audio)
     nyq = 0.5 * sr
@@ -404,7 +617,8 @@ def dynamic_deharsh(audio, sr, center_freq=5000.0, q=2.8, depth=1.0):
     b_ref, a_ref = signal.butter(2, [f_ref_low, f_ref_high], btype='band')
     ref_band = signal.filtfilt(b_ref, a_ref, audio, axis=0)
 
-    # 3. Vectorized Envelope Followers (Attack ~5ms, Release ~45ms)
+    # 3. Envelope followers: peak across channels, then zero-phase (filtfilt) 35 Hz 1st-order
+    #    low-pass - symmetric smoothing (~4.5 ms time constant), no separate attack/release.
     harsh_mono = np.max(np.abs(harsh_band), axis=1)
     ref_mono = np.max(np.abs(ref_band), axis=1)
 
@@ -413,11 +627,16 @@ def dynamic_deharsh(audio, sr, center_freq=5000.0, q=2.8, depth=1.0):
     env_ref = signal.filtfilt(b_env, a_env, ref_mono)
 
     # 4. Compute dynamic attenuation factor
-    # Expected band-to-reference ratio for normal acoustic spectral distribution
-    expected_ratio = bw / (center_freq * 1.35)
+    # Expected band-to-reference amplitude ratio for a flat spectral distribution
+    if calibrated:
+        bw_harsh_hz = (f_high - f_low) * nyq
+        bw_ref_hz = (f_ref_high - f_ref_low) * nyq
+        expected_ratio = float(np.sqrt(bw_harsh_hz / max(1.0, bw_ref_hz)))
+    else:
+        expected_ratio = bw / (center_freq * 1.35)  # legacy (see docstring)
     excess = np.maximum(0.0, env_harsh - env_ref * expected_ratio)
     
-    # Gain ducking: up to 9-12 dB reduction when harsh resonance spikes
+    # Gain ducking: duck_amount up to 0.85 -> up to ~16.5 dB in-band reduction on harsh resonance spikes
     duck_amount = np.clip((excess / (env_harsh + 1e-6)) * depth, 0.0, 0.85)
 
     # 5. Apply dynamic attenuation strictly to the isolated band
@@ -429,11 +648,12 @@ def dynamic_deharsh(audio, sr, center_freq=5000.0, q=2.8, depth=1.0):
 # 4. TRUE-PEAK BRICKWALL LIMITER WITH 4X POLYPHASE OVERSAMPLING
 # -----------------------------------------------------------------------------
 
-def _true_peak_limiter_block(audio, sr, target_ceiling_db=-0.3, oversample=4):
+def _true_peak_limiter_block(audio, sr, target_ceiling_db=-0.3, oversample=4, legacy_limiter=False):
     """
     Core 4x polyphase oversampled brickwall limiter for audio segment.
-    ITU-R BS.1770-4 / EBU R128 compliant with decimation peak-regrowth compensation.
-    100% Stereo-Linked envelope follower prevents phantom center shifts.
+    P0-2 Refactored: Computes gain reduction envelope on 4X True-Peak signal and applies
+    it directly to 1X signal without audio resampling or global tanh degradation.
+    Preserves bit-identical pristine audio outside peak events (residual error <= -80 dBFS).
     """
     is_1d = audio.ndim == 1
     if is_1d:
@@ -442,51 +662,82 @@ def _true_peak_limiter_block(audio, sr, target_ceiling_db=-0.3, oversample=4):
     orig_len = len(audio)
     target_ceiling = 10.0 ** (target_ceiling_db / 20.0)
 
-    # 4X Polyphase upsampling to detect inter-sample peaks (sinc reconstruction)
+    # Legacy limiter implementation retained for backwards-compatibility comparison
+    if legacy_limiter:
+        audio_4x = signal.resample_poly(audio, up=oversample, down=1, axis=0)
+        sr_4x = sr * oversample
+        peak_4x = float(np.max(np.abs(audio_4x)))
+        if peak_4x <= target_ceiling:
+            tp_db = float(20.0 * np.log10(max(1e-9, peak_4x)))
+            out_aud = audio.squeeze() if is_1d else audio
+            return out_aud.astype(np.float32), round(tp_db, 2)
+        max_sample_4x = np.max(np.abs(audio_4x), axis=1)
+        internal_ceiling = target_ceiling * (10.0 ** (-0.15 / 20.0))
+        needed_gain = np.minimum(1.0, internal_ceiling / (max_sample_4x + 1e-12))
+        win_size = int(0.0015 * sr_4x) | 1
+        gain_ahead = minimum_filter1d(needed_gain, size=win_size, origin=0)
+        b_rel, a_rel = signal.butter(1, 30.0 / (0.5 * sr_4x), btype='low')
+        gain_smooth = signal.filtfilt(b_rel, a_rel, gain_ahead)
+        gain_final_4x = np.minimum(needed_gain, gain_smooth)
+        limited_4x = audio_4x * gain_final_4x[:, None]
+        limited_1x = signal.resample_poly(limited_4x, up=1, down=oversample, axis=0)
+        if len(limited_1x) > orig_len:
+            limited_1x = limited_1x[:orig_len]
+        elif len(limited_1x) < orig_len:
+            pad = np.zeros((orig_len - len(limited_1x), limited_1x.shape[1]), dtype=limited_1x.dtype)
+            limited_1x = np.vstack([limited_1x, pad])
+        excess = np.maximum(0.0, np.abs(limited_1x) - target_ceiling)
+        if np.any(excess > 0.0):
+            limited_1x = np.tanh(limited_1x / target_ceiling) * target_ceiling
+        actual_tp = float(np.max(np.abs(limited_4x)))
+        tp_db = float(20.0 * np.log10(max(1e-9, actual_tp)))
+        if is_1d:
+            limited_1x = limited_1x.squeeze()
+        return limited_1x.astype(np.float32), round(tp_db, 2)
+
+    # 1. 4X Polyphase upsampling to detect inter-sample peaks
     audio_4x = signal.resample_poly(audio, up=oversample, down=1, axis=0)
     sr_4x = sr * oversample
 
-    peak_4x = float(np.max(np.abs(audio_4x)))
-    if peak_4x <= target_ceiling:
-        true_peak_db = float(20.0 * np.log10(max(1e-9, peak_4x)))
-        out_aud = audio.squeeze() if is_1d else audio
-        logger.debug(
-            "Limiter block bypass: frames=%d sr=%d peak_4x=%.6f <= ceiling=%.6f (%.2f dBFS)",
-            orig_len,
-            sr,
-            peak_4x,
-            target_ceiling,
-            target_ceiling_db,
-        )
-        return out_aud.astype(np.float32), round(true_peak_db, 2)
-
-    # 100% Stereo-Linked peak detection across channels
     max_sample_4x = np.max(np.abs(audio_4x), axis=1)
+    internal_ceiling = target_ceiling * (10.0 ** (-0.20 / 20.0))
 
-    # 0.15 dB safety margin on internal 4X ceiling to absorb decimation filter Gibbs ringing (Peak Regrowth)
-    internal_ceiling = target_ceiling * (10.0 ** (-0.15 / 20.0))
-    needed_gain = np.minimum(1.0, internal_ceiling / (max_sample_4x + 1e-12))
+    # Also account for 1X sample peaks directly
+    max_sample_1x = np.max(np.abs(audio), axis=1)
+    rep_1x_peaks = np.repeat(max_sample_1x, oversample)[:len(max_sample_4x)]
+    combined_peaks_4x = np.maximum(max_sample_4x, rep_1x_peaks)
 
-    win_size = int(0.0015 * sr_4x) | 1
+    needed_gain = np.minimum(1.0, internal_ceiling / (combined_peaks_4x + 1e-12))
+
+    # Fast lookahead minimum filter (2 ms)
+    win_size = int(0.002 * sr_4x) | 1
     gain_ahead = minimum_filter1d(needed_gain, size=win_size, origin=0)
 
+    # Smooth release filter
     b_rel, a_rel = signal.butter(1, 30.0 / (0.5 * sr_4x), btype='low')
     gain_smooth = signal.filtfilt(b_rel, a_rel, gain_ahead)
     gain_final_4x = np.minimum(needed_gain, gain_smooth)
 
-    limited_4x = audio_4x * gain_final_4x[:, None]
-    limited_1x = signal.resample_poly(limited_4x, up=1, down=oversample, axis=0)
-    if len(limited_1x) > orig_len:
-        limited_1x = limited_1x[:orig_len]
-    elif len(limited_1x) < orig_len:
-        pad = np.zeros((orig_len - len(limited_1x), limited_1x.shape[1]), dtype=limited_1x.dtype)
-        limited_1x = np.vstack([limited_1x, pad])
+    # 2. Downsample gain envelope to 1X via minimum pooling
+    pad_len = int(np.ceil(len(gain_final_4x) / oversample) * oversample)
+    if pad_len > len(gain_final_4x):
+        gain_final_4x = np.pad(gain_final_4x, (0, pad_len - len(gain_final_4x)), mode='edge')
+    gain_1x = np.min(gain_final_4x[:orig_len * oversample].reshape(orig_len, oversample), axis=1)
 
-    # Soft-knee safety guard instead of brutal hard-clipping
-    excess = np.maximum(0.0, np.abs(limited_1x) - target_ceiling)
-    if np.any(excess > 0.0):
-        overshoot_samples = int(np.count_nonzero(excess > 0.0))
-        max_excess = float(np.max(excess))
+    # 3. Apply gain directly to original 1X audio (zero filtering on audio!)
+    limited_1x = audio * gain_1x[:, None]
+
+    # 4. Localized True-Peak verification & windowed guard (NO global tanh!)
+    tp_out_4x = signal.resample_poly(limited_1x, up=oversample, down=1, axis=0)
+    max_tp_4x = np.max(np.abs(tp_out_4x), axis=1)
+    tp_overshoot_4x = max_tp_4x > target_ceiling
+    sample_overshoot_1x = np.max(np.abs(limited_1x), axis=1) > target_ceiling
+
+    if np.any(tp_overshoot_4x) or np.any(sample_overshoot_1x):
+        tp_ov_1x = np.any(tp_overshoot_4x[:orig_len * oversample].reshape(orig_len, oversample), axis=1)
+        ov_mask = tp_ov_1x | sample_overshoot_1x
+        overshoot_samples = int(np.count_nonzero(ov_mask))
+        max_excess = float(max(np.max(max_tp_4x - target_ceiling), np.max(np.abs(limited_1x) - target_ceiling)))
         logger.warning(
             "Limiter post-decimation safety guard triggered: overshoot_samples=%d total_samples=%d max_excess=%.6f ceiling_db=%.2f",
             overshoot_samples,
@@ -494,24 +745,28 @@ def _true_peak_limiter_block(audio, sr, target_ceiling_db=-0.3, oversample=4):
             max_excess,
             target_ceiling_db,
         )
-        limited_1x = np.tanh(limited_1x / target_ceiling) * target_ceiling
-    else:
-        logger.debug(
-            "Limiter block processed: frames=%d sr=%d peak_4x_in=%.6f ceiling_db=%.2f guard_triggered=False",
-            orig_len,
-            sr,
-            peak_4x,
-            target_ceiling_db,
-        )
+        expand_samples = int(0.015 * sr)
+        kernel = np.ones(2 * expand_samples + 1, dtype=bool)
+        ov_expanded = np.convolve(ov_mask.astype(float), kernel.astype(float), mode='same') > 0
+        smooth_mask = signal.convolve(ov_expanded.astype(float), np.hanning(int(0.005 * sr)), mode='same')
+        smooth_mask = np.clip(smooth_mask / max(1e-6, np.max(smooth_mask)), 0.0, 1.0)[:, None]
+        tanh_audio = np.tanh(limited_1x / target_ceiling) * target_ceiling
+        limited_1x = limited_1x * (1.0 - smooth_mask) + tanh_audio * smooth_mask
 
-    actual_tp = float(np.max(np.abs(limited_4x)))
+    limited_1x = np.clip(limited_1x, -target_ceiling, target_ceiling)
+
+    # Measure final true peak
+    res_l = signal.resample_poly(limited_1x[:, 0], 4, 1)
+    res_r = signal.resample_poly(limited_1x[:, 1], 4, 1)
+    actual_tp = float(max(np.max(np.abs(res_l)), np.max(np.abs(res_r))))
     true_peak_db = float(20.0 * np.log10(max(1e-9, actual_tp)))
+
     if is_1d:
         limited_1x = limited_1x.squeeze()
     return limited_1x.astype(np.float32), round(true_peak_db, 2)
 
 
-def true_peak_limiter(audio, sr, target_ceiling_db=-0.3, oversample=4):
+def true_peak_limiter(audio, sr, target_ceiling_db=-0.3, oversample=4, legacy_limiter=False):
     """
     True-Peak Brickwall Limiter with 4x Polyphase Oversampling.
     Includes seamless chunking protection for long audio files (>3 minutes) to guarantee zero OOM.
@@ -521,9 +776,10 @@ def true_peak_limiter(audio, sr, target_ceiling_db=-0.3, oversample=4):
     max_chunk_samples = int(120 * sr)  # 2 minutes per chunk
 
     if orig_len <= max_chunk_samples:
-        return _true_peak_limiter_block(audio, sr, target_ceiling_db, oversample)
+        return _true_peak_limiter_block(audio, sr, target_ceiling_db, oversample, legacy_limiter=legacy_limiter)
 
-    # Chunked streaming processing with 1.0s equal-power crossfades
+    # Chunked streaming processing with 1.0 s raised-cosine equal-GAIN crossfades
+    # (fade_in + fade_out = 1: correct for the strongly correlated overlapping chunks)
     fade_len = int(1.0 * sr)
     step = max_chunk_samples - fade_len
     out_audio = np.zeros_like(audio, dtype=np.float32)
@@ -532,7 +788,7 @@ def true_peak_limiter(audio, sr, target_ceiling_db=-0.3, oversample=4):
     for start_idx in range(0, orig_len, step):
         end_idx = min(start_idx + max_chunk_samples, orig_len)
         chunk = audio[start_idx:end_idx]
-        proc_chunk, tp_db = _true_peak_limiter_block(chunk, sr, target_ceiling_db, oversample)
+        proc_chunk, tp_db = _true_peak_limiter_block(chunk, sr, target_ceiling_db, oversample, legacy_limiter=legacy_limiter)
         max_tp_db = max(max_tp_db, tp_db)
 
         chunk_len = len(proc_chunk)
@@ -561,6 +817,49 @@ def true_peak_limiter(audio, sr, target_ceiling_db=-0.3, oversample=4):
     return out_audio.astype(np.float32), round(max_tp_db, 2)
 
 
+def saturate_vocal_oversampled(audio: np.ndarray, sr: int = 48000, drive: float = 1.08, ceiling: float = 0.96, oversample: int = 4) -> np.ndarray:
+    """4x Polyphase Oversampled Vocal Saturation to prevent HF foldback aliasing (P1-2)."""
+    if drive <= 1.0001:
+        return audio.astype(np.float32)
+    orig_len = len(audio)
+    is_1d = (audio.ndim == 1)
+    if is_1d:
+        audio = audio[:, np.newaxis]
+    up_sr = sr * oversample
+    audio_up = signal.resample_poly(audio, up_sr, sr, axis=0)
+    sat_up = np.tanh(audio_up * drive) * ceiling
+    audio_down = signal.resample_poly(sat_up, sr, up_sr, axis=0)
+    if len(audio_down) > orig_len:
+        audio_down = audio_down[:orig_len]
+    elif len(audio_down) < orig_len:
+        pad = np.zeros((orig_len - len(audio_down), audio_down.shape[1]), dtype=audio_down.dtype)
+        audio_down = np.vstack([audio_down, pad])
+    if is_1d:
+        audio_down = audio_down.squeeze()
+    return audio_down.astype(np.float32)
+
+
+def soft_clip_oversampled(x: np.ndarray, sr: int, threshold: float = 0.95, oversample: int = 4) -> np.ndarray:
+    """
+    soft_clip (tanh) evaluated at 4x polyphase oversampling.
+    tanh creates odd harmonics without bound; at 1x every harmonic above Nyquist
+    folds back as inharmonic aliasing (measured -31 / -33 dB on drum / bass stages).
+    At 4x those harmonics land below the 4x Nyquist and are removed by the
+    decimation filter. Small-signal response is identical to soft_clip.
+    """
+    orig_len = len(x)
+    is_1d = (x.ndim == 1)
+    if is_1d:
+        x = x[:, np.newaxis]
+    x_up = signal.resample_poly(x, oversample, 1, axis=0)
+    y = signal.resample_poly(np.tanh(x_up / threshold) * threshold, 1, oversample, axis=0)
+    if len(y) > orig_len:
+        y = y[:orig_len]
+    elif len(y) < orig_len:
+        y = np.vstack([y, np.zeros((orig_len - len(y), y.shape[1]), dtype=y.dtype)])
+    return y[:, 0] if is_1d else y
+
+
 def enhance_drum_transients(drums, sr, punch_factor=1.0):
     """
     Enhances acoustic transient impact using dual attack/release envelope followers.
@@ -573,11 +872,11 @@ def enhance_drum_transients(drums, sr, punch_factor=1.0):
     drums_clean = butter_highpass(drums, 28, sr, order=4)
     abs_d = np.abs(drums_clean)
 
-    # Fast attack filter (approx 2 ms cutoff = 250 Hz)
+    # Fast envelope: 1st-order 250 Hz low-pass (time constant ~0.64 ms)
     b_fast, a_fast = signal.butter(1, 250.0 / (0.5 * sr), btype='low')
     env_fast = signal.lfilter(b_fast, a_fast, abs_d, axis=0)
 
-    # Slow release filter (approx 35 ms cutoff = 25 Hz)
+    # Slow envelope: 1st-order 25 Hz low-pass (time constant ~6.4 ms)
     b_slow, a_slow = signal.butter(1, 25.0 / (0.5 * sr), btype='low')
     env_slow = signal.lfilter(b_slow, a_slow, abs_d, axis=0)
 
@@ -587,7 +886,7 @@ def enhance_drum_transients(drums, sr, punch_factor=1.0):
 
     attack_mask = np.clip((transient / max(1e-6, p_trans)) * (punch_factor - 1.0) * 0.45, 0.0, 0.6)
     drums_proc = drums_clean * (1.0 + attack_mask)
-    return soft_clip(drums_proc, 0.98).astype(np.float32)
+    return soft_clip_oversampled(drums_proc, sr, 0.98).astype(np.float32)
 
 # -----------------------------------------------------------------------------
 # 6. COMPARATIVE METRICS & SPECTRAL CURVES
@@ -882,6 +1181,7 @@ def calc_audio_metrics(orig, proc, sr, params=None):
         'fft_orig_db': [round(float(x), 1) for x in curve_o],
         'fft_proc_db': [round(float(x), 1) for x in curve_p],
         'fft_delta_db': [round(float(x), 1) for x in curve_d],
+        'fft_delta_display_offset_db': 22.0,  # curve_d = residue + 22 dB, clamped [-74, -10] (display only)
         'sub_phase_corr_orig': round(float(np.clip(sub_corr_orig, -1.0, 1.0)), 2),
         'sub_phase_corr_proc': round(float(np.clip(sub_corr_proc, -1.0, 1.0)), 2),
         'full_phase_corr_orig': round(float(np.clip(full_corr_orig, -1.0, 1.0)), 2),
@@ -899,6 +1199,200 @@ def calc_audio_metrics(orig, proc, sr, params=None):
         'scope_sample_orig': byte_o,
         'scope_sample_proc': byte_p
     }
+
+# -----------------------------------------------------------------------------
+# 6b. MEASURED SPECTRAL DIAGNOSIS (single source of truth for console + certificate)
+# -----------------------------------------------------------------------------
+# Every line shown to the user is computed from THIS track's audio. Nothing is a
+# canned claim: a defect is reported only if measured, and "fixed" only if the
+# measurement after processing shows it. Status: 'issue' | 'warn' | 'ok' | 'info'.
+# Thresholds (engineering conventions, documented here, not taste):
+DIAG_TP_STREAMING_DBTP = -1.0     # streaming / EBU R128 max true-peak recommendation
+DIAG_CLIP_LEVEL = 0.9999          # |x| at or above this counts as a full-scale sample
+DIAG_CLIP_RUN = 3                 # >= 3 consecutive full-scale samples = clipped plateau
+DIAG_SUBCORR_WARN = 0.9           # low-band L/R correlation below this = wide / smeared low end
+DIAG_SUBCORR_ISSUE = 0.5          # below this = strong decorrelation; < 0 = anti-phase
+DIAG_INFRA_WARN_DB = -35.0        # energy below sub cutoff relative to total
+DIAG_INFRA_ISSUE_DB = -25.0
+DIAG_RES_ISSUE_DB = 3.0           # persistent resonance height (detector v2)
+
+
+def _diag_item(key, label, status, text, value=None):
+    return {"key": key, "label": label, "status": status, "text": text, "value": value}
+
+
+def _clipped_runs(x):
+    a = np.max(np.abs(ensure_stereo(np.asarray(x))), axis=1) >= DIAG_CLIP_LEVEL
+    if not a.any():
+        return 0
+    edges = np.diff(np.concatenate([[0], a.astype(np.int8), [0]]))
+    starts, ends = np.nonzero(edges == 1)[0], np.nonzero(edges == -1)[0]
+    return int(np.sum((ends - starts) >= DIAG_CLIP_RUN))
+
+
+def _band_rel_change_db(orig, proc, sr, f_lo, f_hi):
+    """Band level change relative to the overall level change (so limiter / loudness gain
+    is not mistaken for an EQ change)."""
+    nyq = 0.5 * sr
+    f_hi = min(f_hi, nyq * 0.98)
+    if f_lo >= f_hi:
+        return 0.0
+    sos = signal.butter(2, [f_lo, f_hi], btype='band', fs=sr, output='sos')
+    mo, mp = np.mean(orig, axis=1), np.mean(proc, axis=1)
+    bo = np.sqrt(np.mean(signal.sosfiltfilt(sos, mo) ** 2)) + 1e-12
+    bp = np.sqrt(np.mean(signal.sosfiltfilt(sos, mp) ** 2)) + 1e-12
+    ro, rp = np.sqrt(np.mean(mo ** 2)) + 1e-12, np.sqrt(np.mean(mp ** 2)) + 1e-12
+    return float(20 * np.log10(bp / bo) - 20 * np.log10(rp / ro))
+
+
+def build_spectral_diagnosis(orig, proc, sr, metrics, params=None, extra=None):
+    """
+    Measured Mastering & Spectral Diagnosis for one track.
+    orig / proc: audio before / after processing. metrics: calc_audio_metrics output.
+    extra: pipeline facts - sound_profile, antidote_v2_corrections (or None if not run),
+    deharsh_freq_used, tape_stage_gain_db, target_ceiling_db, mode ('full' | 'stems').
+    """
+    p = params or {}
+    e = extra or {}
+    orig = ensure_stereo(np.asarray(orig, dtype=np.float64))
+    proc = ensure_stereo(np.asarray(proc, dtype=np.float64))
+    n = min(len(orig), len(proc))
+    orig, proc = orig[:n], proc[:n]
+    ceiling = float(e.get('target_ceiling_db', p.get('target_ceiling_db', -0.3)))
+    src, trt, seal = [], [], []
+
+    # --- SOURCE: peaks / clipping
+    tp_o = float(metrics.get('true_peak_orig_db', 0.0))
+    runs = _clipped_runs(orig)
+    if runs > 0 or tp_o > 0.0:
+        st = 'issue'
+        txt = f"True-Peak {tp_o:+.2f} dBTP" + (f", {runs} clipped run(s) at full scale" if runs else ", inter-sample overs above 0 dBFS")
+    elif tp_o > DIAG_TP_STREAMING_DBTP:
+        st, txt = 'warn', f"True-Peak {tp_o:+.2f} dBTP - above the {DIAG_TP_STREAMING_DBTP:.0f} dBTP streaming recommendation; no clipped samples"
+    else:
+        st, txt = 'ok', f"True-Peak {tp_o:+.2f} dBTP - headroom OK, no clipping"
+    src.append(_diag_item('peak', 'Peak / Clipping', st, txt, tp_o))
+
+    # --- SOURCE: persistent resonances (detector v2, measured on the original)
+    res_src = detect_resonances_v2(orig, sr)["resonances"]
+    if res_src:
+        top = res_src[:3]
+        st = 'issue' if top[0]['prominence_db'] >= DIAG_RES_ISSUE_DB else 'warn'
+        txt = "; ".join(f"{r['hz']:.0f} Hz +{r['prominence_db']:.1f} dB ({r['persistence']:.0%} of track)" for r in top)
+    else:
+        st, txt = 'ok', "No persistent resonant colouring found (2-9 kHz)"
+    src.append(_diag_item('resonance', 'AI Resonance', st, txt,
+                          [{k: v for k, v in r.items() if not k.startswith('_')} for r in res_src[:5]]))
+
+    # --- SOURCE: low-end stereo phase
+    c_o = metrics.get('sub_phase_corr_orig')
+    if c_o is None:
+        src.append(_diag_item('sub_phase', 'Sub-Bass Phase', 'info', 'not measured'))
+    else:
+        c_o = float(c_o)
+        if c_o < 0:
+            st, txt = 'issue', f"Low-band L/R correlation {c_o:+.2f} - anti-phase (cancels in mono / club systems)"
+        elif c_o < DIAG_SUBCORR_ISSUE:
+            st, txt = 'issue', f"Low-band L/R correlation {c_o:+.2f} - strongly decorrelated low end"
+        elif c_o < DIAG_SUBCORR_WARN:
+            st, txt = 'warn', f"Low-band L/R correlation {c_o:+.2f} - partly wide low end"
+        else:
+            st, txt = 'ok', f"Low-band L/R correlation {c_o:+.2f} - coherent"
+        src.append(_diag_item('sub_phase', 'Sub-Bass Phase', st, txt, c_o))
+
+    # --- SOURCE: infrasonic energy
+    sub_cut = float(p.get('sub_cutoff', 32.0))
+    mo = np.mean(orig, axis=1)
+    sos_lo = signal.butter(4, min(sub_cut, 0.45 * sr), btype='low', fs=sr, output='sos')
+    infra_db = float(10 * np.log10((np.mean(signal.sosfiltfilt(sos_lo, mo) ** 2) + 1e-20) / (np.mean(mo ** 2) + 1e-20)))
+    if infra_db > DIAG_INFRA_ISSUE_DB:
+        st = 'issue'
+    elif infra_db > DIAG_INFRA_WARN_DB:
+        st = 'warn'
+    else:
+        st = 'ok'
+    src.append(_diag_item('infrasonic', 'Infrasonic Energy', st,
+                          f"Energy below {sub_cut:.0f} Hz: {infra_db:.1f} dB of total", infra_db))
+
+    # --- SOURCE: dynamics (information, not a defect by itself)
+    src.append(_diag_item('dynamics', 'Dynamics', 'info',
+                          f"Crest factor {metrics.get('crest_factor_orig_db')} dB, PLR {metrics.get('plr_orig_db')} dB"))
+
+    # --- TREATMENT: true-peak ceiling
+    tp_p = float(metrics.get('true_peak_proc_db', 0.0))
+    held = tp_p <= ceiling + 0.05
+    trt.append(_diag_item('true_peak', '4x True-Peak', 'ok' if held else 'issue',
+                          f"Output {tp_p:+.2f} dBTP (ceiling {ceiling:+.1f} dBTP {'held' if held else 'EXCEEDED'})", tp_p))
+    trt.append(_diag_item('loudness', 'Integrated Loudness', 'info',
+                          f"{metrics.get('lufs_orig')} -> {metrics.get('lufs_proc')} LUFS (ITU-R BS.1770-4)",
+                          metrics.get('lufs_proc')))
+
+    # --- TREATMENT: Antidote v2 (what was cut) + what remains after processing
+    cors = e.get('antidote_v2_corrections')
+    res_after = detect_resonances_v2(proc, sr)["resonances"]
+    max_after = res_after[0]['prominence_db'] if res_after else 0.0
+    if cors is None:
+        txt = "Not run in this mode (Classic 3.1 or stems)"
+        st = 'info'
+    elif cors:
+        txt = "; ".join(f"{c['hz']:.0f} Hz cut {c['cut_db']:.1f} dB, Q {c['q']:.1f}, "
+                        f"{c.get('time_coverage', 1.0):.0%} of track" for c in cors)
+        st = 'ok'
+    else:
+        txt, st = "No correction needed (no persistent resonance)", 'ok'
+    txt += (f" | after: strongest remaining {res_after[0]['hz']:.0f} Hz +{max_after:.1f} dB" if res_after
+            else " | after: no persistent resonance")
+    if res_after and max_after >= DIAG_RES_ISSUE_DB:
+        st = 'warn'
+    trt.append(_diag_item('antidote', 'Auto Antidote v2', st, txt,
+                          {"corrections": cors, "after_max_db": round(float(max_after), 2)}))
+
+    # --- TREATMENT: de-harsher band (signed, relative to overall level)
+    fdh = float(e.get('deharsh_freq_used', p.get('deharsh_freq', 5000.0)))
+    dh = _band_rel_change_db(orig, proc, sr, fdh * 0.9, fdh * 1.1)
+    trt.append(_diag_item('deharsh', 'Dynamic De-Harshing', 'info',
+                          f"{fdh:.0f} Hz band {dh:+.2f} dB relative to overall level", round(dh, 2)))
+
+    # --- TREATMENT: low end
+    c_p = metrics.get('sub_phase_corr_proc')
+    if c_p is not None and c_o is not None:
+        trt.append(_diag_item('sub_phase', 'Low-End Mono', 'ok' if float(c_p) >= DIAG_SUBCORR_WARN else 'warn',
+                              f"Low-band correlation {float(c_o):+.2f} -> {float(c_p):+.2f} "
+                              f"(mono below {float(p.get('mono_crossover', 120.0)):.0f} Hz)", float(c_p)))
+
+    # --- TREATMENT: infrasonic cut
+    mp = np.mean(proc, axis=1)
+    infra_after = float(10 * np.log10((np.mean(signal.sosfiltfilt(sos_lo, mp) ** 2) + 1e-20) / (np.mean(mp ** 2) + 1e-20)))
+    trt.append(_diag_item('infrasonic', 'Infrasonic Cut', 'ok' if infra_after <= DIAG_INFRA_WARN_DB else 'warn',
+                          f"Energy below {sub_cut:.0f} Hz: {infra_db:.1f} -> {infra_after:.1f} dB of total", infra_after))
+
+    # --- TREATMENT: saturation operating level
+    prof = e.get('sound_profile', 'Clean Chain 3.2')
+    tg = e.get('tape_stage_gain_db')
+    if tg is None:
+        sat_txt = "Not applied in this mode" if e.get('mode') == 'stems' else "Source-dependent operating level (Classic 3.1)"
+    else:
+        sat_txt = f"Calibrated operating level (input aligned by {tg:+.1f} dB, restored after)"
+    trt.append(_diag_item('saturation', 'Tape Saturation', 'info', sat_txt, tg))
+
+    # --- TREATMENT: tonal balance (relative to overall level) and dynamics
+    tb = {name: round(_band_rel_change_db(orig, proc, sr, lo, hi), 2)
+          for name, lo, hi in (('sub', 20, 120), ('body', 120, 2000), ('presence', 2000, 5000),
+                               ('brilliance', 5000, 10000), ('air', 10000, 20000))}
+    trt.append(_diag_item('tonal_balance', 'Tonal Balance', 'info',
+                          ", ".join(f"{k} {v:+.1f} dB" for k, v in tb.items()) + " (relative to overall level)", tb))
+    trt.append(_diag_item('dynamics', 'Dynamics', 'info',
+                          f"Crest factor {metrics.get('crest_factor_orig_db')} -> {metrics.get('crest_factor_proc_db')} dB, "
+                          f"PLR {metrics.get('plr_orig_db')} -> {metrics.get('plr_proc_db')} dB"))
+
+    # --- SEAL: only statements that are true for this file
+    seal.append(f"True-Peak {tp_p:+.2f} dBTP measured with 4x oversampling" +
+                (" - ceiling held" if held else " - CEILING EXCEEDED"))
+    seal.append(("Meets the -1 dBTP streaming recommendation" if tp_p <= DIAG_TP_STREAMING_DBTP
+                 else "For streaming / EBU R128 delivery export with a -1.0 dBTP ceiling"))
+    seal.append("Loudness: ITU-R BS.1770-4 meter verified against EBU Tech 3341 cases 1-5")
+    return {"profile": prof, "mode": e.get('mode', 'full'), "source": src, "treatment": trt, "seal": seal,
+            "tonal_balance_rel_db": tb}
 
 # -----------------------------------------------------------------------------
 # 7. MAIN MASTERING DSP PIPELINE
@@ -963,7 +1457,7 @@ def harmonic_air_exciter(audio, sr, drive=0.12, cutoff=15500.0, donor_band=(8000
     return excited_audio.astype(np.float32)
 
 
-def align_sub_phase(drums, bass, sr, max_lag_ms=6.0, crossover_freq=100.0):
+def align_sub_phase(drums, bass, sr, max_lag_ms=3.0, crossover_freq=100.0):
     """
     Automatic Low-End Phase Alignment (Sub Sync):
     - Linear crossover isolates sub-band (<100 Hz) from upper attack (>100 Hz).
@@ -1018,6 +1512,24 @@ def align_sub_phase(drums, bass, sr, max_lag_ms=6.0, crossover_freq=100.0):
 
     # 4. Recombine phase-locked sub with pristine upper transient attack
     aligned_bass = (aligned_sub + bass_high)[:orig_len]
+
+    # P0-1 Sub-Sync Energy Guard:
+    # If sub-sum (<100 Hz) drops > -0.1 dB or crossover band (85-120 Hz) drops > -1.0 dB, reject shift
+    try:
+        b_sub100, a_sub100 = signal.butter(4, 100.0 / nyq, btype="low")
+        sum_orig = signal.filtfilt(b_sub100, a_sub100, (drums + bass).astype(np.float64), axis=0)
+        sum_proc = signal.filtfilt(b_sub100, a_sub100, (drums + aligned_bass).astype(np.float64), axis=0)
+        sub_gain_db = 20.0 * np.log10(max(1e-12, np.sqrt(np.mean(sum_proc ** 2))) / max(1e-12, np.sqrt(np.mean(sum_orig ** 2))))
+
+        b_band, a_band = signal.butter(2, [85.0 / nyq, min(120.0, nyq - 10.0) / nyq], btype="band")
+        b85_orig = np.sqrt(np.mean(signal.filtfilt(b_band, a_band, bass.astype(np.float64), axis=0) ** 2))
+        b85_proc = np.sqrt(np.mean(signal.filtfilt(b_band, a_band, aligned_bass.astype(np.float64), axis=0) ** 2))
+        b85_diff = 20.0 * np.log10(max(1e-12, b85_proc) / max(1e-12, b85_orig))
+
+        if sub_gain_db < -0.1 or (b85_diff < -1.0 and sub_gain_db < 0.5):
+            return bass.astype(np.float32), 0, 1.0
+    except Exception:
+        pass
     logger.info(
         "Sub-Sync legacy alignment: sr=%d max_lag_ms=%.2f crossover_hz=%.1f best_lag_samples=%d polarity=%.1f",
         sr,
@@ -1185,8 +1697,11 @@ def align_sub_phase_limiter_aware(
     pre_samples = int(round(pre_trigger_sec * sr))
     max_lag = int(round(max_lag_ms * 1e-3 * sr))
 
-    bass_out = np.zeros_like(bass_stereo, dtype=np.float64)
-    weight_acc = np.zeros((n_samples, 1), dtype=np.float64)
+    # Output starts as the untouched bass; accepted shifts are crossfaded in with
+    # the Tukey taper: y = y_prev * (1 - w) + shifted * w. Rejected events leave
+    # the bass bit-exact, and overlapping windows stay continuous because each
+    # window blends onto the current output (w = 0 at window edges).
+    bass_out = bass_stereo.astype(np.float64).copy()
 
     events_corrected = 0
     applied_shifts = []
@@ -1231,6 +1746,10 @@ def align_sub_phase_limiter_aware(
         # Safe path verification
         raw_sub_sum = d_sub_win + b_sub_win
         cand_b_sub = np.roll(b_sub_win * best_pol, best_lag)
+        if best_lag > 0:
+            cand_b_sub[:best_lag] = b_sub_win[:best_lag]
+        elif best_lag < 0:
+            cand_b_sub[best_lag:] = b_sub_win[best_lag:]
         cand_sub_sum = d_sub_win + cand_b_sub
         rms_raw = float(np.sqrt(np.mean(np.square(raw_sub_sum)) + 1e-12))
         rms_cand = float(np.sqrt(np.mean(np.square(cand_sub_sum)) + 1e-12))
@@ -1250,24 +1769,13 @@ def align_sub_phase_limiter_aware(
         accept = (effective_net_db >= min_gain_db) and (xover_drop_db >= -max_xover_drop_db)
 
         if accept:
-            effective_segment = shifted_b
+            bass_out[w_start:w_end] = bass_out[w_start:w_end] * (1.0 - w_taper) + shifted_b * w_taper
             events_corrected += 1
             applied_shifts.append(best_lag * 1000.0 / sr)
             applied_polarities.append(float(best_pol))
         else:
-            effective_segment = raw_b_segment
             applied_shifts.append(0.0)
             applied_polarities.append(1.0)
-
-        bass_out[w_start:w_end] += effective_segment * w_taper
-        weight_acc[w_start:w_end] += w_taper
-
-    # Blend back with partition of unity
-    unassigned = (weight_acc < 1e-6)
-    bass_out[unassigned[:, 0]] = bass_stereo[unassigned[:, 0]]
-    assigned = ~unassigned
-    weight_div = np.maximum(1.0, weight_acc)
-    bass_out[assigned[:, 0]] /= weight_div[assigned[:, 0]]
 
     final_bass = bass_out[:n_samples].astype(np.float32)
 
@@ -1310,6 +1818,41 @@ EXPERIMENTAL_SUB_SYNC_DEFAULTS = {
 }
 
 DEFAULT_PARAMS.update(EXPERIMENTAL_SUB_SYNC_DEFAULTS)
+
+# -----------------------------------------------------------------------------
+# SOUND PROFILE: "Clean Chain" (default since 3.2) vs "Classic 3.1"
+# -----------------------------------------------------------------------------
+# Goal of the Clean Chain: remove MEASURABLE defects that make long listening tiring
+# (AI resonances, intermodulation, aliasing, added sharpness, squashed dynamics) while
+# keeping matters of taste (tonal balance, character) close to the original.
+# Evidence: DEV_NOTE_MATH_AUDIT_FIXES.md sections 14-18 and bench/results/.
+# 'classic_31': True restores the exact PHARMAKON 3.1 processing (bit-identical).
+# Any parameter given explicitly always overrides the profile.
+
+CLEAN_CHAIN_DEFAULTS = {
+    'antidote_v2': True,          # persistent-resonance detector + time-local matched cut
+    'antidote_v2_local': True,
+    'deharsh_calibrated': True,   # no hidden ~5.5 dB static cut at the de-harsh frequency
+    'tape_deemphasis': True,      # flat linear response of the tape stage
+    'tape_ref_peak_dbfs': -12.0,  # tape operating level calibrated by robust peak
+}
+CLASSIC_31_DEFAULTS = {
+    'antidote_v2': False,
+    'antidote_v2_local': True,
+    'deharsh_calibrated': False,
+    'tape_deemphasis': False,
+    'tape_ref_peak_dbfs': None,
+}
+
+
+def resolve_sound_profile(params=None):
+    """Returns (profile_name, settings) for the Clean Chain / Classic 3.1 switch."""
+    p = params or {}
+    classic = bool(p.get('classic_31', False))
+    base = CLASSIC_31_DEFAULTS if classic else CLEAN_CHAIN_DEFAULTS
+    settings = {k: (p[k] if k in p else v) for k, v in base.items()}
+    return ('Classic 3.1' if classic else 'Clean Chain 3.2'), settings
+
 
 def resolve_sub_sync_config(params=None):
     """
@@ -1412,8 +1955,7 @@ def process_audio_array(audio, sr, params=None):
     """
     if params is None:
         params = dict(DEFAULT_PARAMS)
-    if params.get('phase_align_sub', True) and params.get('sub_sync_mode') in (None, 'off'):
-        params['sub_sync_mode'] = 'limiter_aware'
+# Sub-Sync defaults to off per specification
     else:
         # If preset specified, merge preset values
         preset_key = params.get('preset')
@@ -1448,7 +1990,25 @@ def process_audio_array(audio, sr, params=None):
 
     # 1. AUTO SPECTRAL ANTIDOTE (Intelligent resonance scanning)
     detected_freq, detected_q, detected_prom = None, None, None
-    if mode == 'pharmakon1':
+    sound_profile, profile = resolve_sound_profile(params)
+    antidote_v2 = bool(profile['antidote_v2'])
+    v2_resonances, v2_applied, v2_timeline = [], [], None
+    if antidote_v2:
+        # v2 runs in BOTH workflow modes: it is a defect remover (persistent resonant
+        # colouring, 2-9 kHz, only where present, never notes), not a tonal control, so it
+        # does not conflict with the manual Pro Rack knobs. The dynamic de-harsher keeps the
+        # user's / preset frequency for transient harshness.
+        v2_det = detect_resonances_v2(audio, sr)
+        v2_resonances = v2_det["resonances"]
+        v2_timeline = ({"seg_starts": v2_det["_seg_starts"], "seg_n": v2_det["_seg_n"]}
+                       if bool(profile['antidote_v2_local']) else None)
+        if v2_resonances:
+            detected_freq = v2_resonances[0]["hz"]
+            detected_prom = v2_resonances[0]["prominence_db"]
+            for r in v2_resonances[:3]:
+                print(f"  [AUTO ANTIDOTE v2] Persistent resonance: {r['hz']:.1f} Hz "
+                      f"(+{r['prominence_db']:.1f} dB, Q~{r['q_est']}, persistence {r['persistence']:.0%})")
+    elif mode == 'pharmakon1':
         detected_freq, detected_q, detected_prom = detect_harsh_resonances(audio, sr)
         if detected_prom >= 3.0:
             deharsh_freq = detected_freq
@@ -1466,9 +2026,19 @@ def process_audio_array(audio, sr, params=None):
     mono_low = np.mean(low_band, axis=1, keepdims=True)
     mono_low_stereo = np.repeat(mono_low, 2, axis=1)
 
+    # 4b. Auto Antidote v2: matched correction of persistent resonances (high band only)
+    if v2_resonances:
+        high_band, v2_applied = apply_resonance_correction(
+            high_band, sr, v2_resonances,
+            depth=float(params.get('antidote_v2_depth', 1.0)),
+            max_cut_db=float(params.get('antidote_v2_max_cut_db', 8.0)),
+            timeline=v2_timeline,
+        )
+
     # 5. Anti-AI De-Harshing (Dynamic Multi-band Ducker vs Static Notch)
     if dynamic_mode:
-        high_deharsh = dynamic_deharsh(high_band, sr, center_freq=deharsh_freq, q=deharsh_q, depth=deharsh_depth)
+        high_deharsh = dynamic_deharsh(high_band, sr, center_freq=deharsh_freq, q=deharsh_q, depth=deharsh_depth,
+                                       calibrated=bool(profile['deharsh_calibrated']))
     else:
         f_harsh = min(deharsh_freq, nyq - 50.0) / nyq
         b_notch, a_notch = signal.iirnotch(f_harsh, deharsh_q)
@@ -1485,7 +2055,28 @@ def process_audio_array(audio, sr, params=None):
     full_mix = mono_low_stereo + high_proc
 
     # 8. Analog tape saturation warmth (Oversampled Asymmetric Saturation with NAB Pre-Emphasis)
-    full_mix = analog_tape_saturation(full_mix, sr, drive=tape_drive, ceiling=tape_ceiling, bias=0.035, oversample=4)
+    # Calibrated operating level (optional): like aligning a tape machine to 0 VU, the mix
+    # is brought to a fixed reference loudness before the saturator and restored after it,
+    # so the amount of distortion no longer depends on how hot the source was rendered
+    # (measured: each +6 dB of input adds ~+10 dB of nonlinear residual).
+    # The saturator reacts to instantaneous amplitude, so the reference is a robust PEAK
+    # (99.9th percentile of |x|), not loudness: LUFS alignment was measured to widen the
+    # track-to-track spread of distortion (7.8 -> 11 dB) because high-crest material
+    # (acoustic guitar) gets its peaks pushed further into saturation.
+    tape_ref_lufs = params.get('tape_ref_lufs', None)
+    tape_ref_peak = profile['tape_ref_peak_dbfs']
+    tape_stage_gain_db = 0.0
+    if tape_ref_peak is not None:
+        p999 = float(np.percentile(np.max(np.abs(full_mix), axis=1), 99.9))
+        if p999 > 1e-6:
+            tape_stage_gain_db = float(np.clip(float(tape_ref_peak) - 20.0 * np.log10(p999), -24.0, 12.0))
+    elif tape_ref_lufs is not None:
+        lufs_in = calc_integrated_lufs(full_mix, sr)
+        if lufs_in > -70.0:
+            tape_stage_gain_db = float(np.clip(float(tape_ref_lufs) - lufs_in, -24.0, 12.0))
+    g_in = 10.0 ** (tape_stage_gain_db / 20.0)
+    full_mix = analog_tape_saturation(full_mix * g_in, sr, drive=tape_drive, ceiling=tape_ceiling, bias=0.035,
+                                      oversample=4, deemphasis=bool(profile['tape_deemphasis'])) / g_in
 
     # 9. Psychoacoustic Harmonic Air Exciter (>16 kHz silk synthesis)
     air_drive = float(params.get('air_exciter', 0.12))
@@ -1505,7 +2096,7 @@ def process_audio_array(audio, sr, params=None):
         start_samp = int(np.clip(range_start * sr, 0, total_len))
         end_samp = int(np.clip(range_end * sr, start_samp, total_len))
 
-        # 35ms equal-power cosine crossfade to prevent boundary clicks
+        # 35 ms raised-cosine equal-GAIN crossfade (fade_in + fade_out = 1) to prevent boundary clicks
         fade_len = int(min(sr * 0.035, (end_samp - start_samp) // 4))
         final_out = np.copy(audio)
 
@@ -1535,6 +2126,23 @@ def process_audio_array(audio, sr, params=None):
     if detected_freq:
         metrics['detected_resonance_hz'] = detected_freq
         metrics['detected_prominence_db'] = detected_prom
+    metrics['sound_profile'] = sound_profile
+    metrics['sound_profile_settings'] = profile
+    if antidote_v2:
+        metrics['antidote_version'] = 2
+        metrics['antidote_v2_resonances'] = [{k: v for k, v in r.items() if not k.startswith('_')}
+                                             for r in v2_resonances[:5]]
+        metrics['antidote_v2_corrections'] = v2_applied
+    tape_calibrated = (profile['tape_ref_peak_dbfs'] is not None) or (params.get('tape_ref_lufs') is not None)
+    metrics['tape_stage_gain_db'] = round(tape_stage_gain_db, 2) if tape_calibrated else None
+    metrics['diagnosis'] = build_spectral_diagnosis(audio, full_mix, sr, metrics, params, extra={
+        'sound_profile': sound_profile,
+        'antidote_v2_corrections': v2_applied if antidote_v2 else None,
+        'deharsh_freq_used': float(deharsh_freq),
+        'tape_stage_gain_db': metrics['tape_stage_gain_db'],
+        'target_ceiling_db': target_ceiling_db,
+        'mode': 'full',
+    })
 
     logger.info(
         "DSP pipeline complete: mode=%s true_peak_proc_db=%.2f lufs_proc=%.2f detected_resonance_hz=%s",
@@ -1614,6 +2222,8 @@ def generate_svg_spectrum(freqs, orig_db, proc_db, delta_db=None, width=860, hei
     </svg>"""
 
 def generate_track_map_html(track_map, target_path=""):
+    if not track_map or not isinstance(track_map, dict):
+        return ""
     import json
     sections = track_map.get('sections', [])
     bpm = track_map.get('estimated_bpm', 120.0)
@@ -1687,7 +2297,7 @@ def generate_track_map_html(track_map, target_path=""):
               </div>
               <div class="tm-grid-row">
                 <span class="tm-lbl">SUB-CORRELATION</span>
-                <span class="tm-val" style="color:#38bdf8;">{s.get('sub_correlation_r', 0.0):+.2f} r</span>
+                <span class="tm-val" style="color:#38bdf8;">{(format(s['sub_correlation_r'], '+.2f') + ' r') if isinstance(s.get('sub_correlation_r'), (int, float)) else '&mdash; (stems only)'}</span>
               </div>
               <div style="margin-top:5px; font-size:9.5px; font-family:monospace; color:{c};">
                 &#9642; {s.get('policy_verdict', '')}
@@ -2082,29 +2692,76 @@ def generate_mastering_report_html(track_name, metrics, output_dir, params=None)
     timestamp = time.strftime("%Y-%m-%d %H:%M:%S UTC")
     serial_no = f"PH-{abs(hash(track_name + timestamp)) % 900000 + 100000}"
     
-    tp_orig = metrics.get('true_peak_orig_db', metrics.get('peak_orig_db', 0.0))
-    tp_proc = metrics.get('true_peak_proc_db', metrics.get('peak_proc_db', -0.3))
-    lufs_orig = metrics.get('lufs_orig', -14.0)
-    lufs_proc = metrics.get('lufs_proc', -14.0)
-    lufs_diff = round(lufs_proc - lufs_orig, 2)
-    lufs_sign = "+" if lufs_diff >= 0 else ""
+    def _v(key, fmt="{}"):
+        val = metrics.get(key)
+        return fmt.format(val) if isinstance(val, (int, float)) else "&mdash;"
+
+    tp_orig = _v('true_peak_orig_db')
+    tp_proc = _v('true_peak_proc_db')
+    lufs_orig = _v('lufs_orig')
+    lufs_proc = _v('lufs_proc')
+    if isinstance(metrics.get('lufs_proc'), (int, float)) and isinstance(metrics.get('lufs_orig'), (int, float)):
+        lufs_diff = round(metrics['lufs_proc'] - metrics['lufs_orig'], 2)
+        lufs_sign = "+" if lufs_diff >= 0 else ""
+    else:
+        lufs_diff, lufs_sign = "&mdash;", ""
     
     rms_diff = round(metrics.get('rms_proc_db', 0.0) - metrics.get('rms_orig_db', 0.0), 2)
     rms_sign = "+" if rms_diff >= 0 else ""
 
-    res_hz = metrics.get('detected_resonance_hz', 5000.0)
-    res_prom = metrics.get('detected_prominence_db', 0.0)
-    harsh_red = metrics.get('harsh_reduction_db', 0.0)
-    
-    sub_corr_o = metrics.get('sub_phase_corr_orig', 0.84)
-    sub_corr_p = metrics.get('sub_phase_corr_proc', 0.99)
-    crest_orig = metrics.get('crest_factor_orig_db', 12.0)
-    crest_proc = metrics.get('crest_factor_proc_db', 10.8)
-    plr_proc = metrics.get('plr_proc_db', 11.2)
-    shift_sub = metrics.get('energy_shift_sub_db', -0.9)
-    shift_body = metrics.get('energy_shift_body_db', 0.2)
-    shift_pres = metrics.get('energy_shift_presence_db', -1.2)
-    shift_air = metrics.get('energy_shift_air_db', 1.3)
+    sub_corr_o = _v('sub_phase_corr_orig', "{:+.2f}")
+    sub_corr_p = _v('sub_phase_corr_proc', "{:+.2f}")
+    crest_orig = _v('crest_factor_orig_db')
+    crest_proc = _v('crest_factor_proc_db')
+    plr_proc = _v('plr_proc_db')
+
+    # Antidote v2 tile: measured corrections only
+    cors = metrics.get('antidote_v2_corrections')
+    if isinstance(cors, list) and cors:
+        anti_val = f"{len(cors)} band{'s' if len(cors) > 1 else ''} cut"
+        anti_sub = ", ".join(f"{c['hz']:.0f} Hz -{c['cut_db']:.1f} dB ({c.get('time_coverage', 1.0):.0%})" for c in cors)
+    elif isinstance(cors, list):
+        anti_val, anti_sub = "none needed", "no persistent resonance measured"
+    else:
+        anti_val = "off"
+        anti_sub = (f"Classic 3.1 v1 target: {metrics['detected_resonance_hz']:.0f} Hz"
+                    if metrics.get('detected_resonance_hz') else "Classic 3.1 / stems mode")
+
+    # Measured diagnosis + tonal balance relative to overall level
+    diag = metrics.get('diagnosis') or {}
+    tb = diag.get('tonal_balance_rel_db') or {}
+
+    def _tb(k):
+        return f"{tb[k]:+.2f} dB" if isinstance(tb.get(k), (int, float)) else "&mdash;"
+
+    def _esc(t):
+        return str(t).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+
+    _col = {'issue': '#f43f5e', 'warn': '#f59e0b', 'ok': '#10b981', 'info': '#94a3b8'}
+    _ico = {'issue': '&#9888;', 'warn': '&#9888;', 'ok': '&#10003;', 'info': '&bull;'}
+
+    def _diag_list(items):
+        return "".join(
+            f'<div style="font-size:11.5px; margin-bottom:6px; line-height:1.4;">'
+            f'<span style="color:{_col.get(i.get("status"), "#94a3b8")};">{_ico.get(i.get("status"), "&bull;")}</span> '
+            f'<b style="color:#e2e8f0;">{_esc(i.get("label", ""))}:</b> <span style="color:#cbd5e1;">{_esc(i.get("text", ""))}</span></div>'
+            for i in (items or []))
+
+    diagnosis_html = ""
+    if diag:
+        diagnosis_html = f'''
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:20px; font-family:monospace;">
+      <div style="background:#0d0a0d; border:1px solid #3b1d24; border-radius:8px; padding:14px 16px;">
+        <div style="font-size:11px; font-weight:700; letter-spacing:1.5px; color:#f43f5e; margin-bottom:10px;">SOURCE DIAGNOSIS (MEASURED ON THE ORIGINAL)</div>
+        {_diag_list(diag.get('source'))}
+      </div>
+      <div style="background:#080e0c; border:1px solid #14342a; border-radius:8px; padding:14px 16px;">
+        <div style="font-size:11px; font-weight:700; letter-spacing:1.5px; color:#10b981; margin-bottom:10px;">TREATMENT (MEASURED BEFORE &rarr; AFTER) &bull; {_esc(diag.get('profile', ''))}</div>
+        {_diag_list(diag.get('treatment'))}
+      </div>
+    </div>'''
+    seal_html = " &bull; ".join(_esc(x) for x in (diag.get('seal') or [])) or "Measurements: see telemetry above"
+    export_fmt = _esc((params or {}).get('export_subtype', 'PCM_24')) if isinstance(params, dict) else 'PCM_24'
 
     freqs = metrics.get('fft_freqs', [])
     orig_db = metrics.get('fft_orig_db', [])
@@ -2485,41 +3142,41 @@ def generate_mastering_report_html(track_name, metrics, output_dir, params=None)
       font-family: monospace;
     }}
     
-    .tm-inspector {
+    .tm-inspector {{
       background: #090d16;
       border: 1px solid #1e293b;
       border-radius: 6px;
       padding: 12px 16px;
       margin-bottom: 16px;
       box-shadow: 0 4px 20px rgba(0,0,0,0.6);
-    }
-    .tm-insp-header {
+    }}
+    .tm-insp-header {{
       display: flex;
       justify-content: space-between;
       align-items: center;
       border-bottom: 1px solid #161e2e;
       padding-bottom: 8px;
       margin-bottom: 10px;
-    }
-    .tm-insp-controls {
+    }}
+    .tm-insp-controls {{
       display: flex;
       flex-wrap: wrap;
       gap: 12px;
       align-items: flex-end;
-    }
-    .tm-control-group {
+    }}
+    .tm-control-group {{
       display: flex;
       flex-direction: column;
       gap: 4px;
-    }
-    .tm-label {
+    }}
+    .tm-label {{
       font-size: 8.5px;
       font-weight: 700;
       color: #64748b;
       font-family: monospace;
       letter-spacing: 0.5px;
-    }
-    .tm-select, .tm-input {
+    }}
+    .tm-select, .tm-input {{
       background: #04060a;
       border: 1px solid #334155;
       color: #fff;
@@ -2527,12 +3184,12 @@ def generate_mastering_report_html(track_name, metrics, output_dir, params=None)
       padding: 4px 8px;
       font-size: 11px;
       font-family: monospace;
-    }
-    .tm-input-num {
+    }}
+    .tm-input-num {{
       width: 58px;
       text-align: center;
-    }
-    .tm-nudge-btn {
+    }}
+    .tm-nudge-btn {{
       background: #1e293b;
       border: 1px solid #334155;
       color: #94a3b8;
@@ -2542,12 +3199,12 @@ def generate_mastering_report_html(track_name, metrics, output_dir, params=None)
       font-family: monospace;
       cursor: pointer;
       transition: all 0.15s;
-    }
-    .tm-nudge-btn:hover {
+    }}
+    .tm-nudge-btn:hover {{
       background: #38bdf8;
       color: #000;
-    }
-    .tm-btn {
+    }}
+    .tm-btn {{
       border: none;
       border-radius: 4px;
       padding: 6px 12px;
@@ -2556,24 +3213,24 @@ def generate_mastering_report_html(track_name, metrics, output_dir, params=None)
       font-family: monospace;
       cursor: pointer;
       transition: all 0.2s;
-    }
-    .tm-btn-play {
+    }}
+    .tm-btn-play {{
       background: #0ea5e9;
       color: #fff;
-    }
-    .tm-btn-play:hover {
+    }}
+    .tm-btn-play:hover {{
       background: #38bdf8;
       box-shadow: 0 0 10px #38bdf866;
-    }
-    .tm-btn-save {
+    }}
+    .tm-btn-save {{
       background: #10b981;
       color: #04060a;
-    }
-    .tm-btn-save:hover {
+    }}
+    .tm-btn-save:hover {{
       background: #34d399;
       box-shadow: 0 0 10px #10b98166;
-    }
-    .tm-kick-strip {
+    }}
+    .tm-kick-strip {{
       width: 100%;
       height: 20px;
       background: #04060a;
@@ -2583,8 +3240,8 @@ def generate_mastering_report_html(track_name, metrics, output_dir, params=None)
       overflow: hidden;
       display: flex;
       align-items: center;
-    }
-    .tm-kick-dot {
+    }}
+    .tm-kick-dot {{
       position: absolute;
       top: 3px;
       width: 3px;
@@ -2592,19 +3249,19 @@ def generate_mastering_report_html(track_name, metrics, output_dir, params=None)
       border-radius: 1.5px;
       cursor: pointer;
       transition: transform 0.1s;
-    }
-    .tm-kick-dot:hover {
+    }}
+    .tm-kick-dot:hover {{
       transform: scaleY(1.3);
       box-shadow: 0 0 6px currentColor;
-    }
-    .tm-notice-disclaimer {
+    }}
+    .tm-notice-disclaimer {{
       font-size: 9px;
       color: #64748b;
       font-family: monospace;
       margin-top: 8px;
       font-style: italic;
-    }
-    .tm-toast {
+    }}
+    .tm-toast {{
       position: fixed;
       bottom: 24px;
       right: 24px;
@@ -2617,7 +3274,7 @@ def generate_mastering_report_html(track_name, metrics, output_dir, params=None)
       border-radius: 4px;
       box-shadow: 0 4px 16px rgba(0,0,0,0.8);
       z-index: 9999;
-    }
+    }}
 
     .tm-grid-row {{
       display: flex;
@@ -2641,7 +3298,7 @@ def generate_mastering_report_html(track_name, metrics, output_dir, params=None)
   <div class="certificate-card">
     <div class="cert-header">
       <div class="cert-title">
-        <h1>PHARMAKON 3.0 PRO</h1>
+        <h1>PHARMAKON 3.2 PRO</h1>
         <div class="subtitle">MASTERING &amp; SPECTRAL DIAGNOSIS CERTIFICATE</div>
       </div>
       <div class="cert-meta">
@@ -2657,15 +3314,15 @@ def generate_mastering_report_html(track_name, metrics, output_dir, params=None)
         <div class="track-name">{track_name}</div>
       </div>
       <div class="track-specs">
-        {metrics.get('sample_rate', 44100)} Hz &bull; 24-bit Lossless WAV &bull; {metrics.get('duration_sec', 0.0)}s
+        {metrics.get('sample_rate', '&mdash;')} Hz &bull; WAV {export_fmt} &bull; {metrics.get('duration_sec', '&mdash;')}s
       </div>
     </div>
 
     <div class="telemetry-grid">
       <div class="t-card">
-        <div class="t-label">4X TRUE-PEAK CEILING</div>
-        <div class="t-val">{tp_proc} <span>dBFS</span></div>
-        <div class="t-sub">Oversampled (Raw: {tp_orig} dBFS)</div>
+        <div class="t-label">4X TRUE-PEAK (MEASURED)</div>
+        <div class="t-val">{tp_proc} <span>dBTP</span></div>
+        <div class="t-sub">Raw: {tp_orig} dBTP</div>
       </div>
       <div class="t-card">
         <div class="t-label">INTEGRATED LOUDNESS (LUFS)</div>
@@ -2675,48 +3332,49 @@ def generate_mastering_report_html(track_name, metrics, output_dir, params=None)
       <div class="t-card">
         <div class="t-label">TRANSIENT CREST FACTOR</div>
         <div class="t-val">{crest_proc} <span>dB</span></div>
-        <div class="t-sub">Healthy Punch (Raw: {crest_orig} dB)</div>
+        <div class="t-sub">Raw: {crest_orig} dB</div>
       </div>
       <div class="t-card">
-        <div class="t-label">DYNAMIC DE-HARSH ATTENUATION</div>
-        <div class="t-val">-{harsh_red} <span>dB</span></div>
-        <div class="t-sub">Resonance: {res_hz:.0f} Hz ({res_prom:+.1f} dB)</div>
+        <div class="t-label">AUTO ANTIDOTE v2</div>
+        <div class="t-val">{anti_val}</div>
+        <div class="t-sub">{anti_sub}</div>
       </div>
       <div class="t-card">
         <div class="t-label">SUB-BASS SOLIDIFICATION &amp; PHASE</div>
-        <div class="t-val">{sub_corr_p:+.2f} <span>Corr</span></div>
-        <div class="t-sub">Phase: {sub_corr_o:+.2f} &rarr; {sub_corr_p:+.2f} (Mono &lt; 120Hz)</div>
+        <div class="t-val">{sub_corr_p} <span>Corr</span></div>
+        <div class="t-sub">Phase: {sub_corr_o} &rarr; {sub_corr_p} (Mono below crossover)</div>
       </div>
       <div class="t-card">
         <div class="t-label">3D STEREO WIDTH (MID-SIDE)</div>
         <div class="t-val">+{metrics.get('stereo_expansion_db', 0.0)} <span>dB</span></div>
-        <div class="t-sub">High-Frequency Air Expansion</div>
+        <div class="t-sub">Mid-side side level (measured)</div>
       </div>
     </div>
 
+    {diagnosis_html}
     {match_card_html}
     {track_map_html}
     <!-- 4-Band Energy Shift Summary -->
     <div class="energy-bar-grid">
       <div class="e-band">
-        <div class="e-band-title">SUB (&lt;120 Hz)</div>
-        <div class="e-band-val" style="color:#fde047;">{shift_sub:+.2f} dB</div>
-        <div class="e-band-desc">Mono Solidification</div>
+        <div class="e-band-title">SUB (20-120 Hz)</div>
+        <div class="e-band-val" style="color:#fde047;">{_tb('sub')}</div>
+        <div class="e-band-desc">vs overall level</div>
       </div>
       <div class="e-band">
-        <div class="e-band-title">BODY (120Hz-2kHz)</div>
-        <div class="e-band-val" style="color:#93c5fd;">{shift_body:+.2f} dB</div>
-        <div class="e-band-desc">Tape Warmth (tanh)</div>
+        <div class="e-band-title">BODY (120 Hz-2 kHz)</div>
+        <div class="e-band-val" style="color:#93c5fd;">{_tb('body')}</div>
+        <div class="e-band-desc">vs overall level</div>
       </div>
       <div class="e-band">
-        <div class="e-band-title">PRESENCE (2-8kHz)</div>
-        <div class="e-band-val" style="color:#f43f5e;">{shift_pres:+.2f} dB</div>
-        <div class="e-band-desc">De-Harsh Notch Cut</div>
+        <div class="e-band-title">PRESENCE (2-5 kHz)</div>
+        <div class="e-band-val" style="color:#f43f5e;">{_tb('presence')}</div>
+        <div class="e-band-desc">vs overall level</div>
       </div>
       <div class="e-band">
-        <div class="e-band-title">AIR (&gt;8kHz)</div>
-        <div class="e-band-val" style="color:#10b981;">{shift_air:+.2f} dB</div>
-        <div class="e-band-desc">Harmonic Silk Exciter</div>
+        <div class="e-band-title">BRILLIANCE / AIR (5-20 kHz)</div>
+        <div class="e-band-val" style="color:#10b981;">{_tb('brilliance')} / {_tb('air')}</div>
+        <div class="e-band-desc">vs overall level</div>
       </div>
     </div>
 
@@ -2729,7 +3387,7 @@ def generate_mastering_report_html(track_name, metrics, output_dir, params=None)
         <div>
           <span class="legend-item"><span class="legend-dot" style="background:#f43f5e;"></span> RAW AI</span>
           <span class="legend-item"><span class="legend-dot" style="background:#10b981;"></span> MASTER</span>
-          <span class="legend-item"><span class="legend-dot" style="background:#f59e0b;"></span> DELTA RESIDUE (&Delta;)</span>
+          <span class="legend-item"><span class="legend-dot" style="background:#f59e0b;"></span> DELTA RESIDUE (&Delta;, +22 dB display offset)</span>
         </div>
       </div>
       <div id="chartContainerFull">{svg_chart_full}</div>
@@ -2738,7 +3396,7 @@ def generate_mastering_report_html(track_name, metrics, output_dir, params=None)
 
     <div class="cert-footer">
       <div>PHARMAKON DSP ARCHITECTURE &bull; OPEN-SOURCE MIT LICENSE &copy; 2026 LEX GEREK</div>
-      <div class="cert-seal">&#10003; VERIFIED STREAMING COMPLIANT &bull; ZERO INTER-SAMPLE PEAKS</div>
+      <div class="cert-seal">{seal_html}</div>
     </div>
   </div>
 
@@ -2779,8 +3437,7 @@ def process_single_file(file_path, params=None, open_folder=True):
 
     if params is None:
         params = dict(DEFAULT_PARAMS)
-    if params.get('phase_align_sub', True) and params.get('sub_sync_mode') in (None, 'off'):
-        params['sub_sync_mode'] = 'limiter_aware'
+# Sub-Sync defaults to off per specification
 
     base_dir = os.path.dirname(file_path)
     filename = os.path.basename(file_path)
@@ -2874,8 +3531,7 @@ def process_stems_folder(target_folder, params=None, open_folder=True):
 
     if params is None:
         params = dict(DEFAULT_PARAMS)
-    if params.get('phase_align_sub', True) and params.get('sub_sync_mode') in (None, 'off'):
-        params['sub_sync_mode'] = 'limiter_aware'
+# Sub-Sync defaults to off per specification
 
     audio_files = []
     for ext in SUPPORTED_EXTS:
@@ -2942,7 +3598,7 @@ def process_stems_folder(target_folder, params=None, open_folder=True):
     mono_low = np.mean(bass_low, axis=1, keepdims=True)
     mono_low_stereo = np.repeat(mono_low, 2, axis=1)
     bass_proc = mono_low_stereo + bass_high
-    bass_proc = soft_clip(bass_proc * 1.05, 0.98)
+    bass_proc = soft_clip_oversampled(bass_proc * 1.05, sr, 0.98)
 
     # --- DRUMS ---
     print(f"[2/4] DRUMS: Envelope Follower Transient Punch (x{punch_factor})...")
@@ -2952,9 +3608,7 @@ def process_stems_folder(target_folder, params=None, open_folder=True):
     sub_sync_cfg = resolve_sub_sync_config(params)
     effective_mode = sub_sync_cfg['effective_mode']
 
-    # Default to limiter_aware in stems mode if not explicitly overridden
-    if params is not None and 'sub_sync_mode' not in params and sub_sync_cfg['phase_align_sub']:
-        effective_mode = 'limiter_aware'
+# Sub-Sync defaults to off per specification
 
     sub_sync_summary_result = None
     sub_sync_mode_result = 'Bypassed'
@@ -3040,8 +3694,9 @@ def process_stems_folder(target_folder, params=None, open_folder=True):
     # --- VOCALS ---
     print(f"[3/4] VOCALS: Dynamic De-Harshing ({deharsh_f}Hz), Soft Saturation...")
     vocals_clean = butter_highpass(vocals, 85, sr, order=3)
-    vocals_deharsh = dynamic_deharsh(vocals_clean, sr, center_freq=deharsh_f, q=deharsh_q, depth=deharsh_depth)
-    vocals_proc = np.tanh(vocals_deharsh * 1.08) * 0.96
+    vocals_deharsh = dynamic_deharsh(vocals_clean, sr, center_freq=deharsh_f, q=deharsh_q, depth=deharsh_depth,
+                                     calibrated=bool(resolve_sound_profile(params)[1]['deharsh_calibrated']))
+    vocals_proc = saturate_vocal_oversampled(vocals_deharsh, sr, drive=1.08, ceiling=0.96, oversample=4)
 
     # --- OTHER / SYNTHS ---
     print(f"[4/4] SYNTHS: Highpass 115Hz, 3D Mid-Side (+{round((side_boost-1)*100)}% stereo)...")
@@ -3111,6 +3766,15 @@ def process_stems_folder(target_folder, params=None, open_folder=True):
         'raw_sum': verify_wav_export(raw_sum_path, expected_subtype=export_subtype, expected_sr=sr),
     }
     metrics = calc_audio_metrics(raw_sum, master_mix, sr, params)
+    metrics['diagnosis'] = build_spectral_diagnosis(raw_sum, master_mix, sr, metrics, params, extra={
+        'sound_profile': resolve_sound_profile(params)[0],
+        'antidote_v2_corrections': None,
+        'deharsh_freq_used': float(deharsh_f),
+        'tape_stage_gain_db': None,
+        'target_ceiling_db': target_ceiling_db,
+        'mode': 'stems',
+    })
+    metrics['sound_profile'] = resolve_sound_profile(params)[0]
     metrics['sub_sync_summary'] = sub_sync_summary_result
     metrics['sub_sync_mode'] = sub_sync_mode_result
     metrics['sub_sync_corrected_events'] = sub_sync_corrected_events_result

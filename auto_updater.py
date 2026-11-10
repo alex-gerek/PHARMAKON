@@ -1,9 +1,14 @@
 """
-PHARMAKON 2.0 — Smart Online Patch Sync & Live Overlay Updater
-Checks GitHub repository for verified DSP/UI patches when online,
-stages & syntax-validates updates atomically, and remains 100% functional offline.
+PHARMAKON 3.1 — Hardened Cryptographic Online Patch Sync & Live Overlay Updater
+Features:
+- Ed25519 signature verification + SHA-256 manifest validation
+- Tag-based releases (v{version}) instead of rolling master
+- Non-destructive update check (check notifies, user explicitly clicks install)
+- Dynamic re-verification of cached live patches on every startup
 """
 
+import base64
+import hashlib
 import importlib.util
 import json
 import os
@@ -16,18 +21,27 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+from cryptography.hazmat.primitives.asymmetric import ed25519
+
+# Ed25519 Public Key for PHARMAKON official updates
+UPDATE_PUBLIC_KEY_B64 = "xGVv4GtJMLb5ozFQabRgKGbGQ+4f6GXjmgMXMcKbV4Q="
+
 RAW_BASE_URL = "https://raw.githubusercontent.com/alex-gerek/PHARMAKON/master"
-RELEASE_PAGE_URL = "https://github.com/alex-gerek/PHARMAKON/releases/tag/v3.0.0"
-FALLBACK_VERSION = "3.0.0"
+TAG_BASE_URL = "https://raw.githubusercontent.com/alex-gerek/PHARMAKON/v{version}"
+RELEASE_PAGE_URL = "https://github.com/alex-gerek/PHARMAKON/releases/tag/v3.2.0"
+FALLBACK_VERSION = "3.2.0"
 
 _LAST_UPDATE_STATUS = {
     "state": "idle",
     "local_version": FALLBACK_VERSION,
     "remote_version": None,
+    "signature_verified": False,
+    "update_available": False,
     "updated_just_now": False,
     "notes": "",
     "release_url": RELEASE_PAGE_URL,
     "checked_at": None,
+    "error": None,
 }
 
 
@@ -52,7 +66,7 @@ def resolve_live_patch_dir() -> Path:
         return preferred
     except Exception:
         appdata = Path(os.environ.get("LOCALAPPDATA", str(Path.home())))
-        fallback = appdata / "PHARMAKON_2" / "_live_patches"
+        fallback = appdata / "PHARMAKON" / "_live_patches"
         fallback.mkdir(parents=True, exist_ok=True)
         return fallback
 
@@ -67,11 +81,37 @@ def parse_version(v_str: str) -> tuple:
     return tuple(parts)
 
 
+def canonical_json_bytes(obj: dict) -> bytes:
+    """Returns deterministic canonical UTF-8 JSON bytes for cryptographic verification."""
+    return json.dumps(obj, sort_keys=True, separators=(',', ':')).encode('utf-8')
+
+
+def hash_file_sha256(path: Path) -> str:
+    h = hashlib.sha256()
+    with open(path, 'rb') as f:
+        while chunk := f.read(65536):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def verify_manifest_signature(manifest_dict: dict, sig_b64: str, pubkey_b64: str = UPDATE_PUBLIC_KEY_B64) -> bool:
+    """Verifies that the manifest dictionary was signed by the official PHARMAKON Ed25519 private key."""
+    try:
+        sig_bytes = base64.b64decode(sig_b64.strip())
+        pub_bytes = base64.b64decode(pubkey_b64.strip())
+        pub_key = ed25519.Ed25519PublicKey.from_public_bytes(pub_bytes)
+        canon_bytes = canonical_json_bytes(manifest_dict)
+        pub_key.verify(sig_bytes, canon_bytes)
+        return True
+    except Exception:
+        return False
+
+
 def _read_json_safe(p: Path):
     try:
         if p.is_file():
             data = json.loads(p.read_text(encoding="utf-8"))
-            if isinstance(data, dict) and data.get("app") == "PHARMAKON":
+            if isinstance(data, dict):
                 return data
     except Exception:
         pass
@@ -128,13 +168,30 @@ def _load_module_from_file(mod_name: str, file_path: Path):
 
 def activate_live_patches(load_server: bool = False) -> bool:
     """
-    Mounts verified live-patched modules & static UI assets ahead of frozen PYZ bundle.
-    Safe rollback: if any patched file fails to load, restores default behavior cleanly.
+    Mounts verified live-patched modules & static UI assets.
+    Security Guard: Re-verifies file SHA-256 against VERSION.json before loading.
+    Rolls back safely to built-in bundle if any file fails integrity check.
     """
     if not has_newer_live_patch():
         return False
 
     patch_dir = resolve_live_patch_dir()
+    manifest = _read_json_safe(patch_dir / "VERSION.json")
+    if not manifest:
+        return False
+
+    # Verify integrity of each patched file
+    expected_files = manifest.get("files", {})
+    for rel_path, expected_hash in expected_files.items():
+        fpath = patch_dir / rel_path
+        if not fpath.exists():
+            print(f"[SECURITY] Live patch missing expected file {rel_path}. Fallback to bundle.")
+            return False
+        actual_hash = hash_file_sha256(fpath)
+        if actual_hash != expected_hash:
+            print(f"[SECURITY] Live patch hash mismatch on {rel_path}. Tampering detected. Fallback.")
+            return False
+
     patched_static = patch_dir / "gui" / "static"
     if (patched_static / "index.html").is_file():
         os.environ["PHARMAKON_STATIC_DIR"] = str(patched_static)
@@ -176,36 +233,11 @@ def activate_live_patches(load_server: bool = False) -> bool:
         return False
 
 
-def _validate_downloaded_file(rel_path: str, raw_bytes: bytes) -> bool:
-    try:
-        text = raw_bytes.decode("utf-8")
-    except UnicodeDecodeError:
-        return False
-
-    if len(text) < 64:
-        return False
-
-    if rel_path.endswith(".py"):
-        if "PHARMAKON" not in text:
-            return False
-        try:
-            compile(text, rel_path, "exec")
-        except SyntaxError:
-            return False
-    elif rel_path.endswith(".html"):
-        if "PHARMAKON" not in text or "</html>" not in text.lower():
-            return False
-    elif rel_path.endswith(".js"):
-        if "runPharmakonProcess" not in text:
-            return False
-    return True
-
-
 def _fetch_bytes(url: str, timeout: float) -> bytes:
     req = urllib.request.Request(
         url,
         headers={
-            "User-Agent": "PHARMAKON-Studio-AutoSync/3.0",
+            "User-Agent": "PHARMAKON-Studio-AutoSync/3.1",
             "Cache-Control": "no-cache",
         },
     )
@@ -215,15 +247,13 @@ def _fetch_bytes(url: str, timeout: float) -> bytes:
         return resp.read()
 
 
-def sync_online_patches(force_apply_in_git: bool = False, timeout: float = 2.5) -> dict:
+def check_online_updates(timeout: float = 3.0) -> dict:
     """
-    Checks GitHub master VERSION.json. If a newer version exists:
-    - Downloads and validates all patch files atomically into _live_patches/
-    - Hot-reloads remaster_engine & static assets in memory
-    - Gracefully returns 'offline' when no internet connection is available
+    Checks GitHub for new signed updates.
+    Verifies Ed25519 signature before notifying the user.
+    NEVER installs automatically — sets state for user confirmation.
     """
     global _LAST_UPDATE_STATUS
-    project_dir, _ = get_paths()
     active_info = get_active_version_info()
     local_ver = active_info.get("version", FALLBACK_VERSION)
     ts = int(time.time())
@@ -231,106 +261,140 @@ def sync_online_patches(force_apply_in_git: bool = False, timeout: float = 2.5) 
     try:
         raw_manifest = _fetch_bytes(f"{RAW_BASE_URL}/VERSION.json?t={ts}", timeout=timeout)
         remote_info = json.loads(raw_manifest.decode("utf-8"))
+        raw_sig = _fetch_bytes(f"{RAW_BASE_URL}/VERSION.json.sig?t={ts}", timeout=timeout).decode("utf-8").strip()
     except Exception:
         status = {
             "state": "offline",
             "local_version": local_ver,
             "remote_version": None,
+            "signature_verified": False,
+            "update_available": False,
             "updated_just_now": _LAST_UPDATE_STATUS.get("updated_just_now", False),
             "notes": active_info.get("notes", ""),
             "release_url": active_info.get("release_url", RELEASE_PAGE_URL),
             "checked_at": ts,
+            "error": None,
         }
         _LAST_UPDATE_STATUS = status
         return status
 
-    if not isinstance(remote_info, dict) or remote_info.get("app") != "PHARMAKON":
-        status = {
-            "state": "offline",
-            "local_version": local_ver,
-            "remote_version": None,
-            "updated_just_now": False,
-            "notes": active_info.get("notes", ""),
-            "release_url": RELEASE_PAGE_URL,
-            "checked_at": ts,
-        }
-        _LAST_UPDATE_STATUS = status
-        return status
-
+    # Verify Ed25519 signature
+    sig_valid = verify_manifest_signature(remote_info, raw_sig, UPDATE_PUBLIC_KEY_B64)
     remote_ver = str(remote_info.get("version", local_ver))
     notes = str(remote_info.get("notes", ""))
-    rel_url = str(remote_info.get("release_url", RELEASE_PAGE_URL))
+    rel_url = str(remote_info.get("release_url", f"https://github.com/alex-gerek/PHARMAKON/releases/tag/v{remote_ver}"))
+
+    if not sig_valid:
+        status = {
+            "state": "signature_invalid",
+            "local_version": local_ver,
+            "remote_version": remote_ver,
+            "signature_verified": False,
+            "update_available": False,
+            "updated_just_now": False,
+            "notes": notes,
+            "release_url": rel_url,
+            "checked_at": ts,
+            "error": "Cryptographic signature verification failed! Untrusted release.",
+        }
+        _LAST_UPDATE_STATUS = status
+        return status
 
     if parse_version(remote_ver) <= parse_version(local_ver):
         status = {
             "state": "up_to_date",
             "local_version": local_ver,
             "remote_version": remote_ver,
+            "signature_verified": True,
+            "update_available": False,
             "updated_just_now": _LAST_UPDATE_STATUS.get("updated_just_now", False),
             "notes": notes,
             "release_url": rel_url,
             "checked_at": ts,
+            "error": None,
         }
-        _LAST_UPDATE_STATUS = status
-        return status
-
-    # Developer git workspace protection: notify without overwriting unless explicitly clicked
-    is_git_repo = (project_dir / ".git").exists() and not getattr(sys, "frozen", False)
-    if is_git_repo and not force_apply_in_git:
+    else:
         status = {
             "state": "update_available",
             "local_version": local_ver,
             "remote_version": remote_ver,
+            "signature_verified": True,
+            "update_available": True,
             "updated_just_now": False,
             "notes": notes,
             "release_url": rel_url,
             "checked_at": ts,
+            "error": None,
         }
-        _LAST_UPDATE_STATUS = status
-        return status
 
-    # Download & validate all patch files into temporary staging directory
-    patch_files = remote_info.get("patch_files") or [
-        "remaster_engine.py",
-        "gui/server.py",
-        "gui/static/index.html",
-        "gui/static/app.js",
-        "gui/static/style.css",
-    ]
+    _LAST_UPDATE_STATUS = status
+    return status
+
+
+def install_verified_update(timeout: float = 10.0) -> dict:
+    """
+    Downloads and installs files from the verified release tag v{version}.
+    Validates SHA-256 hash of each file before staging.
+    """
+    global _LAST_UPDATE_STATUS
+    active_info = get_active_version_info()
+    local_ver = active_info.get("version", FALLBACK_VERSION)
+    ts = int(time.time())
+
+    # Pre-check update status
+    chk = check_online_updates(timeout=timeout)
+    if not chk.get("signature_verified") or not chk.get("update_available"):
+        return chk
+
+    remote_ver = chk["remote_version"]
+    tag_url = TAG_BASE_URL.format(version=remote_ver)
+
+    # Re-fetch manifest from tag
+    try:
+        raw_manifest = _fetch_bytes(f"{tag_url}/VERSION.json", timeout=timeout)
+        manifest = json.loads(raw_manifest.decode("utf-8"))
+        raw_sig = _fetch_bytes(f"{tag_url}/VERSION.json.sig", timeout=timeout).decode("utf-8").strip()
+    except Exception as exc:
+        chk["error"] = f"Failed to download release manifest: {exc}"
+        return chk
+
+    if not verify_manifest_signature(manifest, raw_sig, UPDATE_PUBLIC_KEY_B64):
+        chk["signature_verified"] = False
+        chk["error"] = "Signature verification failed on release tag."
+        return chk
+
+    files_to_download = manifest.get("files", {})
+    if not files_to_download:
+        chk["error"] = "No files declared in manifest."
+        return chk
 
     patch_dir = resolve_live_patch_dir()
     staging_dir = patch_dir.parent / "_live_patches_staging"
+
     try:
         if staging_dir.exists():
             shutil.rmtree(staging_dir, ignore_errors=True)
         staging_dir.mkdir(parents=True, exist_ok=True)
 
-        for rel_file in patch_files:
-            clean_rel = rel_file.strip("/").replace("\\", "/")
+        for rel_name, expected_hash in files_to_download.items():
+            clean_rel = rel_name.strip("/").replace("\\", "/")
             if ".." in clean_rel:
                 raise ValueError(f"Unsafe path in manifest: {clean_rel}")
-            raw_data = _fetch_bytes(f"{RAW_BASE_URL}/{clean_rel}?t={ts}", timeout=max(timeout, 6.0))
-            if not _validate_downloaded_file(clean_rel, raw_data):
-                raise ValueError(f"Validation failed for {clean_rel}")
-            dest_file = staging_dir / clean_rel
-            dest_file.parent.mkdir(parents=True, exist_ok=True)
-            dest_file.write_bytes(raw_data)
 
-        (staging_dir / "VERSION.json").write_text(
-            json.dumps(remote_info, indent=2), encoding="utf-8"
-        )
+            raw_bytes = _fetch_bytes(f"{tag_url}/{clean_rel}", timeout=timeout)
+            calc_hash = hashlib.sha256(raw_bytes).hexdigest()
+            if calc_hash != expected_hash:
+                raise ValueError(f"Hash mismatch on {clean_rel}: expected {expected_hash}, got {calc_hash}")
 
-        # Ensure companion static assets (icons/SVGs) exist in live patch static dir
-        _, base_dir = get_paths()
-        orig_static = base_dir / "gui" / "static"
-        patch_static = patch_dir / "gui" / "static"
-        if orig_static.is_dir():
-            patch_static.mkdir(parents=True, exist_ok=True)
-            for asset in orig_static.iterdir():
-                if asset.is_file() and not (patch_static / asset.name).exists():
-                    shutil.copy2(asset, patch_static / asset.name)
+            dest = staging_dir / clean_rel
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_bytes(raw_bytes)
 
-        # Commit validated staging files into live patch overlay
+        # Write manifest and signature to staging
+        (staging_dir / "VERSION.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+        (staging_dir / "VERSION.json.sig").write_text(raw_sig, encoding="utf-8")
+
+        # Copy to live patch directory
         for item in staging_dir.rglob("*"):
             if item.is_file():
                 rel = item.relative_to(staging_dir)
@@ -339,36 +403,28 @@ def sync_online_patches(force_apply_in_git: bool = False, timeout: float = 2.5) 
                 shutil.copy2(item, target)
 
         shutil.rmtree(staging_dir, ignore_errors=True)
-
-        # Hot-activate updated DSP engine & static assets immediately
         activate_live_patches(load_server=False)
 
-        status = {
+        res = {
             "state": "updated",
             "previous_version": local_ver,
             "local_version": remote_ver,
             "remote_version": remote_ver,
+            "signature_verified": True,
+            "update_available": False,
             "updated_just_now": True,
-            "notes": notes,
-            "release_url": rel_url,
+            "notes": manifest.get("notes", ""),
+            "release_url": chk["release_url"],
             "checked_at": ts,
+            "error": None,
         }
-        _LAST_UPDATE_STATUS = status
-        return status
+        _LAST_UPDATE_STATUS = res
+        return res
     except Exception as exc:
         shutil.rmtree(staging_dir, ignore_errors=True)
-        status = {
-            "state": "update_available",
-            "local_version": local_ver,
-            "remote_version": remote_ver,
-            "updated_just_now": False,
-            "notes": notes,
-            "release_url": rel_url,
-            "error": str(exc),
-            "checked_at": ts,
-        }
-        _LAST_UPDATE_STATUS = status
-        return status
+        chk["error"] = str(exc)
+        _LAST_UPDATE_STATUS = chk
+        return chk
 
 
 def get_cached_status() -> dict:

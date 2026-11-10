@@ -38,10 +38,13 @@ hidden_imports = [
     'auto_updater',
     'remaster_engine',
     'track_map_engine',
+    'cryptography',
+    'cryptography.hazmat.primitives.asymmetric.ed25519',
 ]
 hidden_imports += collect_submodules('uvicorn')
 hidden_imports += collect_submodules('fastapi')
 hidden_imports += collect_submodules('starlette')
+hidden_imports += collect_submodules('cryptography')
 
 datas = [
     ('gui/static', 'gui/static'),

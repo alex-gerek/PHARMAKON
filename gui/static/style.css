@@ -2553,3 +2553,14 @@ body.cinematic-hide-cursor, body.cinematic-hide-cursor * {
     justify-content: space-between;
   }
 }
+
+/* Mastering Report button: visible waiting state and click feedback */
+.btn-report.btn-report-waiting { opacity: 0.55; border-style: dashed; cursor: help; }
+.btn-report.btn-report-nudge { animation: reportNudge 0.45s ease; }
+@keyframes reportNudge {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-5px); }
+  40% { transform: translateX(5px); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(3px); }
+}
