@@ -338,7 +338,7 @@ Mathematical proofs, transfer functions, and AES/IEEE calibrations are documente
 * [04. Death in the Club: A Kick, a Bassline, and a Phase Problem That Refuses to Die](articles/04_death_in_the_club_sub_phase_cancellation.md) ([Original publication on X](https://x.com/LexGerek/status/2118355503122182427))
 * [05. Inter-Sample Peaks (True-Peak): Why Streaming Distorts and How 4X Polyphase Oversampling Solves It](articles/05_intersample_peaks_and_4x_oversampling.md)
 * [06. From Python to C++20: Architecting the Real-Time DSP Engine of PHARMAKON PRO](articles/06_from_python_to_cxx20_architecting_pharmakon_pro.md)
-* [07. PHARMAKON 3.2: Math Without the Plastic](articles/07_pharmakon_3_2_math_without_the_plastic.md)
+* [07. Who Put Plastic in My Music? Hunting Down the Math Behind a Cleaner Sound](articles/07_who_put_plastic_in_my_music.md)
 
 ---
 

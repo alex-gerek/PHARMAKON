@@ -1,7 +1,7 @@
-# PHARMAKON 3.2: Math Without the Plastic
+# Who Put Plastic in My Music? Hunting Down the Math Behind a Cleaner Sound
 
 **Author:** Lex Gerek (Sound Architect / Engineer)  
-**Project:** PHARMAKON 3.2 Studio Console  
+**Project:** PHARMAKON 3.2 Studio Console (Clean Chain, Track Intelligence Map)  
 **Implementation:** `remaster_engine.py`, `track_map_engine.py`, measurement bench in `bench/`
 
 ---
