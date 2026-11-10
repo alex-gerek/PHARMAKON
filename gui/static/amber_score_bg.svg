@@ -56,7 +56,7 @@
       <line x1="72" y1="158" x2="72" y2="210" stroke="#d97706" stroke-width="0.8" stroke-opacity="0.2" />
     </g>
 
-    <!-- MASTER CALLIGRAPHIC TREBLE G-CLEF (Гуру каллиграфии: thick/thin brush curves, copperplate spiral) -->
+    <!-- MASTER CALLIGRAPHIC TREBLE G-CLEF (master calligraphy: thick/thin brush curves, copperplate spiral) -->
     <!-- Drawn as an authentic filled calligraphic ribbon varying from 1px to 6px -->
     <g id="master-g-clef" class="ink-calligraphy-bright">
       <!-- Lower terminal drop & flourishing hook -->
@@ -171,7 +171,7 @@
       <line x1="10" y1="206" x2="460" y2="206" class="stave-line-right" />
       <line x1="10" y1="218" x2="460" y2="218" class="stave-line-right" />
 
-      <!-- MASTER CALLIGRAPHIC BASS F-CLEF (Гуру каллиграфии: thick copperplate arc & teardrop eyes) -->
+      <!-- MASTER CALLIGRAPHIC BASS F-CLEF (master calligraphy: thick copperplate arc and teardrop eyes) -->
       <g id="master-f-clef" class="ink-calligraphy-bright">
         <!-- Clef head: heavy swelling curl from line 4 (F line = Y=182) -->
         <path d="M 48 186 C 45 186 41 183 41 178 C 41 171 48 165 57 166 C 70 167 78 178 74 193 C 70 208 55 220 38 226 C 36 227 34 225 35 224 C 48 217 62 206 65 194 C 67 184 62 174 54 173 C 48 173 45 177 46 181 C 47 185 50 186 48 186 Z" />
@@ -200,7 +200,7 @@
       <path d="M 165 232 L 215 226 M 165 232 L 215 238" stroke="#fbbf24" stroke-width="1.4" stroke-opacity="0.28" fill="none" />
       <path d="M 218 226 L 268 232 M 218 238 L 268 232" stroke="#fbbf24" stroke-width="1.4" stroke-opacity="0.28" fill="none" />
 
-      <!-- THE ROYAL FERMATA (Знак ферматы — корона времени / вечный покой звука) -->
+      <!-- THE ROYAL FERMATA (fermata: the crown of time, the sound held at rest) -->
       <!-- Thick calligraphic arch with a luminous drop in the center -->
       <g id="royal-fermata" transform="translate(310, 138)">
         <path d="M 0 16 C 0 0 32 0 32 16 C 29 3 3 3 0 16 Z" class="ink-calligraphy-bright" />
@@ -262,7 +262,7 @@
       <line x1="185" y1="100" x2="185" y2="73" stroke="#f59e0b" stroke-width="1.2" stroke-opacity="0.3" />
       <polygon points="64,25 186,73 186,77 64,29" class="ink-calligraphy" fill-opacity="0.32" />
 
-      <!-- Antique Rest symbols (Crotchet rest / пауза) -->
+      <!-- Antique Rest symbols (crotchet rest) -->
       <path d="M 230 70 L 238 78 L 232 86 L 240 94 C 237 99 231 100 228 98" stroke="#fbbf24" stroke-width="1.4" stroke-opacity="0.3" fill="none" />
 
       <!-- Final fading inscription -->
