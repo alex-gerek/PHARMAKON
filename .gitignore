@@ -42,3 +42,5 @@ _live_patches_staging/
 # Versioned release build outputs
 dist_*/
 build_*/
+
+_publish/
