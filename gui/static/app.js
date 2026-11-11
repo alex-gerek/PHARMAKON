@@ -200,11 +200,13 @@ function setupAudioStreams(origPath, masterPath) {
       document.getElementById('progressBar').style.width = `${pct}%`;
       document.getElementById('currTime').innerText = formatTime(audioHealed.currentTime);
     }
+    updateModalPlaybackUI();
   });
 
   audioHealed.addEventListener('ended', () => {
     isPlaying = false;
     document.getElementById('playIcon').innerText = "▶";
+    updateModalPlaybackUI();
   });
 }
 
@@ -383,6 +385,7 @@ function togglePlayPause() {
     isPlaying = false;
     document.getElementById('playIcon').innerText = "▶";
     updateStatus("PAUSED. Both screens frozen in sync. Use Zoom or mouse wheel to inspect.");
+    updateModalPlaybackUI();
   } else {
     // Unfreeze when resuming playback
     if (isFrozen) {
@@ -396,6 +399,7 @@ function togglePlayPause() {
     audioHealed.play().catch(() => {});
     isPlaying = true;
     document.getElementById('playIcon').innerText = "❚❚";
+    updateModalPlaybackUI();
   }
 }
 
@@ -3047,7 +3051,8 @@ function openMasteringReportModal() {
               ${tmLegendHtml(tm)}
             </div>
           </div>
-          <div style="display:flex; height:34px; gap:2px; background:#04060a; border:1px solid #141b27; border-radius:4px; padding:2px; margin-bottom:8px;">
+          <div id="tmModalSegmentsBar" style="position:relative; display:flex; height:34px; gap:2px; background:#04060a; border:1px solid #141b27; border-radius:4px; padding:2px; margin-bottom:8px; overflow:hidden;">
+            <div id="tmModalPlayheadLine" style="display:none; position:absolute; top:0; bottom:0; width:2px; background:#38bdf8; box-shadow:0 0 8px #38bdf8; z-index:20; pointer-events:none;"></div>
             ${segs}
           </div>
           ${(tm.genre && tm.genre.structure_note) ? `<div style="font-size:9px; color:#f59e0b; font-family:var(--font-mono); margin-bottom:6px;">${tm.genre.structure_note}</div>` : ''}
@@ -3202,7 +3207,8 @@ function inspectTrackMapSection(secIdx) {
           <span style="font-size:13px; color:#94a3b8; background:#1e293b; border-radius:4px; padding:2px 8px;">${timeStr} (${durSec}s · ${bars} bars)</span>
         </div>
         <div style="display:flex; align-items:center; gap:8px;">
-          <button id="btnModalPlaySection" onclick="playTrackMapSectionFromModal(${secIdx})" style="background:#0284c7; border:1px solid #38bdf8; color:#fff; border-radius:4px; padding:4px 12px; font-size:12px; cursor:pointer; font-weight:800; display:inline-flex; align-items:center; gap:6px; box-shadow:0 0 10px rgba(56,189,248,0.3); transition:all 0.15s ease;" onmouseover="this.style.background='#0369a1'" onmouseout="this.style.background='#0284c7'" title="Audition this section from its start time">
+          <span id="tmInspectorLiveTimer" style="display:none; font-family:var(--font-mono); font-size:12px; font-weight:800; color:#10b981; background:#041610; border:1px solid #10b98166; border-radius:4px; padding:3px 8px; letter-spacing:0.5px;"></span>
+          <button id="btnModalPlaySection" onclick="playTrackMapSectionFromModal(${secIdx})" style="background:#0284c7; border:1px solid #38bdf8; color:#fff; border-radius:4px; padding:4px 12px; font-size:12px; cursor:pointer; font-weight:800; display:inline-flex; align-items:center; gap:6px; box-shadow:0 0 10px rgba(56,189,248,0.3); transition:all 0.15s ease;" onmouseover="if(!isPlaying)this.style.background='#0369a1'" onmouseout="if(!isPlaying)this.style.background='#0284c7'" title="Audition this section from its start time">
             <span>&#9654; PLAY FROM HERE</span>
           </button>
           <button onclick="closeTrackMapInspector()" style="background:#1e293b; border:1px solid #334155; color:#94a3b8; border-radius:4px; padding:4px 10px; font-size:12px; cursor:pointer; font-weight:bold; transition:all 0.15s ease;" onmouseover="this.style.color='#fff'; this.style.borderColor='#f43f5e';" onmouseout="this.style.color='#94a3b8'; this.style.borderColor='#334155';">✕ CLOSE ENLARGED VIEW</button>
@@ -3242,7 +3248,8 @@ function inspectTrackMapSection(secIdx) {
           <span style="color:#94a3b8; font-weight:bold;">INTRA-SECTION KICK ONSET MAP (${kCnt} events):</span>
           <span style="font-size:10px; color:#64748b;">${s.policy_verdict || ''}</span>
         </div>
-        <div style="position:relative; height:18px; background:#04060a; border:1px solid #1e293b; border-radius:4px; overflow:hidden;">
+        <div id="tmKickMapTimeline" onclick="seekModalSectionTime(event)" style="position:relative; height:18px; background:#04060a; border:1px solid #1e293b; border-radius:4px; overflow:hidden; cursor:pointer;" title="Click anywhere to scrub playback within this section">
+          <div id="tmInspectorPlayhead" style="display:none; position:absolute; top:0; bottom:0; width:2px; background:#38bdf8; box-shadow:0 0 6px #38bdf8; z-index:10; pointer-events:none;"></div>
           ${kickMarkersHtml || '<div style="font-size:9px; color:#475569; text-align:center; line-height:18px;">No percussive kicks in this section (Acoustic Transparency)</div>'}
         </div>
       </div>
@@ -3254,12 +3261,16 @@ function inspectTrackMapSection(secIdx) {
     </div>
   `;
   inspector.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  updateModalPlaybackUI();
 }
+
+let modalAuditionSectionIdx = null;
 
 function closeTrackMapInspector() {
   const inspector = document.getElementById('tmSectionInspector');
   if (inspector) inspector.innerHTML = '';
   activeInspectedSection = null;
+  modalAuditionSectionIdx = null;
 }
 
 window.playTrackMapSectionFromModal = function(secIdx) {
@@ -3268,6 +3279,7 @@ window.playTrackMapSectionFromModal = function(secIdx) {
   const s = tm.sections.find(x => (x.sec_index === secIdx || x.section_index === secIdx));
   if (!s) return;
   const targetTime = (s.start_s !== undefined) ? s.start_s : ((s.time_start_s !== undefined) ? s.time_start_s : 0);
+  const endTime = (s.end_s !== undefined) ? s.end_s : ((s.time_end_s !== undefined) ? s.time_end_s : (targetTime + (s.duration_s || 0)));
 
   initWebAudio();
 
@@ -3283,6 +3295,24 @@ window.playTrackMapSectionFromModal = function(secIdx) {
     }
   }
 
+  // 1. If currently playing this section: PAUSE!
+  if (isPlaying && (modalAuditionSectionIdx === secIdx || (audioHealed.currentTime >= targetTime && audioHealed.currentTime <= endTime))) {
+    togglePlayPause();
+    updateModalPlaybackUI();
+    updateStatus(`PAUSED: Section '${s.name || s.tag || s.sec_tag}' at ${formatTime(audioHealed.currentTime)}`);
+    return;
+  }
+
+  // 2. If paused on this section: RESUME!
+  if (!isPlaying && modalAuditionSectionIdx === secIdx && audioHealed.currentTime >= targetTime && audioHealed.currentTime < endTime) {
+    togglePlayPause();
+    updateModalPlaybackUI();
+    updateStatus(`RESUMING: Section '${s.name || s.tag || s.sec_tag}' from ${formatTime(audioHealed.currentTime)}`);
+    return;
+  }
+
+  // 3. Otherwise: start new audition from targetTime
+  modalAuditionSectionIdx = secIdx;
   const startAudition = () => {
     try {
       audioHealed.currentTime = targetTime;
@@ -3308,12 +3338,7 @@ window.playTrackMapSectionFromModal = function(secIdx) {
       if (playIcon) playIcon.innerText = "❚❚";
     }
 
-    const btn = document.getElementById('btnModalPlaySection');
-    if (btn) {
-      btn.style.background = '#10b981';
-      btn.style.borderColor = '#34d399';
-      btn.innerHTML = `<span>&#10074;&#10074; PLAYING FROM ${formatTime(targetTime)}</span>`;
-    }
+    updateModalPlaybackUI();
     updateStatus(`Auditioning section '${s.name || s.tag || s.sec_tag}' from ${formatTime(targetTime)}`);
   };
 
@@ -3328,6 +3353,111 @@ window.playTrackMapSectionFromModal = function(secIdx) {
     updateStatus(`Audition seek: ${formatTime(targetTime)} (start playback in Studio Console)`);
   }
 };
+
+window.seekModalSectionTime = function(e) {
+  const s = activeInspectedSection;
+  if (!s) return;
+  const el = document.getElementById('tmKickMapTimeline');
+  if (!el) return;
+  const rect = el.getBoundingClientRect();
+  const frac = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+  const start = (s.start_s !== undefined) ? s.start_s : ((s.time_start_s !== undefined) ? s.time_start_s : 0);
+  const end = (s.end_s !== undefined) ? s.end_s : ((s.time_end_s !== undefined) ? s.time_end_s : (start + (s.duration_s || 0)));
+  const t = start + frac * (end - start);
+
+  initWebAudio();
+  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+
+  if (audioHealed && audioHealed.src) {
+    try {
+      audioHealed.currentTime = t;
+      if (audioRaw && audioRaw.src) audioRaw.currentTime = t;
+    } catch(err) {
+      console.warn('Seek error:', err);
+    }
+    if (!isPlaying) {
+      togglePlayPause();
+    }
+    modalAuditionSectionIdx = s.sec_index || s.section_index;
+    updateModalPlaybackUI();
+  }
+};
+
+function updateModalPlaybackUI() {
+  const modal = document.getElementById('reportModal');
+  if (!modal || modal.style.display === 'none') return;
+
+  const cur = (audioHealed && typeof audioHealed.currentTime === 'number') ? audioHealed.currentTime : 0;
+  const s = activeInspectedSection;
+
+  if (s) {
+    const sIdx = s.sec_index || s.section_index;
+    const start = (s.start_s !== undefined) ? s.start_s : ((s.time_start_s !== undefined) ? s.time_start_s : 0);
+    const end = (s.end_s !== undefined) ? s.end_s : ((s.time_end_s !== undefined) ? s.time_end_s : (start + (s.duration_s || 0)));
+    const curStr = formatTime(cur);
+    const endStr = formatTime(end);
+
+    // 1. Live Timer readout
+    const timer = document.getElementById('tmInspectorLiveTimer');
+    if (timer) {
+      timer.innerText = `${curStr} / ${endStr}`;
+      timer.style.display = 'inline-block';
+      if (isPlaying && cur >= start && cur <= end) {
+        timer.style.color = '#10b981';
+        timer.style.borderColor = '#10b98166';
+        timer.style.background = '#041610';
+      } else {
+        timer.style.color = '#94a3b8';
+        timer.style.borderColor = '#334155';
+        timer.style.background = '#0f172a';
+      }
+    }
+
+    // 2. Button state & text
+    const btn = document.getElementById('btnModalPlaySection');
+    if (btn) {
+      if (isPlaying && (modalAuditionSectionIdx === sIdx || (cur >= start && cur <= end))) {
+        btn.style.background = '#10b981';
+        btn.style.borderColor = '#34d399';
+        btn.style.boxShadow = '0 0 14px rgba(16,185,129,0.4)';
+        btn.innerHTML = `<span>&#10074;&#10074; PAUSE (${curStr})</span>`;
+        btn.title = "Pause audition";
+      } else {
+        btn.style.background = '#0284c7';
+        btn.style.borderColor = '#38bdf8';
+        btn.style.boxShadow = '0 0 10px rgba(56,189,248,0.3)';
+        if (modalAuditionSectionIdx === sIdx && cur > start && cur < end) {
+          btn.innerHTML = `<span>&#9654; RESUME (${curStr})</span>`;
+          btn.title = "Resume audition";
+        } else {
+          btn.innerHTML = `<span>&#9654; PLAY FROM HERE</span>`;
+          btn.title = "Audition this section from its start time";
+        }
+      }
+    }
+
+    // 3. Playhead on kick onset map
+    const playhead = document.getElementById('tmInspectorPlayhead');
+    if (playhead) {
+      if (cur >= start && cur <= end) {
+        const span = Math.max(0.1, end - start);
+        const relPct = Math.max(0, Math.min(100, ((cur - start) / span) * 100));
+        playhead.style.left = `${relPct}%`;
+        playhead.style.display = 'block';
+      } else {
+        playhead.style.display = 'none';
+      }
+    }
+  }
+
+  // 4. Playhead on top phrase segments bar
+  const globalPlayhead = document.getElementById('tmModalPlayheadLine');
+  if (globalPlayhead && duration > 0) {
+    const totalPct = Math.max(0, Math.min(100, (cur / duration) * 100));
+    globalPlayhead.style.left = `${totalPct}%`;
+    globalPlayhead.style.display = 'block';
+  }
+}
 
 window.togglePlay = togglePlayPause;
 
