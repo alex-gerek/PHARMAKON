@@ -789,7 +789,7 @@ def _true_peak_limiter_block(audio, sr, target_ceiling_db=-0.3, oversample=4, le
     # 3. Apply gain directly to original 1X audio (zero filtering on audio!)
     limited_1x = audio * gain_1x[:, None]
 
-    # 3b. Precise pass (Clean Chain 3.2): re-measure at 8X and correct residual overs
+    # 3b. Precise pass (Clean Chain 3.2): re-measure at 16X and correct residual overs
     #     with smooth gain, so the tanh guard and the hard clamp below normally have
     #     nothing left to do (they are what created new inter-sample peaks on dense HF).
     if precise:
@@ -1903,7 +1903,7 @@ CLEAN_CHAIN_DEFAULTS = {
     'deharsh_calibrated': True,   # no hidden ~5.5 dB static cut at the de-harsh frequency
     'tape_deemphasis': True,      # flat linear response of the tape stage
     'tape_ref_peak_dbfs': -12.0,  # tape operating level calibrated by robust peak
-    'limiter_precise': True,      # 8X re-check, residual overs removed by gain (no clamp-made peaks)
+    'limiter_precise': True,      # 16X re-check, residual overs removed by gain (no clamp-made peaks)
 }
 CLASSIC_31_DEFAULTS = {
     'antidote_v2': False,
