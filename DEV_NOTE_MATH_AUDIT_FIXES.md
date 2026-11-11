@@ -429,3 +429,16 @@ Browser check: modal opens without errors; no canned captions remain.
 Verified end to end on a clean copy of the 3.0.0 portable build. It auto-updates from master to 3.2.0 and the 6 patched files are byte-identical to master. Processing works (Clean Chain 3.2, −1.19 dBTP, master and report written), but the Track Map was missing. The 3.0 updater can live-patch `remaster_engine.py` and the GUI, not `track_map_engine.py`, so the new engine called the bundled 3.0 map, which failed with `name 'phrase_8' is not defined` (caught and logged as a warning).
 
 **Fix:** `remaster_engine._track_map_module()` uses the loaded `track_map_engine` only if it has sections v2 (`detect_sections`). Otherwise it loads the `track_map_engine.py` patched in next to `remaster_engine.py`. Re-checked on the same 3.0 copy: map present (131.1 BPM, 12 sections, kicks labelled as a mix estimate). `remaster_engine.py` changed, so it needs a re-signed manifest (see the release tool fix).
+
+## 30. True peak through lossy codecs, and the limiter's limits (measurement only)
+
+**Codec bench** (`bench/validate_codec_true_peak.py`, results `bench/results/codec_true_peak.json`; ffmpeg is a measuring instrument here, not part of the product). 6 AI-generated tracks, 60 s around the loudest second, mastered to −14 and −8 LUFS with the engine limiter at −0.3 / −1.0 / −2.0 dBTP, 24-bit WAV, then MP3 320/128, AAC 256, Vorbis 160, Opus 128 decoded and measured at 4X.
+
+- Raw generator files: sample peak = true peak within 0.01 dB, peaks −2.8…−4.4 dBFS at −13…−15 LUFS.
+- −14 LUFS: no master reached any ceiling (peaks −2.9…−6.2 dBTP); worst decoded peak −2.8 dBTP.
+- −8 LUFS, peak growth (median / worst): MP3 320 +0.28 / +0.65, AAC 256 +0.32 / +0.82, MP3 128 +1.10 / +1.46, Vorbis 160 +1.14 / +1.59, Opus 128 +1.12 / +1.76 dB.
+- Decoded samples above 0 dBFS at −8 LUFS: ceiling −0.3 → 6/6 tracks on MP3 128, Vorbis 160, Opus 128; −1.0 → 2/6, 4/6, 4/6; −2.0 → 0/6 on every format. The −2.0 masters were 0.1…0.7 LU quieter than −0.3 at the same input gain. This supports Spotify's −2 dBTP rule for masters louder than −14 LUFS; the engine default (−0.3) and the Club preset (−0.1) are lossless-delivery values.
+
+**Limiter accuracy.** On the 18 real −8 LUFS masters, 32X measurement stays within +0.01 dB of the ceiling. Stress signals expose two gaps (open, no code change yet): full-band white noise (to 24 kHz) ends 0.3 dB over the ceiling at 32X (the final sample clamp after the local tanh guard creates new inter-sample peaks), and on noise low-passed at 16 kHz the 4X measurement reads 0.1 dB low compared with 32X. Candidate fix: iterate the verification pass and check at a finer oversampling factor before the final clamp.
+
+**Article 05** rewritten from these measurements (3.2, corrected physics example, measured codec section, ceiling guidance by destination, the limits above).
