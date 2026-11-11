@@ -842,6 +842,35 @@ if getattr(sys, 'frozen', False):
 STATIC_DIR.mkdir(exist_ok=True)
 
 
+@app.get("/api/{filename:path}")
+def stream_relative_audio(filename: str):
+    """Fallback route for relative audio requests issued from /api/report pages."""
+    clean_name = urllib.parse.unquote(filename).strip()
+    if ".." in clean_name or "\\" in clean_name:
+        raise HTTPException(status_code=403, detail="Access denied")
+    ext = Path(clean_name).suffix.lower()
+    if ext in ALLOWED_AUDIO_EXTENSIONS:
+        target_name = os.path.basename(clean_name)
+        search_dirs = [
+            PROJECT_DIR / "uploads" / "Remaster",
+            PROJECT_DIR / "uploads",
+            PROJECT_DIR / "Remaster",
+            PROJECT_DIR / "demo_audio",
+            PROJECT_DIR,
+        ]
+        for sdir in search_dirs:
+            if sdir.exists():
+                candidate = (sdir / target_name).resolve()
+                if candidate.is_file():
+                    return FileResponse(str(candidate), media_type=f"audio/{ext.lstrip('.')}")
+                for root, _, files in os.walk(str(sdir)):
+                    if target_name in files:
+                        full_cand = (Path(root) / target_name).resolve()
+                        if full_cand.is_file():
+                            return FileResponse(str(full_cand), media_type=f"audio/{ext.lstrip('.')}")
+    raise HTTPException(status_code=404, detail="Resource not found")
+
+
 @app.get("/static/{asset_path:path}")
 def serve_static_overlay(asset_path: str):
     """Secure static file server preventing path traversal."""

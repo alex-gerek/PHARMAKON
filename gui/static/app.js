@@ -3273,6 +3273,14 @@ window.playTrackMapSectionFromModal = function(secIdx) {
     audioCtx.resume();
   }
 
+  if (!audioHealed.src || audioHealed.src === window.location.href) {
+    const orig = lastResult?.original_path || lastMetrics?.raw_path || "";
+    const mstr = lastResult?.master_path || lastMetrics?.master_path || "";
+    if (mstr) {
+      setupAudioStreams(orig, mstr);
+    }
+  }
+
   if (audioHealed && audioHealed.src) {
     audioHealed.currentTime = targetTime;
     if (audioRaw && audioRaw.src) {
@@ -3282,6 +3290,8 @@ window.playTrackMapSectionFromModal = function(secIdx) {
       togglePlay();
     }
     updateStatus(`Auditioning section '${s.name || s.tag || s.sec_tag}' from ${formatTime(targetTime)}`);
+  } else {
+    updateStatus(`Audition seek: ${formatTime(targetTime)} (start playback in Studio Console)`);
   }
 };
 

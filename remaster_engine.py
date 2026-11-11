@@ -648,7 +648,46 @@ def dynamic_deharsh(audio, sr, center_freq=5000.0, q=2.8, depth=1.0, calibrated=
 # 4. TRUE-PEAK BRICKWALL LIMITER WITH 4X POLYPHASE OVERSAMPLING
 # -----------------------------------------------------------------------------
 
-def _true_peak_limiter_block(audio, sr, target_ceiling_db=-0.3, oversample=4, legacy_limiter=False):
+PRECISE_VERIFY_OVERSAMPLE = 16  # verification factor of the precise pass: worst-case under-read cos(pi/2k) = -0.04 dB at Nyquist (4X: -0.69 dB)
+PRECISE_MAX_PASSES = 16  # stress signals converge ~30 % per pass; music needs 0-1
+
+
+def _tp_envelope_1x(x, k=PRECISE_VERIFY_OVERSAMPLE, block_s=5.0, pad=1024):
+    """Per-1X-sample true-peak envelope: max |x| over the k sub-points of each sample
+    (and over channels), computed in padded blocks so memory stays bounded."""
+    n = len(x)
+    env = np.empty(n, dtype=np.float64)
+    blk = max(1, int(block_s * 48000))
+    for a in range(0, n, blk):
+        b = min(n, a + blk)
+        lo, hi = max(0, a - pad), min(n, b + pad)
+        up = signal.resample_poly(x[lo:hi], k, 1, axis=0)
+        pk = np.max(np.abs(up), axis=1)[(a - lo) * k:(b - lo) * k]
+        env[a:b] = pk.reshape(b - a, k).max(axis=1)
+    return np.maximum(env, np.max(np.abs(x), axis=1))
+
+
+def _precise_gain_pass(limited_1x, sr, target_ceiling, internal_ceiling):
+    """Removes residual true-peak overs with smooth gain (no saturation, no clamp).
+    Returns the corrected audio; audio with no over at 16X is returned unchanged."""
+    win = int(0.002 * sr) | 1
+    b_rel, a_rel = signal.butter(1, 30.0 / (0.5 * sr), btype='low')
+    # the 16X envelope can read up to cos(pi/32) = -0.042 dB low at Nyquist: verify against that bound
+    verify_ceiling = target_ceiling * np.cos(np.pi / (2 * PRECISE_VERIFY_OVERSAMPLE))
+    for _ in range(PRECISE_MAX_PASSES):
+        env = _tp_envelope_1x(limited_1x)
+        if np.max(env) <= verify_ceiling:
+            break
+        # only the overs are corrected (to the internal ceiling); everything else keeps gain 1
+        need = np.where(env > verify_ceiling, internal_ceiling / (env + 1e-12), 1.0)
+        hold = minimum_filter1d(need, size=win, origin=0)
+        g = np.minimum(need, signal.filtfilt(b_rel, a_rel, hold))
+        g = np.where(np.abs(g - 1.0) < 1e-9, 1.0, g)
+        limited_1x = limited_1x * g[:, None]
+    return limited_1x
+
+
+def _true_peak_limiter_block(audio, sr, target_ceiling_db=-0.3, oversample=4, legacy_limiter=False, precise=False):
     """
     Core 4x polyphase oversampled brickwall limiter for audio segment.
     P0-2 Refactored: Computes gain reduction envelope on 4X True-Peak signal and applies
@@ -727,6 +766,12 @@ def _true_peak_limiter_block(audio, sr, target_ceiling_db=-0.3, oversample=4, le
     # 3. Apply gain directly to original 1X audio (zero filtering on audio!)
     limited_1x = audio * gain_1x[:, None]
 
+    # 3b. Precise pass (Clean Chain 3.2): re-measure at 8X and correct residual overs
+    #     with smooth gain, so the tanh guard and the hard clamp below normally have
+    #     nothing left to do (they are what created new inter-sample peaks on dense HF).
+    if precise:
+        limited_1x = _precise_gain_pass(limited_1x, sr, target_ceiling, internal_ceiling)
+
     # 4. Localized True-Peak verification & windowed guard (NO global tanh!)
     tp_out_4x = signal.resample_poly(limited_1x, up=oversample, down=1, axis=0)
     max_tp_4x = np.max(np.abs(tp_out_4x), axis=1)
@@ -766,7 +811,7 @@ def _true_peak_limiter_block(audio, sr, target_ceiling_db=-0.3, oversample=4, le
     return limited_1x.astype(np.float32), round(true_peak_db, 2)
 
 
-def true_peak_limiter(audio, sr, target_ceiling_db=-0.3, oversample=4, legacy_limiter=False):
+def true_peak_limiter(audio, sr, target_ceiling_db=-0.3, oversample=4, legacy_limiter=False, precise=False):
     """
     True-Peak Brickwall Limiter with 4x Polyphase Oversampling.
     Includes seamless chunking protection for long audio files (>3 minutes) to guarantee zero OOM.
@@ -776,7 +821,7 @@ def true_peak_limiter(audio, sr, target_ceiling_db=-0.3, oversample=4, legacy_li
     max_chunk_samples = int(120 * sr)  # 2 minutes per chunk
 
     if orig_len <= max_chunk_samples:
-        return _true_peak_limiter_block(audio, sr, target_ceiling_db, oversample, legacy_limiter=legacy_limiter)
+        return _true_peak_limiter_block(audio, sr, target_ceiling_db, oversample, legacy_limiter=legacy_limiter, precise=precise)
 
     # Chunked streaming processing with 1.0 s raised-cosine equal-GAIN crossfades
     # (fade_in + fade_out = 1: correct for the strongly correlated overlapping chunks)
@@ -788,7 +833,7 @@ def true_peak_limiter(audio, sr, target_ceiling_db=-0.3, oversample=4, legacy_li
     for start_idx in range(0, orig_len, step):
         end_idx = min(start_idx + max_chunk_samples, orig_len)
         chunk = audio[start_idx:end_idx]
-        proc_chunk, tp_db = _true_peak_limiter_block(chunk, sr, target_ceiling_db, oversample, legacy_limiter=legacy_limiter)
+        proc_chunk, tp_db = _true_peak_limiter_block(chunk, sr, target_ceiling_db, oversample, legacy_limiter=legacy_limiter, precise=precise)
         max_tp_db = max(max_tp_db, tp_db)
 
         chunk_len = len(proc_chunk)
@@ -1835,6 +1880,7 @@ CLEAN_CHAIN_DEFAULTS = {
     'deharsh_calibrated': True,   # no hidden ~5.5 dB static cut at the de-harsh frequency
     'tape_deemphasis': True,      # flat linear response of the tape stage
     'tape_ref_peak_dbfs': -12.0,  # tape operating level calibrated by robust peak
+    'limiter_precise': True,      # 8X re-check, residual overs removed by gain (no clamp-made peaks)
 }
 CLASSIC_31_DEFAULTS = {
     'antidote_v2': False,
@@ -1842,6 +1888,7 @@ CLASSIC_31_DEFAULTS = {
     'deharsh_calibrated': False,
     'tape_deemphasis': False,
     'tape_ref_peak_dbfs': None,
+    'limiter_precise': False,
 }
 
 
@@ -2116,7 +2163,8 @@ def process_audio_array(audio, sr, params=None):
         full_mix = harmonic_air_exciter(full_mix, sr, drive=air_drive, cutoff=15500.0)
 
     # 9. True-Peak Limiter with 4x Polyphase Oversampling
-    full_mix, true_peak_out = true_peak_limiter(full_mix, sr, target_ceiling_db=target_ceiling_db, oversample=4)
+    full_mix, true_peak_out = true_peak_limiter(full_mix, sr, target_ceiling_db=target_ceiling_db, oversample=4,
+                                                precise=bool(profile['limiter_precise']))
 
     # 10. SURGICAL TIME-RANGE / REGION PUNCH-IN BLENDING
     region_mode = params.get('region_mode', 'full')
@@ -2277,9 +2325,9 @@ def generate_track_map_html(track_map, target_path="", audio_sources=None):
     src_master = audio_sources.get('master', './STUDIO_REMASTER.wav')
     src_delta = audio_sources.get('delta', './DELTA_POISON.wav')
     src_raw = audio_sources.get('raw', '../ORIGINAL.wav')
-    abs_master = audio_sources.get('master_abs', '')
-    abs_delta = audio_sources.get('delta_abs', '')
-    abs_raw = audio_sources.get('raw_abs', '')
+    abs_master = str(audio_sources.get('master_abs') or '').replace('\\', '/')
+    abs_delta = str(audio_sources.get('delta_abs') or '').replace('\\', '/')
+    abs_raw = str(audio_sources.get('raw_abs') or '').replace('\\', '/')
 
     tag_colors = {
         "INTRO": "#f59e0b",
@@ -2416,6 +2464,22 @@ def generate_track_map_html(track_map, target_path="", audio_sources=None):
           </div>
         </div>
       </div>
+      <script>
+        window.handleAudioLoadError = function(el) {{
+          if (!el) return;
+          const abs = el.getAttribute('data-abs-path');
+          if (abs && window.location.protocol.startsWith('http') && !el.dataset.retried) {{
+            el.dataset.retried = 'true';
+            el.src = '/api/stream?path=' + encodeURIComponent(abs);
+            el.load();
+          }} else if (abs && window.location.protocol === 'file:' && !el.dataset.retried) {{
+            el.dataset.retried = 'true';
+            const norm = abs.replace(/\\\\/g, '/');
+            el.src = 'file:///' + (norm.startsWith('/') ? norm.slice(1) : norm);
+            el.load();
+          }}
+        }};
+      </script>
       <audio id="tmAudioMaster" preload="metadata" src="{src_master}" data-abs-path="{abs_master}" onerror="handleAudioLoadError(this)"></audio>
       <audio id="tmAudioRaw" preload="metadata" src="{src_raw}" data-abs-path="{abs_raw}" onerror="handleAudioLoadError(this)"></audio>
       <audio id="tmAudioDelta" preload="metadata" src="{src_delta}" data-abs-path="{abs_delta}" onerror="handleAudioLoadError(this)"></audio>
@@ -2613,18 +2677,19 @@ def generate_track_map_html(track_map, target_path="", audio_sources=None):
         let isReportPlaying = false;
         const tmTotalDuration = {dur};
 
+        // When served over HTTP, point directly to /api/stream endpoints for guaranteed playback
+        if (window.location.protocol.startsWith('http')) {{
+          const absM = tmAudioMaster ? tmAudioMaster.getAttribute('data-abs-path') : '';
+          const absR = tmAudioRaw ? tmAudioRaw.getAttribute('data-abs-path') : '';
+          const absD = tmAudioDelta ? tmAudioDelta.getAttribute('data-abs-path') : '';
+          if (absM) {{ tmAudioMaster.src = '/api/stream?path=' + encodeURIComponent(absM); tmAudioMaster.dataset.retried = 'true'; }}
+          if (absR) {{ tmAudioRaw.src = '/api/stream?path=' + encodeURIComponent(absR); tmAudioRaw.dataset.retried = 'true'; }}
+          if (absD) {{ tmAudioDelta.src = '/api/stream?path=' + encodeURIComponent(absD); tmAudioDelta.dataset.retried = 'true'; }}
+        }}
+
         function getActiveAudio() {{
           return currentAudio || tmAudioMaster || document.querySelector('audio');
         }}
-
-        window.handleAudioLoadError = function(el) {{
-          const absPath = el ? el.getAttribute('data-abs-path') : null;
-          if (absPath && window.location.protocol.startsWith('http') && !el.dataset.retried) {{
-            el.dataset.retried = 'true';
-            el.src = '/api/stream?path=' + encodeURIComponent(absPath);
-            el.load();
-          }}
-        }};
 
         function bindAudioEvents(audioEl) {{
           if (!audioEl) return;
@@ -2682,9 +2747,13 @@ def generate_track_map_html(track_map, target_path="", audio_sources=None):
           const a = getActiveAudio();
           if (!a) return;
           if (a.paused) {{
-            a.play().catch(() => {{
-              showToast('Click page to permit audio playback');
-            }});
+            const p = a.play();
+            if (p && typeof p.then === 'function') {{
+              p.catch(err => {{
+                console.warn('Playback error:', err);
+                showToast('Click page to permit audio playback');
+              }});
+            }}
           }} else {{
             a.pause();
           }}
@@ -2736,14 +2805,26 @@ def generate_track_map_html(track_map, target_path="", audio_sources=None):
         }};
 
         window.playCurrentSection = function() {{
-          if (activeIdx === -1) return;
-          const s = tmSections.find(item => item.section_index === activeIdx);
+          let s = null;
+          if (activeIdx !== -1) {{
+            s = tmSections.find(item => item.section_index === activeIdx);
+          }}
+          if (!s && tmSections.length > 0) {{
+            s = tmSections[0];
+            selectTrackSector(s.section_index);
+          }}
           if (!s) return;
-          const t0 = s.time_start_s;
+          const t0 = (s.time_start_s !== undefined) ? s.time_start_s : (s.start_s || 0);
           const a = getActiveAudio();
           if (a) {{
             a.currentTime = t0;
-            a.play().catch(() => {{}});
+            const p = a.play();
+            if (p && typeof p.then === 'function') {{
+              p.catch(err => {{
+                console.warn('Play section error:', err);
+                showToast('Click page to permit audio playback');
+              }});
+            }}
             showToast('Auditioning ' + (s.name || 'Section') + ' from ' + formatTimeStr(t0));
           }} else {{
             showToast('Target time: ' + formatTimeStr(t0));
@@ -2992,6 +3073,7 @@ def generate_mastering_report_html(track_name, metrics, output_dir, params=None)
     if not track_map and 'sub_sync_summary' in metrics and isinstance(metrics['sub_sync_summary'], dict):
         track_map = metrics['sub_sync_summary'].get('track_map')
 
+    import urllib.parse
     master_file = os.path.basename(metrics.get('master_path') or f"{track_name} - STUDIO_REMASTER.wav")
     delta_file = os.path.basename(metrics.get('delta_path') or f"{track_name} - DELTA_POISON.wav")
     raw_path_val = metrics.get('raw_path')
@@ -3004,12 +3086,12 @@ def generate_mastering_report_html(track_name, metrics, output_dir, params=None)
         rel_raw = f"../{track_name}.wav"
 
     audio_sources = {
-        'master': f"./{master_file}",
-        'delta': f"./{delta_file}",
+        'master': f"./{urllib.parse.quote(master_file)}",
+        'delta': f"./{urllib.parse.quote(delta_file)}",
         'raw': rel_raw,
-        'master_abs': metrics.get('master_path') or os.path.join(output_dir, master_file),
-        'delta_abs': metrics.get('delta_path') or os.path.join(output_dir, delta_file),
-        'raw_abs': raw_path_val or ''
+        'master_abs': os.path.abspath(metrics.get('master_path') or os.path.join(output_dir, master_file)),
+        'delta_abs': os.path.abspath(metrics.get('delta_path') or os.path.join(output_dir, delta_file)),
+        'raw_abs': os.path.abspath(raw_path_val) if raw_path_val else ''
     }
     track_map_html = generate_track_map_html(track_map, target_path=output_dir, audio_sources=audio_sources)
 
@@ -3804,6 +3886,8 @@ def process_single_file(file_path, params=None, open_folder=True):
     out_dir = os.path.join(base_dir, "Remaster")
     os.makedirs(out_dir, exist_ok=True)
     out_file = os.path.join(out_dir, f"{track_title} - STUDIO_REMASTER.wav")
+    metrics['master_path'] = os.path.abspath(out_file)
+    metrics['raw_path'] = os.path.abspath(file_path)
 
     export_subtype = str(params.get('export_subtype', 'PCM_24')) if isinstance(params, dict) else 'PCM_24'
     sf.write(out_file, full_mix, sr, subtype=export_subtype)
@@ -4048,7 +4132,8 @@ def process_stems_folder(target_folder, params=None, open_folder=True):
     o_g = float(params.get('other_gain', 1.0))
     
     master_mix = drums_proc * d_g + bass_proc * b_g + vocals_proc * v_g + other_proc * o_g
-    master_mix, true_peak_out = true_peak_limiter(master_mix, sr, target_ceiling_db=target_ceiling_db, oversample=4)
+    master_mix, true_peak_out = true_peak_limiter(master_mix, sr, target_ceiling_db=target_ceiling_db, oversample=4,
+                                                  precise=bool(resolve_sound_profile(params)[1]['limiter_precise']))
 
     remaster_dir = os.path.join(target_folder, "Remaster")
     os.makedirs(remaster_dir, exist_ok=True)
@@ -4131,6 +4216,8 @@ def process_stems_folder(target_folder, params=None, open_folder=True):
         sf.write(delta_path, delta_audio.astype(np.float32), sr, subtype='PCM_24')
         export_verif['delta'] = verify_wav_export(delta_path, expected_subtype='PCM_24', expected_sr=sr)
         if metrics:
+            metrics['master_path'] = os.path.abspath(master_path)
+            metrics['raw_path'] = os.path.abspath(raw_sum_path)
             metrics['delta_path'] = delta_path
         print(f"  Delta Poison: {os.path.basename(delta_path)}")
     except Exception as d_err:
