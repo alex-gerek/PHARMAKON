@@ -3202,7 +3202,7 @@ function inspectTrackMapSection(secIdx) {
           <span style="font-size:13px; color:#94a3b8; background:#1e293b; border-radius:4px; padding:2px 8px;">${timeStr} (${durSec}s · ${bars} bars)</span>
         </div>
         <div style="display:flex; align-items:center; gap:8px;">
-          <button onclick="playTrackMapSectionFromModal(${secIdx})" style="background:#0284c7; border:1px solid #38bdf8; color:#fff; border-radius:4px; padding:4px 12px; font-size:12px; cursor:pointer; font-weight:800; display:inline-flex; align-items:center; gap:6px; box-shadow:0 0 10px rgba(56,189,248,0.3); transition:all 0.15s ease;" onmouseover="this.style.background='#0369a1'" onmouseout="this.style.background='#0284c7'" title="Audition this section from its start time">
+          <button id="btnModalPlaySection" onclick="playTrackMapSectionFromModal(${secIdx})" style="background:#0284c7; border:1px solid #38bdf8; color:#fff; border-radius:4px; padding:4px 12px; font-size:12px; cursor:pointer; font-weight:800; display:inline-flex; align-items:center; gap:6px; box-shadow:0 0 10px rgba(56,189,248,0.3); transition:all 0.15s ease;" onmouseover="this.style.background='#0369a1'" onmouseout="this.style.background='#0284c7'" title="Audition this section from its start time">
             <span>&#9654; PLAY FROM HERE</span>
           </button>
           <button onclick="closeTrackMapInspector()" style="background:#1e293b; border:1px solid #334155; color:#94a3b8; border-radius:4px; padding:4px 10px; font-size:12px; cursor:pointer; font-weight:bold; transition:all 0.15s ease;" onmouseover="this.style.color='#fff'; this.style.borderColor='#f43f5e';" onmouseout="this.style.color='#94a3b8'; this.style.borderColor='#334155';">✕ CLOSE ENLARGED VIEW</button>
@@ -3269,6 +3269,8 @@ window.playTrackMapSectionFromModal = function(secIdx) {
   if (!s) return;
   const targetTime = (s.start_s !== undefined) ? s.start_s : ((s.time_start_s !== undefined) ? s.time_start_s : 0);
 
+  initWebAudio();
+
   if (audioCtx && audioCtx.state === 'suspended') {
     audioCtx.resume();
   }
@@ -3281,19 +3283,53 @@ window.playTrackMapSectionFromModal = function(secIdx) {
     }
   }
 
-  if (audioHealed && audioHealed.src) {
-    audioHealed.currentTime = targetTime;
-    if (audioRaw && audioRaw.src) {
-      audioRaw.currentTime = targetTime;
+  const startAudition = () => {
+    try {
+      audioHealed.currentTime = targetTime;
+      if (audioRaw && audioRaw.src) {
+        audioRaw.currentTime = targetTime;
+      }
+    } catch(e) {
+      console.warn('Seek error:', e);
     }
+
+    if (isFrozen) {
+      isFrozen = false;
+      const bFr = document.getElementById('btnFreeze');
+      if (bFr) bFr.classList.remove('active');
+    }
+
     if (!isPlaying) {
-      togglePlay();
+      togglePlayPause();
+    } else {
+      audioRaw.play().catch(() => {});
+      audioHealed.play().catch(() => {});
+      const playIcon = document.getElementById('playIcon');
+      if (playIcon) playIcon.innerText = "❚❚";
+    }
+
+    const btn = document.getElementById('btnModalPlaySection');
+    if (btn) {
+      btn.style.background = '#10b981';
+      btn.style.borderColor = '#34d399';
+      btn.innerHTML = `<span>&#10074;&#10074; PLAYING FROM ${formatTime(targetTime)}</span>`;
     }
     updateStatus(`Auditioning section '${s.name || s.tag || s.sec_tag}' from ${formatTime(targetTime)}`);
+  };
+
+  if (audioHealed && audioHealed.src) {
+    if (audioHealed.readyState >= 1) {
+      startAudition();
+    } else {
+      audioHealed.addEventListener('loadedmetadata', startAudition, { once: true });
+      setTimeout(startAudition, 150);
+    }
   } else {
     updateStatus(`Audition seek: ${formatTime(targetTime)} (start playback in Studio Console)`);
   }
 };
+
+window.togglePlay = togglePlayPause;
 
 async function downloadReportPNG() {
   if (!lastResult || !lastMetrics) {
