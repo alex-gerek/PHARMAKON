@@ -3126,6 +3126,12 @@ function toggleModalSvgZoom(mode) {
 function closeReportModal() {
   const modal = document.getElementById('reportModal');
   if (modal) modal.style.display = 'none';
+  if (isPlaying) {
+    togglePlayPause();
+  }
+  modalAuditionActive = false;
+  modalAuditionSectionIdx = null;
+  updateModalPlaybackUI();
 }
 
 function openReportInNewTab() {
@@ -3185,6 +3191,13 @@ function inspectTrackMapSection(secIdx) {
   if (!tm || !tm.sections) return;
   const s = tm.sections.find(x => (x.sec_index === secIdx || x.section_index === secIdx));
   if (!s) return;
+
+  // When switching to inspect another section, pause any running playback cleanly
+  if (isPlaying && modalAuditionSectionIdx !== secIdx) {
+    togglePlayPause();
+    modalAuditionActive = false;
+    modalAuditionSectionIdx = null;
+  }
 
   activeInspectedSection = s;
   const inspector = document.getElementById('tmSectionInspector');
@@ -3313,8 +3326,12 @@ function closeTrackMapInspector() {
   const inspector = document.getElementById('tmSectionInspector');
   if (inspector) inspector.innerHTML = '';
   activeInspectedSection = null;
-  modalAuditionSectionIdx = null;
+  if (isPlaying) {
+    togglePlayPause();
+  }
   modalAuditionActive = false;
+  modalAuditionSectionIdx = null;
+  updateModalPlaybackUI();
 }
 
 window.playTrackMapSectionFromModal = function(secIdx) {
@@ -3340,19 +3357,26 @@ window.playTrackMapSectionFromModal = function(secIdx) {
   }
 
   const cur = (audioHealed && typeof audioHealed.currentTime === 'number') ? audioHealed.currentTime : 0;
-  const isInsideSection = (cur >= targetTime - 0.25 && cur <= endTime + 0.25);
 
-  // 1. If currently playing this section: PAUSE!
-  if (isPlaying && modalAuditionSectionIdx === secIdx && isInsideSection) {
+  // 1. If currently playing: ANY click on the currently active audition section PAUSES!
+  if (isPlaying) {
+    if (modalAuditionSectionIdx === secIdx) {
+      togglePlayPause();
+      modalAuditionActive = false;
+      updateModalPlaybackUI();
+      updateStatus(`PAUSED: Section '${s.name || s.tag || s.sec_tag}' at ${formatTime(audioHealed.currentTime)}`);
+      return;
+    }
+    // If playing another section, pause it first before starting this one
     togglePlayPause();
-    updateModalPlaybackUI();
-    updateStatus(`PAUSED: Section '${s.name || s.tag || s.sec_tag}' at ${formatTime(audioHealed.currentTime)}`);
-    return;
   }
 
   // 2. If paused on this section: RESUME!
-  if (!isPlaying && modalAuditionSectionIdx === secIdx && isInsideSection) {
+  if (!isPlaying && modalAuditionSectionIdx === secIdx && cur >= targetTime - 0.5 && cur < endTime) {
     togglePlayPause();
+    modalAuditionActive = true;
+    modalAuditionStart = targetTime;
+    modalAuditionEnd = endTime;
     updateModalPlaybackUI();
     updateStatus(`RESUMING: Section '${s.name || s.tag || s.sec_tag}' from ${formatTime(audioHealed.currentTime)}`);
     return;
