@@ -667,6 +667,24 @@ def _tp_envelope_1x(x, k=PRECISE_VERIFY_OVERSAMPLE, block_s=5.0, pad=1024):
     return np.maximum(env, np.max(np.abs(x), axis=1))
 
 
+def _tp_envelope_runs(x, mask, env, k=PRECISE_VERIFY_OVERSAMPLE, pad=256):
+    """Recomputes `env` at k X only on the runs where `mask` is True (in place)."""
+    idx = np.flatnonzero(mask)
+    if idx.size == 0:
+        return env
+    n = len(x)
+    cuts = np.flatnonzero(np.diff(idx) > 2 * pad)
+    starts = np.concatenate([[idx[0]], idx[cuts + 1]])
+    ends = np.concatenate([idx[cuts], [idx[-1]]]) + 1
+    for a, b in zip(starts, ends):
+        a, b = max(0, a - pad // 4), min(n, b + pad // 4)
+        lo, hi = max(0, a - pad), min(n, b + pad)
+        up = signal.resample_poly(x[lo:hi], k, 1, axis=0)
+        pk = np.max(np.abs(up), axis=1)[(a - lo) * k:(b - lo) * k]
+        env[a:b] = np.maximum(pk.reshape(b - a, k).max(axis=1), np.max(np.abs(x[a:b]), axis=1))
+    return env
+
+
 def _precise_gain_pass(limited_1x, sr, target_ceiling, internal_ceiling):
     """Removes residual true-peak overs with smooth gain (no saturation, no clamp).
     Returns the corrected audio; audio with no over at 16X is returned unchanged."""
@@ -674,8 +692,11 @@ def _precise_gain_pass(limited_1x, sr, target_ceiling, internal_ceiling):
     b_rel, a_rel = signal.butter(1, 30.0 / (0.5 * sr), btype='low')
     # the 16X envelope can read up to cos(pi/32) = -0.042 dB low at Nyquist: verify against that bound
     verify_ceiling = target_ceiling * np.cos(np.pi / (2 * PRECISE_VERIFY_OVERSAMPLE))
+    # cheap 4X screen first; 4X reads at most cos(pi/8) = -0.69 dB low, so only samples
+    # within 0.75 dB of the ceiling can hide an over and get the 16X measurement
+    env = _tp_envelope_1x(limited_1x, k=4)
+    env = _tp_envelope_runs(limited_1x, env > verify_ceiling * 10.0 ** (-0.75 / 20.0), env)
     for _ in range(PRECISE_MAX_PASSES):
-        env = _tp_envelope_1x(limited_1x)
         if np.max(env) <= verify_ceiling:
             break
         # only the overs are corrected (to the internal ceiling); everything else keeps gain 1
@@ -684,6 +705,8 @@ def _precise_gain_pass(limited_1x, sr, target_ceiling, internal_ceiling):
         g = np.minimum(need, signal.filtfilt(b_rel, a_rel, hold))
         g = np.where(np.abs(g - 1.0) < 1e-9, 1.0, g)
         limited_1x = limited_1x * g[:, None]
+        # only samples whose gain changed can have a new envelope
+        env = _tp_envelope_runs(limited_1x, g < 1.0, env)
     return limited_1x
 
 

@@ -107,20 +107,35 @@ g_{\mathrm{final}}(t) = \min\bigl(g_{\mathrm{needed}}(t),\ g_{\mathrm{smooth}}(t
 ```
 
    The 4X gain curve is reduced to 1X by **minimum pooling**: each original sample gets the strongest reduction among its four sub-points. That gain multiplies the **original** samples. There is no decimation filter in the audio path, so no decimation ripple can push samples back over.
-4. **Verification.** The output is measured again at 4X. Only if an overshoot remains does a `tanh` guard blend in, locally, over a 15 ms neighbourhood with a smooth 5 ms mask, followed by a sample clamp. The reported true peak is measured on the final output.
+4. **Precise pass at 16X.** The output is measured again, this time at 16X, sixteen points per sample. A 4X check can read a peak up to 0.69 dB low when the energy sits close to the Nyquist frequency; at 16X the worst case is 0.04 dB, and the pass checks against exactly that bound. Where an over remains, it is removed the same way as in step 3, with smooth gain, and the check repeats until nothing is left. To keep it fast, the 16X measurement runs only where the 4X reading is within 0.75 dB of the ceiling, the only places an over can hide.
+5. **Last-resort guard.** If anything were still over, a local `tanh` guard would blend in over a 15 ms neighbourhood, followed by a sample clamp. The reported true peak is measured on the final output.
 
-**How accurate it is.** On sines from 5 to 20 kHz, the 4X measurement reads the true peak within 0.01 dB. We re-measured all 18 loud masters from section 3 at 32X, eight times finer than the limiter itself looks. The output stayed within 0.01 dB of the ceiling.
+**Why we added the precise pass.** Before it, step 5 was the only correction after the first gain stage, and our re-check at 32X showed what that cost:
 
-**Where it reaches its limit.** We also pushed it with signals no music resembles. On white noise that fills the band up to 24 kHz, the output went 0.3 dB over the ceiling. On noise up to 16 kHz, the 4X measurement read 0.1 dB low. Real music holds far less energy near the top of the band, which is why the masters above stayed on target. Closing this gap is on our list.
+- **The guard was firing on real music.** On 6 tracks mastered to −8 LUFS at three ceilings, the `tanh` guard fired in 17 of 18 masters. Where it fired, it squashed up to 15 ms of audio by about 2 dB. That is saturation, exactly what a transparent limiter should never add.
+- **The clamp created new peaks.** The final sample clamp itself made new inter-sample peaks. Full-track masters ended up to 0.02 dB over the ceiling. White noise that fills the band to 24 kHz, a stress signal no music resembles, ended 0.3 dB over.
+
+With the precise pass, at 32X:
+
+| | Before | With the precise pass |
+|---|---|---|
+| 18 full-track masters at −8 LUFS | up to +0.02 dB over the ceiling | 0.04 dB under the ceiling, all 18 |
+| `tanh` guard firing on those masters | 17 of 18 | 0 of 18 |
+| White noise to 24 kHz | +0.3 dB over | 0.03 dB under the ceiling |
+| Noise to 16 kHz | +0.1 dB over | 0.03 dB under the ceiling |
+
+On a 97-second master, 99% of samples changed by less than 0.012 dB. The price is time: the limiter stage takes 1.3 to 2.3 times longer. Material that never comes near the ceiling comes out bit-identical to before. The Classic 3.1 sound profile keeps the 3.1 limiter bit-for-bit.
 
 **Why it replaced the 2.0 limiter.** PHARMAKON 2.0 limited the 4X copy and decimated it back. Decimation ripple could push samples over the ceiling again, which triggered `tanh` saturation over the **entire file**, and the reported true peak was read before that last stage. Test: 20 s of noise with ten 8 dB overs, ceiling −1.0 dBTP:
 
 | | Reported true peak | Actual true peak | Change to the audio away from the peaks (±60 ms excluded) |
 |---|---|---|---|
 | PHARMAKON 2.0 | −1.15 dBTP | −3.36 dBTP | up to −26.7 dBFS (whole-file saturation) |
-| PHARMAKON 3.1 / 3.2 | −1.20 dBTP | −1.20 dBTP | −148 dBFS (float rounding: bit-transparent) |
+| PHARMAKON 3.1 | −1.20 dBTP | −1.20 dBTP | −148 dBFS (float rounding: bit-transparent) |
 
-The limiter has been unchanged since 3.1. Version 3.2 corrected the loudness meter it works with: K-weighting now matches ITU-R BS.1770-4 exactly and passes EBU Tech 3341 test cases 1–5 (±0.1 LU).
+Steps 1 to 3 and 5 have not changed since 3.1; the precise pass is new in the Clean Chain. Version 3.2 also corrected the loudness meter the limiter works with: K-weighting now matches ITU-R BS.1770-4 exactly and passes EBU Tech 3341 test cases 1–5 (±0.1 LU).
+
+The listing below shows the base limiter, steps 1 to 3 and the guard; the precise pass lives in `_precise_gain_pass` in `remaster_engine.py`.
 
 ```python
 import numpy as np
@@ -129,7 +144,7 @@ from scipy.ndimage import minimum_filter1d
 
 def true_peak_limiter_block(audio, sr, target_ceiling_db=-1.0, oversample=4):
     """
-    PHARMAKON 3.2 true-peak limiter (stereo, shape (N, 2)).
+    PHARMAKON base true-peak limiter (3.1, Classic profile; stereo, shape (N, 2)).
     Detects at 4X, applies the gain at 1X: the audio itself is never resampled.
     """
     n = len(audio)
