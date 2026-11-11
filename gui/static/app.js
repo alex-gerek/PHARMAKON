@@ -3201,7 +3201,12 @@ function inspectTrackMapSection(secIdx) {
           <span style="font-size:16px; font-weight:800; color:#fff; letter-spacing:0.5px;">${nameClean}</span>
           <span style="font-size:13px; color:#94a3b8; background:#1e293b; border-radius:4px; padding:2px 8px;">${timeStr} (${durSec}s · ${bars} bars)</span>
         </div>
-        <button onclick="closeTrackMapInspector()" style="background:#1e293b; border:1px solid #334155; color:#94a3b8; border-radius:4px; padding:4px 10px; font-size:12px; cursor:pointer; font-weight:bold; transition:all 0.15s ease;" onmouseover="this.style.color='#fff'; this.style.borderColor='#f43f5e';" onmouseout="this.style.color='#94a3b8'; this.style.borderColor='#334155';">✕ CLOSE ENLARGED VIEW</button>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <button onclick="playTrackMapSectionFromModal(${secIdx})" style="background:#0284c7; border:1px solid #38bdf8; color:#fff; border-radius:4px; padding:4px 12px; font-size:12px; cursor:pointer; font-weight:800; display:inline-flex; align-items:center; gap:6px; box-shadow:0 0 10px rgba(56,189,248,0.3); transition:all 0.15s ease;" onmouseover="this.style.background='#0369a1'" onmouseout="this.style.background='#0284c7'" title="Audition this section from its start time">
+            <span>&#9654; PLAY FROM HERE</span>
+          </button>
+          <button onclick="closeTrackMapInspector()" style="background:#1e293b; border:1px solid #334155; color:#94a3b8; border-radius:4px; padding:4px 10px; font-size:12px; cursor:pointer; font-weight:bold; transition:all 0.15s ease;" onmouseover="this.style.color='#fff'; this.style.borderColor='#f43f5e';" onmouseout="this.style.color='#94a3b8'; this.style.borderColor='#334155';">✕ CLOSE ENLARGED VIEW</button>
+        </div>
       </div>
 
       <div style="display:grid; grid-template-columns:repeat(5, 1fr); gap:12px; margin-bottom:14px;">
@@ -3256,6 +3261,29 @@ function closeTrackMapInspector() {
   if (inspector) inspector.innerHTML = '';
   activeInspectedSection = null;
 }
+
+window.playTrackMapSectionFromModal = function(secIdx) {
+  const tm = lastMetrics?.track_map || (lastMetrics?.sub_sync_summary && lastMetrics?.sub_sync_summary.track_map);
+  if (!tm || !tm.sections) return;
+  const s = tm.sections.find(x => (x.sec_index === secIdx || x.section_index === secIdx));
+  if (!s) return;
+  const targetTime = (s.start_s !== undefined) ? s.start_s : ((s.time_start_s !== undefined) ? s.time_start_s : 0);
+
+  if (audioCtx && audioCtx.state === 'suspended') {
+    audioCtx.resume();
+  }
+
+  if (audioHealed && audioHealed.src) {
+    audioHealed.currentTime = targetTime;
+    if (audioRaw && audioRaw.src) {
+      audioRaw.currentTime = targetTime;
+    }
+    if (!isPlaying) {
+      togglePlay();
+    }
+    updateStatus(`Auditioning section '${s.name || s.tag || s.sec_tag}' from ${formatTime(targetTime)}`);
+  }
+};
 
 async function downloadReportPNG() {
   if (!lastResult || !lastMetrics) {

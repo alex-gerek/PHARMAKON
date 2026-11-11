@@ -2253,15 +2253,33 @@ def generate_svg_spectrum(freqs, orig_db, proc_db, delta_db=None, width=860, hei
       {delta_element}
     </svg>"""
 
-def generate_track_map_html(track_map, target_path=""):
+def generate_track_map_html(track_map, target_path="", audio_sources=None):
     if not track_map or not isinstance(track_map, dict):
         return ""
     import json
     sections = track_map.get('sections', [])
     bpm = track_map.get('estimated_bpm', 120.0)
     dur = track_map.get('total_duration_s', 0.0)
+    m_dur, s_dur = int(dur // 60), int(dur % 60)
+    dur_str = f"{m_dur}:{s_dur:02d}"
     total_kicks = track_map.get('total_kick_events', 0)
     sections_json = json.dumps(sections)
+
+    if not audio_sources or not isinstance(audio_sources, dict):
+        audio_sources = {
+            'master': './STUDIO_REMASTER.wav',
+            'delta': './DELTA_POISON.wav',
+            'raw': '../ORIGINAL.wav',
+            'master_abs': '',
+            'delta_abs': '',
+            'raw_abs': ''
+        }
+    src_master = audio_sources.get('master', './STUDIO_REMASTER.wav')
+    src_delta = audio_sources.get('delta', './DELTA_POISON.wav')
+    src_raw = audio_sources.get('raw', '../ORIGINAL.wav')
+    abs_master = audio_sources.get('master_abs', '')
+    abs_delta = audio_sources.get('delta_abs', '')
+    abs_raw = audio_sources.get('raw_abs', '')
 
     tag_colors = {
         "INTRO": "#f59e0b",
@@ -2375,8 +2393,38 @@ def generate_track_map_html(track_map, target_path=""):
         </div>
       </div>
 
+      <!-- AUDITION PLAYER BAR -->
+      <div class="tm-player-bar" id="tmPlayerBar">
+        <div style="display:flex; align-items:center; gap:12px;">
+          <button class="tm-player-btn" id="tmMainPlayBtn" onclick="toggleReportAudioPlay()" title="Play / Pause">
+            <span id="tmPlayIcon">&#9654;</span>
+          </button>
+          <div class="tm-player-time">
+            <span id="tmCurrTime" style="color:#fff; font-weight:bold;">0:00.0</span> <span style="color:#64748b;">/</span> <span id="tmTotalTime" style="color:#94a3b8;">{dur_str}</span>
+          </div>
+          <div class="tm-playing-pill" id="tmPlayingPill" style="display:none; align-items:center; gap:6px;">
+            <span class="tm-card-badge" id="tmPlayingBadge" style="font-size:9px; padding:2px 6px;">--</span>
+            <span style="font-size:11px; font-weight:bold; color:#fff;" id="tmPlayingName">--</span>
+          </div>
+        </div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="font-size:10px; font-family:monospace; color:#64748b; font-weight:bold; letter-spacing:0.8px;">AUDITION:</span>
+          <div class="tm-source-switch">
+            <button class="tm-src-btn active" id="btnSrcB" onclick="switchReportAudioSource('master')" title="Listen to PHARMAKON Master">B: MASTER</button>
+            <button class="tm-src-btn" id="btnSrcA" onclick="switchReportAudioSource('raw')" title="Listen to Untreated Original Source">A: RAW</button>
+            <button class="tm-src-btn" id="btnSrcC" onclick="switchReportAudioSource('delta')" title="Listen to Removed Delta Artifacts">C: DELTA</button>
+          </div>
+        </div>
+      </div>
+      <audio id="tmAudioMaster" preload="metadata" src="{src_master}" data-abs-path="{abs_master}" onerror="handleAudioLoadError(this)"></audio>
+      <audio id="tmAudioRaw" preload="metadata" src="{src_raw}" data-abs-path="{abs_raw}" onerror="handleAudioLoadError(this)"></audio>
+      <audio id="tmAudioDelta" preload="metadata" src="{src_delta}" data-abs-path="{abs_delta}" onerror="handleAudioLoadError(this)"></audio>
+
       <!-- Interactive Phrase Timeline Bar -->
-      <div class="tm-timeline-bar" id="tmTimelineBar">
+      <div class="tm-timeline-bar" id="tmTimelineBar" onclick="onTimelineBarClicked(event)">
+        <div class="tm-playhead-line" id="tmPlayheadLine" style="display:none; left:0%;">
+          <div class="tm-playhead-bead"></div>
+        </div>
         {timeline_html}
       </div>
 
@@ -2558,19 +2606,147 @@ def generate_track_map_html(track_map, target_path=""):
           }}
         }};
 
+        const tmAudioMaster = document.getElementById('tmAudioMaster');
+        const tmAudioRaw = document.getElementById('tmAudioRaw');
+        const tmAudioDelta = document.getElementById('tmAudioDelta');
+        let currentAudio = tmAudioMaster;
+        let isReportPlaying = false;
+        const tmTotalDuration = {dur};
+
+        function getActiveAudio() {{
+          return currentAudio || tmAudioMaster || document.querySelector('audio');
+        }}
+
+        window.handleAudioLoadError = function(el) {{
+          const absPath = el ? el.getAttribute('data-abs-path') : null;
+          if (absPath && window.location.protocol.startsWith('http') && !el.dataset.retried) {{
+            el.dataset.retried = 'true';
+            el.src = '/api/stream?path=' + encodeURIComponent(absPath);
+            el.load();
+          }}
+        }};
+
+        function bindAudioEvents(audioEl) {{
+          if (!audioEl) return;
+          audioEl.addEventListener('play', () => {{
+            isReportPlaying = true;
+            const icon = document.getElementById('tmPlayIcon');
+            if (icon) icon.innerHTML = '&#10074;&#10074;';
+            const needle = document.getElementById('tmPlayheadLine');
+            if (needle) needle.style.display = 'block';
+          }});
+          audioEl.addEventListener('pause', () => {{
+            isReportPlaying = false;
+            const icon = document.getElementById('tmPlayIcon');
+            if (icon) icon.innerHTML = '&#9654;';
+          }});
+          audioEl.addEventListener('ended', () => {{
+            isReportPlaying = false;
+            const icon = document.getElementById('tmPlayIcon');
+            if (icon) icon.innerHTML = '&#9654;';
+          }});
+          audioEl.addEventListener('timeupdate', () => {{
+            if (audioEl !== getActiveAudio()) return;
+            const cur = audioEl.currentTime;
+            const curEl = document.getElementById('tmCurrTime');
+            if (curEl) curEl.textContent = formatTimeStr(cur);
+
+            const needle = document.getElementById('tmPlayheadLine');
+            if (needle && tmTotalDuration > 0) {{
+              needle.style.display = 'block';
+              needle.style.left = Math.min(100, Math.max(0, (cur / tmTotalDuration) * 100)) + '%';
+            }}
+
+            const sec = tmSections.find(s => cur >= s.time_start_s && cur < s.time_end_s);
+            if (sec) {{
+              const pill = document.getElementById('tmPlayingPill');
+              const b = document.getElementById('tmPlayingBadge');
+              const n = document.getElementById('tmPlayingName');
+              if (pill && b && n) {{
+                pill.style.display = 'inline-flex';
+                b.textContent = sec.tag || 'SECTION';
+                b.style.color = sec.color || '#38bdf8';
+                b.style.borderColor = (sec.color || '#38bdf8') + '66';
+                b.style.background = (sec.color || '#38bdf8') + '26';
+                n.textContent = sec.name || 'Section';
+              }}
+            }}
+          }});
+        }}
+
+        bindAudioEvents(tmAudioMaster);
+        bindAudioEvents(tmAudioRaw);
+        bindAudioEvents(tmAudioDelta);
+
+        window.toggleReportAudioPlay = function() {{
+          const a = getActiveAudio();
+          if (!a) return;
+          if (a.paused) {{
+            a.play().catch(() => {{
+              showToast('Click page to permit audio playback');
+            }});
+          }} else {{
+            a.pause();
+          }}
+        }};
+
+        window.switchReportAudioSource = function(type) {{
+          const oldAudio = getActiveAudio();
+          const curTime = oldAudio ? oldAudio.currentTime : 0;
+          const wasPlaying = oldAudio ? !oldAudio.paused : false;
+
+          if (oldAudio) oldAudio.pause();
+
+          document.querySelectorAll('.tm-src-btn').forEach(b => b.classList.remove('active'));
+
+          if (type === 'raw' && tmAudioRaw) {{
+            currentAudio = tmAudioRaw;
+            document.getElementById('btnSrcA')?.classList.add('active');
+            showToast('Auditioning A: RAW ORIGINAL SOURCE');
+          }} else if (type === 'delta' && tmAudioDelta) {{
+            currentAudio = tmAudioDelta;
+            document.getElementById('btnSrcC')?.classList.add('active');
+            showToast('Auditioning C: DELTA POISON (REMOVED DEFECTS)');
+          }} else {{
+            currentAudio = tmAudioMaster;
+            document.getElementById('btnSrcB')?.classList.add('active');
+            showToast('Auditioning B: PHARMAKON MASTER');
+          }}
+
+          if (currentAudio) {{
+            currentAudio.currentTime = curTime;
+            if (wasPlaying) {{
+              currentAudio.play().catch(() => {{}});
+            }}
+          }}
+        }};
+
+        window.onTimelineBarClicked = function(e) {{
+          const bar = document.getElementById('tmTimelineBar');
+          if (!bar || tmTotalDuration <= 0) return;
+          const rect = bar.getBoundingClientRect();
+          const clickX = e.clientX - rect.left;
+          const frac = Math.max(0, Math.min(1, clickX / rect.width));
+          const seekTime = frac * tmTotalDuration;
+          const a = getActiveAudio();
+          if (a) {{
+            a.currentTime = seekTime;
+            if (a.paused) a.play().catch(() => {{}});
+          }}
+        }};
+
         window.playCurrentSection = function() {{
           if (activeIdx === -1) return;
           const s = tmSections.find(item => item.section_index === activeIdx);
           if (!s) return;
           const t0 = s.time_start_s;
-          // Trigger audio seeking
-          const audio = document.querySelector('audio') || window.parentAudio || (window.parent && window.parent.document.querySelector('audio'));
-          if (audio) {{
-            audio.currentTime = t0;
-            audio.play();
-            showToast('Seeking audio to ' + formatTimeStr(t0) + '...');
+          const a = getActiveAudio();
+          if (a) {{
+            a.currentTime = t0;
+            a.play().catch(() => {{}});
+            showToast('Auditioning ' + (s.name || 'Section') + ' from ' + formatTimeStr(t0));
           }} else {{
-            showToast('Audio player not loaded in this view. Target time: ' + formatTimeStr(t0));
+            showToast('Target time: ' + formatTimeStr(t0));
           }}
         }};
 
@@ -2815,7 +2991,27 @@ def generate_mastering_report_html(track_name, metrics, output_dir, params=None)
     track_map = metrics.get('track_map')
     if not track_map and 'sub_sync_summary' in metrics and isinstance(metrics['sub_sync_summary'], dict):
         track_map = metrics['sub_sync_summary'].get('track_map')
-    track_map_html = generate_track_map_html(track_map)
+
+    master_file = os.path.basename(metrics.get('master_path') or f"{track_name} - STUDIO_REMASTER.wav")
+    delta_file = os.path.basename(metrics.get('delta_path') or f"{track_name} - DELTA_POISON.wav")
+    raw_path_val = metrics.get('raw_path')
+    if raw_path_val:
+        try:
+            rel_raw = os.path.relpath(raw_path_val, output_dir).replace('\\', '/')
+        except Exception:
+            rel_raw = f"../{os.path.basename(raw_path_val)}"
+    else:
+        rel_raw = f"../{track_name}.wav"
+
+    audio_sources = {
+        'master': f"./{master_file}",
+        'delta': f"./{delta_file}",
+        'raw': rel_raw,
+        'master_abs': metrics.get('master_path') or os.path.join(output_dir, master_file),
+        'delta_abs': metrics.get('delta_path') or os.path.join(output_dir, delta_file),
+        'raw_abs': raw_path_val or ''
+    }
+    track_map_html = generate_track_map_html(track_map, target_path=output_dir, audio_sources=audio_sources)
 
     # Match Input Loudness Telemetry Banner
     match_card_html = ""
@@ -3088,6 +3284,7 @@ def generate_mastering_report_html(track_name, metrics, output_dir, params=None)
       font-weight: 700;
     }}
     .tm-timeline-bar {{
+      position: relative;
       display: flex;
       width: 100%;
       height: 44px;
@@ -3098,6 +3295,104 @@ def generate_mastering_report_html(track_name, metrics, output_dir, params=None)
       margin-bottom: 16px;
       gap: 2px;
       padding: 2px;
+      cursor: pointer;
+    }}
+    .tm-player-bar {{
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #060911;
+      border: 1px solid #1a2333;
+      border-radius: 6px;
+      padding: 8px 12px;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+      gap: 10px;
+    }}
+    .tm-player-btn {{
+      background: #38bdf8;
+      color: #030712;
+      border: none;
+      border-radius: 50%;
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: bold;
+      transition: all 0.15s ease;
+      box-shadow: 0 0 10px rgba(56, 189, 248, 0.4);
+    }}
+    .tm-player-btn:hover {{
+      background: #7dd3fc;
+      transform: scale(1.08);
+      box-shadow: 0 0 14px rgba(56, 189, 248, 0.7);
+    }}
+    .tm-player-time {{
+      font-family: monospace;
+      font-size: 11px;
+      letter-spacing: 0.5px;
+    }}
+    .tm-playing-pill {{
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #0d121f;
+      border: 1px solid #1e293b;
+      padding: 3px 8px;
+      border-radius: 4px;
+    }}
+    .tm-source-switch {{
+      display: flex;
+      background: #0a0f1d;
+      border: 1px solid #1e293b;
+      border-radius: 4px;
+      overflow: hidden;
+      gap: 1px;
+    }}
+    .tm-src-btn {{
+      background: transparent;
+      border: none;
+      color: #64748b;
+      font-family: monospace;
+      font-size: 9.5px;
+      font-weight: 700;
+      padding: 4px 9px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }}
+    .tm-src-btn:hover {{
+      color: #e2e8f0;
+      background: rgba(255, 255, 255, 0.05);
+    }}
+    .tm-src-btn.active {{
+      background: #38bdf8;
+      color: #030712;
+      font-weight: 800;
+      box-shadow: 0 0 8px rgba(56, 189, 248, 0.5);
+    }}
+    .tm-playhead-line {{
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: #38bdf8;
+      box-shadow: 0 0 8px #38bdf8;
+      z-index: 10;
+      pointer-events: none;
+      transition: left 0.05s linear;
+    }}
+    .tm-playhead-bead {{
+      position: absolute;
+      top: -3px;
+      left: -4px;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 0 6px #38bdf8;
     }}
     .tm-seg {{
       display: flex;
