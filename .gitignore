@@ -44,3 +44,26 @@ dist_*/
 build_*/
 
 _publish/
+
+# Release and portable ZIP archives
+/*.zip
+PHARMAKON_*.zip
+
+# Experimental test audio and listening benches
+demo_audio/controlled_guard_experiment/
+demo_audio/phase_test/
+demo_audio/synthetic_pop_song_demo.wav
+_ab_listening/
+research/**/real_tracks_test/
+
+# Temporary scratch scripts and benchmark harnesses
+scratch_*
+hunter_bridge.py
+run_native_hunter_suite.py
+wer_ab_benchmark.py
+
+# Local workspace & developer environment configs
+*.code-workspace
+.agents/
+Open_In_Antigravity.bat
+Lex_Gerek_Studio_Couch_Intro.jpg
