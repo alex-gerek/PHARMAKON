@@ -558,6 +558,7 @@ GRID_FIT_MIN_BEATS = 8                  # fewer matched onsets: keep the unfitte
 GRID_FIT_MAX_DEV = 0.02                 # a fitted period more than 2 % from the tempo is rejected
 GRID_FIT_REL_STRENGTH = 0.3             # an onset counts if >= 30 % of the median strong onset
 GRID_FIT_MAX_POINTS = 1500
+DOWNBEAT_BACKBEAT_RATIO = 1.5           # snare on both beats of a pair >= 1.5x the other pair = backbeat
 
 
 def _fit_beat_grid(E: np.ndarray, ph: float, tau: float, method: str = "theil_sen"):
@@ -636,8 +637,24 @@ def detect_bar_grid(mono: np.ndarray, sr: int, bpm: float, fit: str = "theil_sen
     low = B[0] + 0.5 * B[1]
     lowb = low[np.clip(np.round(beats).astype(int), 0, n - 1)]
     sc = [ch[o::4].mean() / (ch.mean() + 1e-9) + 0.5 * lowb[o::4].mean() / (lowb.mean() + 1e-9) for o in range(4)]
+    # Backbeat (3.3, DEV note 34): a snare on 2 and 4 is a broadband change too, so the
+    # score above often put the one on the snare. When both beats of one pair (o, o+2)
+    # carry clearly more snare-band onset than the other pair, that pair is the backbeat
+    # and the one is chosen from the other pair only. One strong snare beat (half-time:
+    # snare on 3) is not a backbeat pair and leaves the choice open.
+    sn = _maxf(B[2], 2)[np.clip(np.round(beats).astype(int), 0, n - 1)]
+    s4 = np.array([sn[o::4].mean() if len(sn[o::4]) else 0.0 for o in range(4)])
+    pair = [min(s4[0], s4[2]), min(s4[1], s4[3])]
+    other = [max(s4[1], s4[3]), max(s4[0], s4[2])]
+    cand = [0, 1, 2, 3]
+    info["backbeat"] = None
+    for pb in (0, 1):
+        if pair[pb] >= DOWNBEAT_BACKBEAT_RATIO * other[pb] and pair[pb] > 0:
+            cand = [1 - pb, 3 - pb]
+            info["backbeat"] = [pb, pb + 2]            # grid offsets of the snare pair
+    best = max(cand, key=lambda o: sc[o])
     lat = onset_latency_s(sr)                  # 3.2 grids were ~40 ms early (DEV note 33)
-    down = beats[int(np.argmax(sc))::4] / fps + lat
+    down = beats[best::4] / fps + lat
     bar_s = 4.0 * period / fps
     while len(down) and down[0] > 0.05 and down[0] - bar_s > -0.5 * bar_s:
         down = np.concatenate([[down[0] - bar_s], down])

@@ -485,3 +485,13 @@ Theil–Sen fitted on all 36 runs; it removes the drift completely, least square
 **Bench** (`bench/validate_bar_grid.py`, new signed `bias_ms` and a `soft` stress: 10 ms attack ramp on every hit). Theil–Sen grid, mean over 6 styles: bias +1.2…+1.4 ms, p95 1.3–1.5 ms on clean, BPM-error, loose-intro, outlier, pickup and combined cases (was −39 ms / p95 39–40 ms); soft attacks +9.3 ms (later physical peak; the perceived onset of a soft attack is later too). Least squares with a BPM error still p95 21.8 ms; the unfitted grid 126 ms.
 
 **Still open.** Downbeat choice (67 % on clean runs, unchanged). A kick with a 40 ms attack at 48/96 kHz locked the grid half a beat off (+215 ms): an extreme attack, but it shows the phase search can pick the off-beat.
+
+## 34. Downbeat on the snare: backbeat rule
+
+**Problem.** `detect_bar_grid` picks the one among the 4 grid offsets by spectral change plus low-end onset. A snare on 2 and 4 is a large broadband change too, so on some tracks the one landed on the snare: in `bench/validate_bar_grid.py` four-on-the-floor 128 and DnB 174 were wrong in every stress where it happened (Theil–Sen grid: 67 % of clean runs right).
+
+**Fix.** Snare-band (2–6 kHz) onset strength is measured on the 4 offsets. If both beats of one pair (o, o + 2) carry ≥ 1.5× the snare of the stronger beat of the other pair, that pair is the backbeat, and the one is chosen from the other pair only (by the same score as before). One strong snare beat (half-time: snare on 3) is not a pair and leaves the choice open. On the diagnosed tracks the backbeat pair had 1.6–2.0 vs 0.02–0.39 of the other pair. `info["backbeat"]` reports the pair.
+
+**Bench.** Downbeat right (±70 ms), Theil–Sen grid: 100 % on all 42 runs (6 styles × 7 stresses; was 67–100 % per stress). Sections bench unchanged to the third decimal: main hr0.5 0.979, labels 0.964; held-out (20 tracks) hr0.5 0.903, bar F 0.910, labels 0.894, before and after. Tests: `tests/test_bar_grid_fit.py` +3 (four-on-the-floor 128 and DnB 174 not on the backbeat; half-time snare not taken for a backbeat).
+
+**Limit.** The rule assumes 4/4 with a backbeat; tracks without a snare on 2 and 4 keep the old score.
