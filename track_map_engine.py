@@ -515,17 +515,100 @@ def _maxf(e: np.ndarray, r: int) -> np.ndarray:
     return out
 
 
-def detect_bar_grid(mono: np.ndarray, sr: int, bpm: float):
+def theil_sen(x, y):
+    """
+    Theil-Sen line fit: slope = median of all pairwise slopes, intercept = median of
+    y - slope * x. Breakdown point 29 %: up to that share of points can be anywhere
+    without moving the line (a least-squares fit follows them).
+    """
+    x = np.asarray(x, dtype=float)
+    y = np.asarray(y, dtype=float)
+    if len(x) < 2:
+        raise ValueError("theil_sen needs at least 2 points")
+    if len(x) > GRID_FIT_MAX_POINTS:          # O(n^2) pairs: thin evenly, deterministic
+        keep = np.unique(np.round(np.linspace(0, len(x) - 1, GRID_FIT_MAX_POINTS)).astype(int))
+        x, y = x[keep], y[keep]
+    i, j = np.triu_indices(len(x), 1)
+    dx = x[j] - x[i]
+    ok = dx != 0
+    slope = float(np.median((y[j] - y[i])[ok] / dx[ok]))
+    return slope, float(np.median(y - slope * x))
+
+
+# Beat grid fit (3.3): the grid used to be ph + k * tau from the detected BPM alone, so a
+# BPM error grew along the track (0.1 BPM at 128 BPM is ~0.2 s after 5 min). The grid is
+# now fitted to the beat onsets themselves. Validated in bench/validate_bar_grid.py.
+GRID_FIT_WINDOWS = (0.30, 0.20, 0.12)   # onset search half-window around the grid, in beats
+GRID_FIT_MIN_BEATS = 8                  # fewer matched onsets: keep the unfitted grid
+GRID_FIT_MAX_DEV = 0.02                 # a fitted period more than 2 % from the tempo is rejected
+GRID_FIT_REL_STRENGTH = 0.3             # an onset counts if >= 30 % of the median strong onset
+GRID_FIT_MAX_POINTS = 1500
+
+
+def _fit_beat_grid(E: np.ndarray, ph: float, tau: float, method: str = "theil_sen"):
+    """
+    Beat grid (frames) as offset + k * period. method "none" = the old fixed grid,
+    "lsq" = least squares, "theil_sen" = robust fit. Returns (beats, period, info).
+    """
+    n = len(E)
+    info = {"method": method, "fitted": False, "matched": 0}
+    if method == "none":
+        return np.arange(ph, n - 1, tau), tau, info
+    offset, period = ph, tau
+    for win in GRID_FIT_WINDOWS:
+        k0 = int(np.ceil(-offset / period))
+        ks = np.arange(k0, int(np.floor((n - 2 - offset) / period)) + 1)
+        pred = offset + ks * period
+        hw = max(1, int(round(win * period)))
+        idx, t, val = [], [], []
+        for k, p in zip(ks, pred):
+            c = int(round(p))
+            a, b = max(1, c - hw), min(n - 1, c + hw + 1)
+            if b - a < 3:
+                continue
+            m = a + int(np.argmax(E[a:b]))
+            if m <= a or m >= b - 1:          # edge of the window: not a peak of its own
+                continue
+            y0, y1, y2 = E[m - 1], E[m], E[m + 1]
+            den = y0 - 2.0 * y1 + y2
+            frac = 0.5 * (y0 - y2) / den if den < 0 else 0.0   # parabolic sub-frame peak
+            idx.append(k)
+            t.append(m + float(np.clip(frac, -0.5, 0.5)))
+            val.append(y1)
+        if len(val) < GRID_FIT_MIN_BEATS:
+            return np.arange(ph, n - 1, tau), tau, info
+        val = np.asarray(val)
+        strong = val >= GRID_FIT_REL_STRENGTH * np.median(val[val >= np.median(val)])
+        if strong.sum() < GRID_FIT_MIN_BEATS:
+            return np.arange(ph, n - 1, tau), tau, info
+        kx, ty = np.asarray(idx, float)[strong], np.asarray(t)[strong]
+        if method == "lsq":
+            s, c = np.polyfit(kx, ty, 1)
+        else:
+            s, c = theil_sen(kx, ty)
+        if abs(s / tau - 1.0) > GRID_FIT_MAX_DEV:
+            return np.arange(ph, n - 1, tau), tau, info
+        period, offset = float(s), float(c)
+        info["matched"] = int(strong.sum())
+    info["fitted"] = True
+    k0 = int(np.ceil(-offset / period))
+    ks = np.arange(k0, int(np.floor((n - 2 - offset) / period)) + 1)
+    return offset + ks * period, period, info
+
+
+def detect_bar_grid(mono: np.ndarray, sr: int, bpm: float, fit: str = "theil_sen", return_info: bool = False):
     """
     Downbeat times (s). Beat phase from drum onsets; downbeat = the beat of the 4 where
     spectral change and low-end onsets concentrate (sections and chords change on the one).
-    The grid is anchored to the music, not to t = 0 (a pickup no longer shifts every boundary).
+    The grid is anchored to the music, not to t = 0 (a pickup no longer shifts every boundary),
+    and fitted to the beat onsets (fit="theil_sen"; "lsq" and "none" are kept for the bench).
     """
     B, fps = _onset_bands(mono, sr)
     tau = 60.0 * fps / bpm
     _, ph = _beat_offbeat(B, tau)
     n = B.shape[1]
-    beats = np.arange(ph, n - 1, tau)
+    E = B[0] + B[1] + B[2]
+    beats, period, info = _fit_beat_grid(E, ph, tau, fit)
     f, _, Z = signal.stft(mono, sr, nperseg=4096, noverlap=4096 - 256, boundary=None, padded=False)
     M = np.log1p(100.0 * np.abs(Z))
     bi = np.clip(np.round(beats).astype(int), 0, M.shape[1] - 1)
@@ -539,9 +622,12 @@ def detect_bar_grid(mono: np.ndarray, sr: int, bpm: float):
     lowb = low[np.clip(np.round(beats).astype(int), 0, n - 1)]
     sc = [ch[o::4].mean() / (ch.mean() + 1e-9) + 0.5 * lowb[o::4].mean() / (lowb.mean() + 1e-9) for o in range(4)]
     down = beats[int(np.argmax(sc))::4] / fps
-    bar_s = 4.0 * 60.0 / bpm
+    bar_s = 4.0 * period / fps
     while len(down) and down[0] > 0.05 and down[0] - bar_s > -0.5 * bar_s:
         down = np.concatenate([[down[0] - bar_s], down])
+    if return_info:
+        info["beat_period_s"] = period / fps
+        return down, bar_s, info
     return down, bar_s
 
 

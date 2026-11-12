@@ -444,3 +444,25 @@ Verified end to end on a clean copy of the 3.0.0 portable build. It auto-updates
 **Fix: precise pass (Clean Chain only, `limiter_precise`; Classic 3.1 keeps the 3.1 limiter bit-for-bit).** `_precise_gain_pass` re-measures the limited output at 16X (worst-case under-read cos(π/32) = −0.042 dB, used as the verification bound), only where the 4X envelope is within 0.75 dB of the ceiling. Residual overs are corrected with the same smooth gain law as the main stage (internal ceiling −0.2 dB, 2 ms hold, zero-phase 30 Hz, gain ≤ need), and only the samples whose gain changed are re-measured; up to 16 passes (music needs 0–1, white noise ~10). Results at 32X: all 18 masters −0.04 dB under the ceiling, tanh guard fired 0 of 18; white noise and 16 kHz noise −0.03 dB under. on a 97 s master 99% of samples change by < 0.012 dB; material below the ceiling is bit-identical. Cost: limiter stage 1.3–2.3× slower (worst case 22 → 49 s for a 4.4 min track). Tests: `tests/test_limiter_precise.py` (11). `remaster_engine.py` changed, so the next release needs a re-signed manifest.
 
 **Article 05** rewritten from these measurements (3.2, corrected physics example, measured codec section, ceiling guidance by destination, the limits above).
+
+## 31. Track Map beat grid: fitted to the beats (Theil–Sen)
+
+**Problem.** `detect_bar_grid` built the grid as phase + k × period from the detected BPM alone; nothing tied later beats to the music. A tempo error therefore grew along the track: 0.1 % (0.13 BPM at 128) is about 0.2 s after 3 minutes, half a beat at 174 BPM.
+
+**Fix.** `_fit_beat_grid` matches the strongest drum onset (kick + body + snare flux) within ±0.30 beat of each grid line, refines it to a sub-frame peak, keeps onsets ≥ 30 % of the median strong onset, and fits a line beat index → onset time with `theil_sen` (median of pairwise slopes, intercept = median residual; our own code). Three passes with the window shrinking to ±0.20 and ±0.12 beat. Safety: fewer than 8 matched onsets, or a fitted period more than 2 % from the tempo, keeps the 3.2 grid. The bar length returned is now the fitted one. `fit="lsq"` and `fit="none"` stay available for the bench.
+
+**Bench** (`bench/validate_bar_grid.py`, results `bench/results/bar_grid.json`): 6 styles (four-on-the-floor 128/100, hip-hop 94, DnB 174, rock 110, half-time 140), 180 s, known beat times; stresses: clean, BPM given 0.1 % off, first 16 beats ±35 ms loose, 10 % extra off-grid hits, 0.73 s pickup, all at once. Mean over styles, |beat error| median / p95 / last 16 beats (ms):
+
+| Stress | 3.2 grid | least squares | Theil–Sen |
+|---|---|---|---|
+| clean | 39.9 / 39.9 / 39.9 | 39.5 / 39.7 / 39.5 | 39.5 / 39.6 / 39.4 |
+| BPM 0.1 % off | 44.8 / 102.0 / 80.0 | 39.9 / 47.1 / 44.8 | 39.4 / 39.5 / 39.4 |
+| all at once | 44.6 / 99.8 / 81.6 | 39.6 / 40.4 / 39.4 | 39.2 / 39.3 / 39.2 |
+
+Theil–Sen fitted on all 36 runs; it removes the drift completely, least squares does not when the tempo is off. Tests: `tests/test_bar_grid_fit.py` (4).
+
+**Found, not fixed here (next steps):**
+- The whole grid is ~39 ms **early** in every case (−36…−40 ms; ~1760 samples at both 44.1 and 48 kHz). It is the latency of the onset function (2048-sample STFT, flux peaks when the hit enters the window), present in 3.2 too. It shifts section starts, the audition start and any future cue export. Needs its own bench with soft attacks before a correction constant is trusted.
+- Downbeat choice (which beat of 4 is the one) is right on only 67 % of clean runs (all methods; the fit does not change it). It decides where bars and sections start.
+
+`track_map_engine.py` changed: the next release needs a re-signed manifest (3.0 clients load it through `_track_map_module()`, see 29).
