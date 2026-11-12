@@ -495,3 +495,11 @@ Theil–Sen fitted on all 36 runs; it removes the drift completely, least square
 **Bench.** Downbeat right (±70 ms), Theil–Sen grid: 100 % on all 42 runs (6 styles × 7 stresses; was 67–100 % per stress). Sections bench unchanged to the third decimal: main hr0.5 0.979, labels 0.964; held-out (20 tracks) hr0.5 0.903, bar F 0.910, labels 0.894, before and after. Tests: `tests/test_bar_grid_fit.py` +3 (four-on-the-floor 128 and DnB 174 not on the backbeat; half-time snare not taken for a backbeat).
 
 **Limit.** The rule assumes 4/4 with a backbeat; tracks without a snare on 2 and 4 keep the old score.
+
+## 35. Section features back on the 3.2 clock (regression from 33)
+
+**Found by comparing against 3.2 (commit 580bad1), track by track.** After note 33 the held-out section set (20 tracks) fell from hr0.5 0.913 / hr3 0.938 / labels 0.918 to 0.903 / 0.916 / 0.894: edm_4, edm_6, edm_10, edm_12 and song_15 lost a boundary or a label. The Theil–Sen grid alone (note 31) matched 3.2 track for track; the cause was note 33. `_bar_features` measured each bar's band energies from the corrected (40 ms later) bar lines, while the section thresholds had been set on the old alignment. Lowering the novelty prominence was tried (0.08 / 0.10) and rejected: it moves the threshold to hide the shift.
+
+**Fix.** `_bar_features` steps back by `onset_latency_s` before measuring, so every bar feature is the 3.2 one; only the reported times are corrected. Prominence stays 0.12.
+
+**Result.** Main set: hr3 0.99, labels 0.986 (3.2: 0.99 / 0.987); held-out: hr0.5 0.906, hr3 0.938, labels 0.919 (3.2: 0.913 / 0.938 / 0.918). Same boundaries as 3.2. The ±1-bar F drops (main 0.99 → 0.97, held-out 0.938 → 0.906) are a metric edge, not a change: three boundaries that 3.2 already places one bar late (e.g. edm_short_intro BUILDUP at 114.9 s vs 113.2 s) were 1 bar − 40 ms off on the early grid and are now 1 bar + 1 ms off, just outside the window. The one-bar-late boundary on risers/build-ups is a real, older weakness: next step.

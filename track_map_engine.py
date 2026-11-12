@@ -672,7 +672,11 @@ def _bar_features(mono: np.ndarray, sr: int, down: np.ndarray) -> list:
     valid = (f >= 65.0) & (f <= 2000.0)
     pc = (np.round(12.0 * np.log2(np.maximum(f[valid], 1.0) / 440.0) + 69.0).astype(int)) % 12
     sub_m = (f >= 20.0) & (f < 100.0)
-    edges = list(down) + [len(mono) / sr]
+    # Bar features stay on the onset-frame clock the section thresholds were set on (3.2):
+    # down is in real time (DEV note 33), so step back by the onset latency here. Measuring
+    # band energies 40 ms later lost boundaries on the held-out section set (DEV note 35).
+    lat = onset_latency_s(sr)
+    edges = [max(0.0, t - lat) for t in down] + [len(mono) / sr]
     feats = []
     for i in range(len(edges) - 1):
         a, b = max(0.0, edges[i]), edges[i + 1]
@@ -680,9 +684,8 @@ def _bar_features(mono: np.ndarray, sr: int, down: np.ndarray) -> list:
         fb = min(max(fa + 1, int(b / hop_t)), P.shape[1])
         Pb = P[:, fa:fb].mean(axis=1)
         band_e = [10.0 * np.log10(Pb[(f >= lo) & (f < hi)].sum() + 1e-12) for lo, hi in SEC_FEAT_BANDS]
-        lat = onset_latency_s(sr)              # down is in real time; B frames lead it
-        oa = min(max(0, int((a - lat) * fps)), B.shape[1] - 1)
-        ob = min(max(oa + 1, int((b - lat) * fps)), B.shape[1])
+        oa = min(int(a * fps), B.shape[1] - 1)
+        ob = min(max(oa + 1, int(b * fps)), B.shape[1])
         dens = [float(B[k, oa:ob].mean()) for k in range(4)]
         ch = np.zeros(12)
         np.add.at(ch, pc, Pb[valid])
