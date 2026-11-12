@@ -14,8 +14,10 @@ Stress cases (each alone, on top of a clean track):
   outliers     10 % extra drum hits at random off-grid times
   pickup       0.73 s of silence before the first beat
   hard         all four at once
+  soft         every hit with a 10 ms attack ramp (later onset-function peak)
 
 Metrics (ms unless noted):
+  bias_ms           median SIGNED error (grid - truth); 3.2 grids were ~-40 ms (early)
   med_ms / p95_ms   median and 95th percentile |error| of every true beat to the grid
   end_ms            mean |error| over the last 16 beats (drift shows up here)
   down_ok           share of true downbeats that have a grid downbeat within 70 ms
@@ -33,7 +35,7 @@ from bench.validate_tempo import STYLES, _hat, _kick, _snare  # noqa: E402
 SR = 44100
 SECONDS = 180.0
 METHODS = ("none", "lsq", "theil_sen")
-STRESS = ("clean", "bpm_err", "loose_intro", "outliers", "pickup", "hard")
+STRESS = ("clean", "bpm_err", "loose_intro", "outliers", "pickup", "hard", "soft")
 CASES = [("four_on_floor", 128), ("four_on_floor", 100), ("hip_hop", 94),
          ("dnb", 174), ("rock_8ths", 110), ("half_time", 140)]
 BPM_ERR = 0.001
@@ -51,6 +53,12 @@ def render(style, bpm, stress, seconds=SECONDS, sr=SR, seed=0):
     n = int(seconds * sr)
     x = np.zeros(n + sr)
     kick, snare = _kick(sr), _snare(sr, rng)
+    if stress == "soft":
+        a = int(0.010 * sr)
+        ramp = np.linspace(0.0, 1.0, a) ** 2
+        kick, snare = kick.copy(), snare.copy()
+        kick[:a] *= ramp
+        snare[:a] *= ramp
     n_steps = int((seconds - pickup - 0.5) / step_s)
 
     def put(sig, t):
@@ -93,10 +101,12 @@ def evaluate(down, bar_s, truth):
     k0 = int(np.floor((0.0 - down[0]) / beat)) - 1
     k1 = int(np.ceil((truth[-1] + 1.0 - down[0]) / beat)) + 1
     grid = down[0] + np.arange(k0, k1) * beat
-    err = np.abs(truth[:, None] - grid[None, :]).min(axis=1) * 1000.0
+    near = np.abs(truth[:, None] - grid[None, :]).argmin(axis=1)
+    signed = (grid[near] - truth) * 1000.0
+    err = np.abs(signed)
     true_down = truth[::4]
     d_err = np.abs(true_down[:, None] - down[None, :]).min(axis=1)
-    return dict(med_ms=float(np.median(err)), p95_ms=float(np.percentile(err, 95)),
+    return dict(bias_ms=float(np.median(signed)), med_ms=float(np.median(err)), p95_ms=float(np.percentile(err, 95)),
                 end_ms=float(np.mean(err[-16:])), down_ok=float(np.mean(d_err <= 0.070)))
 
 
@@ -113,17 +123,17 @@ def run(verbose=True, cases=CASES, stresses=STRESS):
                 r.update(style=style, bpm=bpm, stress=stress, method=m, fitted=info["fitted"])
                 rows.append(r)
                 if verbose:
-                    print(f"{style:14s} {bpm:4d} {stress:12s} {m:10s} med {r['med_ms']:6.1f}  p95 {r['p95_ms']:6.1f}"
+                    print(f"{style:14s} {bpm:4d} {stress:12s} {m:10s} bias {r['bias_ms']:6.1f}  med {r['med_ms']:6.1f}  p95 {r['p95_ms']:6.1f}"
                           f"  end {r['end_ms']:6.1f}  down {r['down_ok']:.0%}  fit {info['fitted']}")
     summary = {}
     for m in METHODS:
         for stress in stresses:
             rr = [r for r in rows if r["method"] == m and r["stress"] == stress]
-            summary[f"{m}/{stress}"] = {k: float(np.mean([r[k] for r in rr])) for k in ("med_ms", "p95_ms", "end_ms", "down_ok")}
+            summary[f"{m}/{stress}"] = {k: float(np.mean([r[k] for r in rr])) for k in ("bias_ms", "med_ms", "p95_ms", "end_ms", "down_ok")}
     if verbose:
         print("\nmean over cases")
         for k, v in summary.items():
-            print(f"{k:24s} med {v['med_ms']:6.1f}  p95 {v['p95_ms']:6.1f}  end {v['end_ms']:6.1f}  down {v['down_ok']:.0%}")
+            print(f"{k:24s} bias {v['bias_ms']:6.1f}  med {v['med_ms']:6.1f}  p95 {v['p95_ms']:6.1f}  end {v['end_ms']:6.1f}  down {v['down_ok']:.0%}")
     return dict(rows=rows, summary=summary)
 
 

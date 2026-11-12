@@ -97,7 +97,22 @@ TEMPO_OFFBEAT_RATIO = 0.6   # a pulse level is "too slow" if its off-beats carry
 _TEMPO_BANDS = ((20.0, 150.0), (150.0, 2000.0), (2000.0, 6000.0), (6000.0, 16000.0))
 
 
-def _onset_bands(mono: np.ndarray, sr: int, hop: int = 256, n_fft: int = 2048):
+ONSET_HOP, ONSET_NFFT = 256, 2048
+
+
+def onset_latency_s(sr: int) -> float:
+    """
+    Onset-function frame m peaks about n_fft - hop samples BEFORE the hit it marks: the
+    log flux rises as soon as the hit enters the far edge of the 2048-sample window, and
+    diff() puts that rise one hop earlier. Measured (bench/validate_bar_grid.py, sharp
+    drum hits): 1770-1800 samples at 44.1, 48 and 96 kHz; softer attacks peak later
+    (10 ms attack ~1350-1530), quieter hits a little later (-40 dB ~1430-1590).
+    Frame index -> time: m / fps + onset_latency_s(sr).
+    """
+    return (ONSET_NFFT - ONSET_HOP) / float(sr)
+
+
+def _onset_bands(mono: np.ndarray, sr: int, hop: int = ONSET_HOP, n_fft: int = ONSET_NFFT):
     """Half-wave rectified log-spectral flux in 4 bands (kick / body / snare / hats), each unit-std."""
     f, _, Z = signal.stft(mono, sr, nperseg=n_fft, noverlap=n_fft - hop, boundary=None, padded=False)
     L = np.log1p(1000.0 * np.abs(Z))
@@ -621,7 +636,8 @@ def detect_bar_grid(mono: np.ndarray, sr: int, bpm: float, fit: str = "theil_sen
     low = B[0] + 0.5 * B[1]
     lowb = low[np.clip(np.round(beats).astype(int), 0, n - 1)]
     sc = [ch[o::4].mean() / (ch.mean() + 1e-9) + 0.5 * lowb[o::4].mean() / (lowb.mean() + 1e-9) for o in range(4)]
-    down = beats[int(np.argmax(sc))::4] / fps
+    lat = onset_latency_s(sr)                  # 3.2 grids were ~40 ms early (DEV note 33)
+    down = beats[int(np.argmax(sc))::4] / fps + lat
     bar_s = 4.0 * period / fps
     while len(down) and down[0] > 0.05 and down[0] - bar_s > -0.5 * bar_s:
         down = np.concatenate([[down[0] - bar_s], down])
@@ -647,8 +663,9 @@ def _bar_features(mono: np.ndarray, sr: int, down: np.ndarray) -> list:
         fb = min(max(fa + 1, int(b / hop_t)), P.shape[1])
         Pb = P[:, fa:fb].mean(axis=1)
         band_e = [10.0 * np.log10(Pb[(f >= lo) & (f < hi)].sum() + 1e-12) for lo, hi in SEC_FEAT_BANDS]
-        oa = min(int(a * fps), B.shape[1] - 1)
-        ob = min(max(oa + 1, int(b * fps)), B.shape[1])
+        lat = onset_latency_s(sr)              # down is in real time; B frames lead it
+        oa = min(max(0, int((a - lat) * fps)), B.shape[1] - 1)
+        ob = min(max(oa + 1, int((b - lat) * fps)), B.shape[1])
         dens = [float(B[k, oa:ob].mean()) for k in range(4)]
         ch = np.zeros(12)
         np.add.at(ch, pc, Pb[valid])
@@ -886,7 +903,7 @@ def _four_on_floor(mono: np.ndarray, sr: int, bpm: float, down: np.ndarray, ev: 
             continue
         for i in range(*e["bars"]):
             for k in range(4):
-                p = down[i] * fps + k * tau
+                p = (down[i] - onset_latency_s(sr)) * fps + k * tau
                 if p < n - 1:
                     q[k] += lowm[int(round(p))]
     return float(q.min() / q.max()) if q.max() > 0 else 0.0

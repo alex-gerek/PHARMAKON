@@ -47,8 +47,25 @@ def test_grid_does_not_drift_with_a_tempo_error():
         down, bars[m] = tm.detect_bar_grid(x, V.SR, given, fit=m)
         res[m] = V.evaluate(np.asarray(down), bars[m], truth)
     fit, old = res["theil_sen"], res["none"]
-    # drift = error at the end of the track beyond the constant onset latency
-    assert fit["end_ms"] - fit["med_ms"] < 3.0, fit
-    assert old["end_ms"] - old["med_ms"] > 15.0, old   # the 3.2 grid did drift (~27 ms here)
+    # error over the last 16 beats (the onset latency is corrected, so drift shows directly)
+    assert fit["end_ms"] < 5.0, fit
+    assert old["end_ms"] > 15.0, old   # the unfitted grid did drift
     # the fitted bar length is the TRUE one, not the one implied by the wrong BPM
     assert abs(bars["theil_sen"] / (240.0 / 128.0) - 1.0) < 2e-4
+
+
+import pytest  # noqa: E402
+
+
+@pytest.mark.parametrize("sr", [44100, 48000])
+def test_grid_is_on_the_beat_not_40_ms_early(sr):
+    # 3.2 grids were 36-40 ms early: onset-function latency (n_fft - hop samples)
+    x, truth = V.render("four_on_floor", 128, "clean", seconds=40.0, sr=sr, seed=11)
+    down, bar_s = tm.detect_bar_grid(x, sr, 128.0)
+    r = V.evaluate(np.asarray(down), bar_s, truth)
+    assert abs(r["bias_ms"]) < 3.0, r
+    assert r["p95_ms"] < 5.0, r
+
+
+def test_latency_is_the_stft_geometry():
+    assert tm.onset_latency_s(44100) == (tm.ONSET_NFFT - tm.ONSET_HOP) / 44100.0

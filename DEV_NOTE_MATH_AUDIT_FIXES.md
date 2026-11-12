@@ -475,3 +475,13 @@ Theil–Sen fitted on all 36 runs; it removes the drift completely, least square
 - **Section end not strict.** The end check ran on `timeupdate` (~4 per second), so an audition overran its end by up to 0.25 s. A `requestAnimationFrame` watcher now checks every frame while an audition plays. A seek more than 0.5 s outside the section (from the main console) ends the audition instead of being pulled back into it. `startAudition` runs once even when both `loadedmetadata` and its 150 ms fallback fire.
 - Tests: `tests/test_track_map_player.py` +3 (no local paths in audio tags, escaping, two same-named files in two folders served correctly, non-audio and absolute paths refused). The modal audition in the GUI was checked with `node --check` only, not in a browser.
 - **Still open:** the hidden `tm-target-path` field of the report (used by "save track map") still holds the output folder.
+
+## 33. Track Map grid was ~40 ms early: onset-function latency
+
+**Cause.** The onset function (log spectral flux, 2048-sample STFT, hop 256, no boundary padding) rises as soon as a hit enters the far edge of the window, and `diff()` puts the rise one hop earlier. So frame m marks a hit about n_fft − hop = 1792 samples later than m / fps. Measured on single sharp hits: 1770–1800 samples at 44.1, 48 and 96 kHz (constant in samples, so not a tuning artefact); 10 ms attacks 1350–1530; hits 40 dB quieter 1430–1590. Every 3.2 downbeat, and so every section start and audition start, was 36–40 ms early.
+
+**Fix.** `onset_latency_s(sr) = (ONSET_NFFT − ONSET_HOP) / sr`, derived from the STFT geometry, not fitted. `detect_bar_grid` adds it to the downbeat times; `_bar_features` and `_four_on_floor`, which map those times back to onset frames, subtract it.
+
+**Bench** (`bench/validate_bar_grid.py`, new signed `bias_ms` and a `soft` stress: 10 ms attack ramp on every hit). Theil–Sen grid, mean over 6 styles: bias +1.2…+1.4 ms, p95 1.3–1.5 ms on clean, BPM-error, loose-intro, outlier, pickup and combined cases (was −39 ms / p95 39–40 ms); soft attacks +9.3 ms (later physical peak; the perceived onset of a soft attack is later too). Least squares with a BPM error still p95 21.8 ms; the unfitted grid 126 ms.
+
+**Still open.** Downbeat choice (67 % on clean runs, unchanged). A kick with a 40 ms attack at 48/96 kHz locked the grid half a beat off (+215 ms): an extreme attack, but it shows the phase search can pick the off-beat.
