@@ -121,3 +121,75 @@ def test_mastering_report_html_contains_player():
         assert "tmAudioDelta" in content
         assert "PLAY FROM HERE" in content
         assert "switchReportAudioSource" in content
+
+
+# --- 3.3 fixes: no local paths in reports, escaped names, report-relative audio ---
+
+def _report_with_audio(tmpdir, track_name):
+    metrics = {
+        'track_map': _sample_track_map(),
+        'master_path': os.path.join(tmpdir, f"{track_name} - STUDIO_REMASTER.wav"),
+        'delta_path': os.path.join(tmpdir, f"{track_name} - DELTA_POISON.wav"),
+        'raw_path': os.path.join(os.path.dirname(tmpdir), f"{track_name}.wav"),
+    }
+    return generate_mastering_report_html(track_name, metrics, tmpdir)
+
+
+def test_report_has_no_absolute_local_paths():
+    with tempfile.TemporaryDirectory() as root:
+        out = os.path.join(root, "Remaster")
+        os.makedirs(out)
+        with open(_report_with_audio(out, "PathLeak"), encoding="utf-8") as f:
+            content = f.read()
+        import re
+        tags = " ".join(re.findall(r"<audio[^>]*>", content))
+        for p in (root, root.replace("\\", "/")):
+            assert p not in tags
+        # NOTE: the hidden "tm-target-path" field (used by "save track map") still holds the
+        # output folder; tracked as a follow-up in DEV note 32.
+        assert "data-abs-path" not in content
+        assert 'src="../PathLeak.wav"' in content
+
+
+def test_report_escapes_track_names_in_audio_tags():
+    tm = _sample_track_map()
+    sources = {'master': './A "quoted" & name.wav', 'delta': './d.wav', 'raw': '../r.wav'}
+    html = generate_track_map_html(tm, audio_sources=sources)
+    assert 'src="./A &quot;quoted&quot; &amp; name.wav"' in html
+    assert 'A "quoted"' not in html
+
+
+def _write_wav(path):
+    import numpy as np
+    import soundfile as sf
+    sf.write(path, np.zeros(441, dtype="float32"), 44100)
+
+
+def test_server_serves_audio_from_the_requesting_reports_folder():
+    from fastapi.testclient import TestClient
+    from gui.server import app, SESSION_TOKEN
+    client = TestClient(app)
+    h = {"X-Session-Token": SESSION_TOKEN}
+    with tempfile.TemporaryDirectory() as root:
+        a, b = os.path.join(root, "A", "Remaster"), os.path.join(root, "B", "Remaster")
+        for d in (a, b):
+            os.makedirs(d)
+        # same file name in two folders: each report must get its own file
+        for d, n in ((a, 441), (b, 882)):
+            import numpy as np
+            import soundfile as sf
+            sf.write(os.path.join(d, "Song - STUDIO_REMASTER.wav"), np.zeros(n, dtype="float32"), 44100)
+        sf.write(os.path.join(root, "B", "Song.wav"), np.zeros(1323, dtype="float32"), 44100)
+        rep_b = _report_with_audio(b, "Song")
+        ref = "http://127.0.0.1:8000/api/report?path=" + rep_b
+        r = client.get("/api/Song%20-%20STUDIO_REMASTER.wav", headers={**h, "Referer": ref})
+        assert r.status_code == 200
+        assert r.content == open(os.path.join(b, "Song - STUDIO_REMASTER.wav"), "rb").read()
+        r = client.get("/api/report-audio", params={"rel": "../Song.wav"}, headers={**h, "Referer": ref})
+        assert r.status_code == 200
+        assert r.content == open(os.path.join(root, "B", "Song.wav"), "rb").read()
+        # non-audio and absolute paths are refused
+        assert client.get("/api/report-audio", params={"rel": "../../x.html"}, headers={**h, "Referer": ref}).status_code == 404
+        assert client.get("/api/report-audio", params={"rel": os.path.join(a, "Song - STUDIO_REMASTER.wav")},
+                          headers={**h, "Referer": ref}).status_code == 404
+        assert client.get("/api/sub/Song.wav", headers={**h, "Referer": ref}).status_code == 403

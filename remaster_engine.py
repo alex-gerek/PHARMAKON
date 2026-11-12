@@ -2345,12 +2345,11 @@ def generate_track_map_html(track_map, target_path="", audio_sources=None):
             'delta_abs': '',
             'raw_abs': ''
         }
-    src_master = audio_sources.get('master', './STUDIO_REMASTER.wav')
-    src_delta = audio_sources.get('delta', './DELTA_POISON.wav')
-    src_raw = audio_sources.get('raw', '../ORIGINAL.wav')
-    abs_master = str(audio_sources.get('master_abs') or '').replace('\\', '/')
-    abs_delta = str(audio_sources.get('delta_abs') or '').replace('\\', '/')
-    abs_raw = str(audio_sources.get('raw_abs') or '').replace('\\', '/')
+    import html as _html
+    # attribute-safe: a track name with " or & used to break the <audio> tag
+    src_master = _html.escape(audio_sources.get('master', './STUDIO_REMASTER.wav'), quote=True)
+    src_delta = _html.escape(audio_sources.get('delta', './DELTA_POISON.wav'), quote=True)
+    src_raw = _html.escape(audio_sources.get('raw', '../ORIGINAL.wav'), quote=True)
 
     tag_colors = {
         "INTRO": "#f59e0b",
@@ -2488,24 +2487,22 @@ def generate_track_map_html(track_map, target_path="", audio_sources=None):
         </div>
       </div>
       <script>
+        // Reports carry relative paths only (no absolute local paths: a shared report must
+        // not reveal the author's folders). Served by PHARMAKON, the server resolves the
+        // relative path against this report's folder.
         window.handleAudioLoadError = function(el) {{
-          if (!el) return;
-          const abs = el.getAttribute('data-abs-path');
-          if (abs && window.location.protocol.startsWith('http') && !el.dataset.retried) {{
+          if (!el || el.dataset.retried) return;
+          const rel = el.getAttribute('data-rel');
+          if (rel && window.location.protocol.startsWith('http')) {{
             el.dataset.retried = 'true';
-            el.src = '/api/stream?path=' + encodeURIComponent(abs);
-            el.load();
-          }} else if (abs && window.location.protocol === 'file:' && !el.dataset.retried) {{
-            el.dataset.retried = 'true';
-            const norm = abs.replace(/\\\\/g, '/');
-            el.src = 'file:///' + (norm.startsWith('/') ? norm.slice(1) : norm);
+            el.src = '/api/report-audio?rel=' + encodeURIComponent(rel);
             el.load();
           }}
         }};
       </script>
-      <audio id="tmAudioMaster" preload="metadata" src="{src_master}" data-abs-path="{abs_master}" onerror="handleAudioLoadError(this)"></audio>
-      <audio id="tmAudioRaw" preload="metadata" src="{src_raw}" data-abs-path="{abs_raw}" onerror="handleAudioLoadError(this)"></audio>
-      <audio id="tmAudioDelta" preload="metadata" src="{src_delta}" data-abs-path="{abs_delta}" onerror="handleAudioLoadError(this)"></audio>
+      <audio id="tmAudioMaster" preload="metadata" src="{src_master}" data-rel="{src_master}" onerror="handleAudioLoadError(this)"></audio>
+      <audio id="tmAudioRaw" preload="metadata" src="{src_raw}" data-rel="{src_raw}" onerror="handleAudioLoadError(this)"></audio>
+      <audio id="tmAudioDelta" preload="metadata" src="{src_delta}" data-rel="{src_delta}" onerror="handleAudioLoadError(this)"></audio>
 
       <!-- Interactive Phrase Timeline Bar -->
       <div class="tm-timeline-bar" id="tmTimelineBar" onclick="onTimelineBarClicked(event)">
@@ -2700,14 +2697,12 @@ def generate_track_map_html(track_map, target_path="", audio_sources=None):
         let isReportPlaying = false;
         const tmTotalDuration = {dur};
 
-        // When served over HTTP, point directly to /api/stream endpoints for guaranteed playback
+        // Served over HTTP: resolve every source against this report's folder on the server
         if (window.location.protocol.startsWith('http')) {{
-          const absM = tmAudioMaster ? tmAudioMaster.getAttribute('data-abs-path') : '';
-          const absR = tmAudioRaw ? tmAudioRaw.getAttribute('data-abs-path') : '';
-          const absD = tmAudioDelta ? tmAudioDelta.getAttribute('data-abs-path') : '';
-          if (absM) {{ tmAudioMaster.src = '/api/stream?path=' + encodeURIComponent(absM); tmAudioMaster.dataset.retried = 'true'; }}
-          if (absR) {{ tmAudioRaw.src = '/api/stream?path=' + encodeURIComponent(absR); tmAudioRaw.dataset.retried = 'true'; }}
-          if (absD) {{ tmAudioDelta.src = '/api/stream?path=' + encodeURIComponent(absD); tmAudioDelta.dataset.retried = 'true'; }}
+          [tmAudioMaster, tmAudioRaw, tmAudioDelta].forEach(el => {{
+            const rel = el ? el.getAttribute('data-rel') : '';
+            if (rel) {{ el.src = '/api/report-audio?rel=' + encodeURIComponent(rel); el.dataset.retried = 'true'; }}
+          }});
         }}
 
         function getActiveAudio() {{
@@ -3111,10 +3106,7 @@ def generate_mastering_report_html(track_name, metrics, output_dir, params=None)
     audio_sources = {
         'master': f"./{urllib.parse.quote(master_file)}",
         'delta': f"./{urllib.parse.quote(delta_file)}",
-        'raw': rel_raw,
-        'master_abs': os.path.abspath(metrics.get('master_path') or os.path.join(output_dir, master_file)),
-        'delta_abs': os.path.abspath(metrics.get('delta_path') or os.path.join(output_dir, delta_file)),
-        'raw_abs': os.path.abspath(raw_path_val) if raw_path_val else ''
+        'raw': urllib.parse.quote(rel_raw),   # URL-encoded like the others; relative only, no local paths
     }
     track_map_html = generate_track_map_html(track_map, target_path=output_dir, audio_sources=audio_sources)
 

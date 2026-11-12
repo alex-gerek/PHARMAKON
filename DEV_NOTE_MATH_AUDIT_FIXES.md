@@ -466,3 +466,12 @@ Theil–Sen fitted on all 36 runs; it removes the drift completely, least square
 - Downbeat choice (which beat of 4 is the one) is right on only 67 % of clean runs (all methods; the fit does not change it). It decides where bars and sections start.
 
 `track_map_engine.py` changed: the next release needs a re-signed manifest (3.0 clients load it through `_track_map_module()`, see 29).
+
+## 32. Track Map player (added 2026-11-11): review fixes
+
+- **Wrong file served.** `GET /api/{file}` matched a bare file name across uploads/, Remaster/, demo_audio/ and then the whole project with `os.walk` (backups, build, dist included), first hit wins. Two tracks with the same name, or an old copy in a backup, played instead of the right one, and every request walked the tree. Now the file is looked up only in the folder of the report that asked for it (its `Referer`, `/api/report?path=...`; else the latest report). The route carries a comment that it must stay the last GET /api route (FastAPI matches in order).
+- **Local paths in shared reports.** Reports wrote absolute paths of the master, delta and original into `data-abs-path`. Now they hold relative paths only; served by PHARMAKON they play through the new `GET /api/report-audio?rel=...`, resolved against the report's folder (audio extensions only, absolute paths refused). Reports written before this still play through `/api/stream`.
+- **Unescaped names.** File names went raw into `src="..."`; a `"` or `&` in a track name broke the tag. They are HTML-escaped; the original's relative path is URL-encoded like the other two.
+- **Section end not strict.** The end check ran on `timeupdate` (~4 per second), so an audition overran its end by up to 0.25 s. A `requestAnimationFrame` watcher now checks every frame while an audition plays. A seek more than 0.5 s outside the section (from the main console) ends the audition instead of being pulled back into it. `startAudition` runs once even when both `loadedmetadata` and its 150 ms fallback fire.
+- Tests: `tests/test_track_map_player.py` +3 (no local paths in audio tags, escaping, two same-named files in two folders served correctly, non-audio and absolute paths refused). The modal audition in the GUI was checked with `node --check` only, not in a browser.
+- **Still open:** the hidden `tm-target-path` field of the report (used by "save track map") still holds the output folder.

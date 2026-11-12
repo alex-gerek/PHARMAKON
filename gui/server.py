@@ -842,33 +842,51 @@ if getattr(sys, 'frozen', False):
 STATIC_DIR.mkdir(exist_ok=True)
 
 
+def _report_dir_for(request: Request):
+    """Folder of the report page that issued this request (its Referer), else of the latest report."""
+    ref = request.headers.get("referer", "")
+    rep_path = ""
+    if ref:
+        u = urllib.parse.urlparse(ref)
+        if u.path.rstrip("/") == "/api/report":
+            rep_path = urllib.parse.parse_qs(u.query).get("path", [""])[0].strip().strip('"').strip("'")
+    rep = _find_latest_mastering_report(rep_path)
+    return Path(rep).resolve().parent if rep else None
+
+
+def _audio_response(p: Path):
+    ext = p.suffix.lower()
+    if ext not in ALLOWED_AUDIO_EXTENSIONS or not p.is_file():
+        raise HTTPException(status_code=404, detail="Resource not found")
+    return FileResponse(str(p), media_type=f"audio/{ext.lstrip('.')}")
+
+
+@app.get("/api/report-audio")
+def report_relative_audio(rel: str, request: Request):
+    """Audio referenced by a report with a path relative to the report (e.g. ../Track.wav).
+    Reports carry no absolute local paths; this resolves them against the report's folder."""
+    clean = urllib.parse.unquote(rel).strip().replace("\\", "/")
+    base = _report_dir_for(request)
+    if not clean or base is None or os.path.isabs(clean) or clean.startswith("file:"):
+        raise HTTPException(status_code=404, detail="Resource not found")
+    return _audio_response((base / clean).resolve())
+
+
+# Catch-all for GET /api/<file>: a report served at /api/report?path=... asks for its
+# "./Track - STUDIO_REMASTER.wav" here. It must stay the LAST GET /api route: FastAPI
+# matches in order, so any GET /api route defined below it would never be reached.
 @app.get("/api/{filename:path}")
-def stream_relative_audio(filename: str):
-    """Fallback route for relative audio requests issued from /api/report pages."""
+def stream_relative_audio(filename: str, request: Request):
+    """Audio next to the report that asked for it. Resolved in that report's folder only:
+    matching a bare file name across the project served the wrong track when two folders
+    (or a backup) held the same name, and walked the whole tree on every request."""
     clean_name = urllib.parse.unquote(filename).strip()
-    if ".." in clean_name or "\\" in clean_name:
+    if ".." in clean_name or "\\" in clean_name or "/" in clean_name:
         raise HTTPException(status_code=403, detail="Access denied")
-    ext = Path(clean_name).suffix.lower()
-    if ext in ALLOWED_AUDIO_EXTENSIONS:
-        target_name = os.path.basename(clean_name)
-        search_dirs = [
-            PROJECT_DIR / "uploads" / "Remaster",
-            PROJECT_DIR / "uploads",
-            PROJECT_DIR / "Remaster",
-            PROJECT_DIR / "demo_audio",
-            PROJECT_DIR,
-        ]
-        for sdir in search_dirs:
-            if sdir.exists():
-                candidate = (sdir / target_name).resolve()
-                if candidate.is_file():
-                    return FileResponse(str(candidate), media_type=f"audio/{ext.lstrip('.')}")
-                for root, _, files in os.walk(str(sdir)):
-                    if target_name in files:
-                        full_cand = (Path(root) / target_name).resolve()
-                        if full_cand.is_file():
-                            return FileResponse(str(full_cand), media_type=f"audio/{ext.lstrip('.')}")
-    raise HTTPException(status_code=404, detail="Resource not found")
+    base = _report_dir_for(request)
+    if base is None:
+        raise HTTPException(status_code=404, detail="Resource not found")
+    return _audio_response((base / clean_name).resolve())
 
 
 @app.get("/static/{asset_path:path}")

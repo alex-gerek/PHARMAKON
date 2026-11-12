@@ -174,6 +174,47 @@ function initWebAudio() {
   floatDataR = new Float32Array(analyserR.fftSize);
 }
 
+// Section audition bounds. timeupdate fires only ~4 times a second, so on its own the
+// audition overran the section end by up to 0.25 s; a requestAnimationFrame watcher
+// checks every frame while an audition plays. A seek far outside the section (from the
+// main console) ends the audition instead of being pulled back into it.
+const MODAL_AUDITION_SEEK_AWAY_S = 0.5;
+let modalAuditionRaf = null;
+
+function checkModalAuditionBounds() {
+  if (!modalAuditionActive || !(modalAuditionEnd > modalAuditionStart) || !audioHealed) return;
+  const t = audioHealed.currentTime;
+  if (t < modalAuditionStart - MODAL_AUDITION_SEEK_AWAY_S || t > modalAuditionEnd + MODAL_AUDITION_SEEK_AWAY_S) {
+    modalAuditionActive = false;
+    return;
+  }
+  if (t < modalAuditionEnd) return;
+  if (modalAuditionLoop) {
+    audioHealed.currentTime = modalAuditionStart;
+    if (audioRaw && audioRaw.src) audioRaw.currentTime = modalAuditionStart;
+  } else {
+    audioHealed.pause();
+    if (audioRaw && audioRaw.src) audioRaw.pause();
+    isPlaying = false;
+    audioHealed.currentTime = modalAuditionStart;
+    if (audioRaw && audioRaw.src) audioRaw.currentTime = modalAuditionStart;
+    const playIcon = document.getElementById('playIcon');
+    if (playIcon) playIcon.innerText = "▶";
+    modalAuditionActive = false;
+  }
+  updateModalPlaybackUI();
+}
+
+function watchModalAudition() {
+  if (modalAuditionRaf !== null) return;
+  const tick = () => {
+    if (!modalAuditionActive || !isPlaying) { modalAuditionRaf = null; return; }
+    checkModalAuditionBounds();
+    modalAuditionRaf = requestAnimationFrame(tick);
+  };
+  modalAuditionRaf = requestAnimationFrame(tick);
+}
+
 function setupAudioStreams(origPath, masterPath) {
   audioRaw.src = `/api/stream?path=${encodeURIComponent(origPath)}`;
   audioHealed.src = `/api/stream?path=${encodeURIComponent(masterPath)}`;
@@ -196,24 +237,7 @@ function setupAudioStreams(origPath, masterPath) {
         }
       }
 
-      // Automatic modal section audition loop jump
-      if (modalAuditionActive && modalAuditionEnd > modalAuditionStart) {
-        if (audioHealed.currentTime >= modalAuditionEnd || audioHealed.currentTime < modalAuditionStart) {
-          if (modalAuditionLoop) {
-            audioHealed.currentTime = modalAuditionStart;
-            if (audioRaw && audioRaw.src) audioRaw.currentTime = modalAuditionStart;
-          } else {
-            audioHealed.pause();
-            if (audioRaw && audioRaw.src) audioRaw.pause();
-            isPlaying = false;
-            audioHealed.currentTime = modalAuditionStart;
-            if (audioRaw && audioRaw.src) audioRaw.currentTime = modalAuditionStart;
-            const playIcon = document.getElementById('playIcon');
-            if (playIcon) playIcon.innerText = "▶";
-            modalAuditionActive = false;
-          }
-        }
-      }
+      checkModalAuditionBounds();
 
       const pct = (audioHealed.currentTime / duration) * 100;
       document.getElementById('progressBar').style.width = `${pct}%`;
@@ -3378,6 +3402,7 @@ window.playTrackMapSectionFromModal = function(secIdx) {
     modalAuditionStart = targetTime;
     modalAuditionEnd = endTime;
     updateModalPlaybackUI();
+    watchModalAudition();
     updateStatus(`RESUMING: Section '${s.name || s.tag || s.sec_tag}' from ${formatTime(audioHealed.currentTime)}`);
     return;
   }
@@ -3388,7 +3413,10 @@ window.playTrackMapSectionFromModal = function(secIdx) {
   modalAuditionEnd = endTime;
   modalAuditionSectionIdx = secIdx;
 
+  let auditionStarted = false;   // loadedmetadata and the 150 ms fallback may both fire
   const startAudition = () => {
+    if (auditionStarted) return;
+    auditionStarted = true;
     try {
       audioHealed.currentTime = targetTime;
       if (audioRaw && audioRaw.src) {
@@ -3414,6 +3442,7 @@ window.playTrackMapSectionFromModal = function(secIdx) {
     }
 
     updateModalPlaybackUI();
+    watchModalAudition();
     updateStatus(`Auditioning section '${s.name || s.tag || s.sec_tag}' [${formatTime(targetTime)} - ${formatTime(endTime)}]`);
   };
 
@@ -3459,6 +3488,7 @@ window.seekModalSectionTime = function(e) {
       togglePlayPause();
     }
     updateModalPlaybackUI();
+    watchModalAudition();
   }
 };
 
