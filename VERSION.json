@@ -1,10 +1,10 @@
 {
   "app": "PHARMAKON",
-  "version": "3.2.0",
-  "build_date": "2026-11-09",
+  "version": "3.3.0",
+  "build_date": "2026-11-22",
   "channel": "production",
-  "release_url": "https://github.com/alex-gerek/PHARMAKON/releases/tag/v3.2.0",
-  "notes": "PHARMAKON 3.2: Clean Chain default sound profile - removes measurable listening-fatigue defects (AI resonances via Auto Antidote v2, intermodulation via calibrated tape operating level, aliasing, added harshness) while keeping the original tonal character; Classic 3.1 switch; ITU-R BS.1770-4 LUFS meter verified against EBU Tech 3341; Sub-Sync and BPM fixes.",
+  "release_url": "https://github.com/alex-gerek/PHARMAKON/releases/tag/v3.3.0",
+  "notes": "PHARMAKON 3.3: Suno stem folders use every stem; own split keeps the kick in Drums; Track Map beat grid fitted to the beats (Theil-Sen), on the beat (latency fix), downbeat backbeat rule, build-up boundaries on their own bar; section player; precise 16X true-peak pass; limiter memory 2.3 -> 1.0 GB; no local paths in reports.",
   "patch_files": [
     "remaster_engine.py",
     "gui/server.py",
@@ -13,13 +13,13 @@
     "gui/static/style.css",
     "track_map_engine.py"
   ],
-  "release_tag": "v3.2.0",
+  "release_tag": "v3.3.0",
   "files": {
-    "remaster_engine.py": "3b72fe2d0b8ae3f1de6b41830e68531049b5cd7752ad0f9ba67950468994c43e",
-    "gui/server.py": "8694218bbbacddd9a7c83b2b4997663beef9cd447d393b6d4fc388dd9460c031",
-    "gui/static/index.html": "0c748f85a8821f32c62abfd6cfbaf38cdfb0be42a6169e32763cc1819d83baa1",
-    "gui/static/app.js": "eab5e052c2fb26f1604e51b312a0ec37097b9db7682ea55796756fb6d8abc4d9",
+    "remaster_engine.py": "7b7a48f44383ead76398d0bea3f4c2bf023d992742ab6837c130fbf93059b8bd",
+    "gui/server.py": "82f724b322d4de7367982c18ea88aa25e04111b6f25683a242fa5d4213c51ff1",
+    "gui/static/index.html": "9bc9d173317597b741ca2575f34a826a05e9e1171e21334de144fa5fb9513a11",
+    "gui/static/app.js": "f1d832321ffdfebc90e2412488746beb42b9009e3d36c3fcac9d7be23b3836fe",
     "gui/static/style.css": "7589d68b682f6ed5b30ce5838d54cbbce931ea0853c52cf410a61bab4b8157dc",
-    "track_map_engine.py": "055e7e56b2476eb7bf5f0a5804bb96eb25935628aa1593da1a8a2e0377d47f66"
+    "track_map_engine.py": "75c2670000d284a3ffb9ef80f7cd91296015bd48b6d2644a2eff450936043b2e"
   }
 }
