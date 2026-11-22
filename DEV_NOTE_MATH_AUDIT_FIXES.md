@@ -573,3 +573,7 @@ Tried and rejected (both measured with the same ruler):
 - stricter vocal mask (mask²): Vocals purity 19 % → 16 %, vocal SI-SDR −8.4 → −9.6 dB; Other −3.1 dB but with more voice in it (17 %).
 
 The mask cannot tell a voice from a centred instrument in the same band. The fix is the pitch-contour model of note 38 (with an oracle f0 it reaches −3.3 dB vocal SI-SDR from the mix), which needs a voice-f0 tracker that works in a mix.
+
+## 42. No local path left in the report (open item of 32)
+
+The hidden `tm-target-path` field of the Mastering Report held the absolute output folder (user name and folder structure in a report that gets shared). It existed only for "💾 SAVE EDITED MAP". The field is gone; the report sends no path, and `/api/save-track-map` saves `track_map.json` next to the report that sent the request (its Referer, as for report audio in 32). An explicit `target_path` from older reports still works. Tests: the no-local-path test now checks the whole report, not only the audio tags; new `test_edited_map_is_saved_next_to_the_report`.

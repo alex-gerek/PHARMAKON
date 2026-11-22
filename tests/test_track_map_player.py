@@ -141,12 +141,9 @@ def test_report_has_no_absolute_local_paths():
         os.makedirs(out)
         with open(_report_with_audio(out, "PathLeak"), encoding="utf-8") as f:
             content = f.read()
-        import re
-        tags = " ".join(re.findall(r"<audio[^>]*>", content))
         for p in (root, root.replace("\\", "/")):
-            assert p not in tags
-        # NOTE: the hidden "tm-target-path" field (used by "save track map") still holds the
-        # output folder; tracked as a follow-up in DEV note 32.
+            assert p not in content       # nowhere in the report (DEV notes 32, 42)
+        assert "tm-target-path" not in content
         assert "data-abs-path" not in content
         assert 'src="../PathLeak.wav"' in content
 
@@ -193,3 +190,19 @@ def test_server_serves_audio_from_the_requesting_reports_folder():
         assert client.get("/api/report-audio", params={"rel": os.path.join(a, "Song - STUDIO_REMASTER.wav")},
                           headers={**h, "Referer": ref}).status_code == 404
         assert client.get("/api/sub/Song.wav", headers={**h, "Referer": ref}).status_code == 403
+
+
+def test_edited_map_is_saved_next_to_the_report(tmp_path):
+    # the report sends no path; the server saves next to the report that asked
+    from fastapi.testclient import TestClient
+    from gui.server import app, SESSION_TOKEN
+    client = TestClient(app)
+    out = tmp_path / "Song" / "Remaster"
+    out.mkdir(parents=True)
+    rep = _report_with_audio(str(out), "Song")
+    r = client.post("/api/save-track-map",
+                    json={"track_map": {"status": "edited", "sections": _sample_track_map()["sections"]}},
+                    headers={"X-Session-Token": SESSION_TOKEN,
+                             "Referer": "http://127.0.0.1:7860/api/report?path=" + rep})
+    assert r.status_code == 200 and r.json()["success"], r.text
+    assert os.path.isfile(out / "track_map.json")

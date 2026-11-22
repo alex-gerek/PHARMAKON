@@ -501,6 +501,13 @@ async def save_track_map(request: Request):
         if not track_map or not track_map.get("sections"):
             return {"success": False, "error": "Invalid track map data"}
 
+        # Reports no longer carry a local path (DEV note 42): save next to the report that
+        # sent the request. An explicit target_path (older reports) still works.
+        if not target_path:
+            rep_dir = _report_dir_for(request)
+            if rep_dir is not None:
+                target_path = str(rep_dir)
+
         if target_path and os.path.exists(target_path):
             if os.path.isfile(target_path):
                 base_dir = os.path.dirname(target_path)

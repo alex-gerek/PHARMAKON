@@ -2539,7 +2539,6 @@ def generate_track_map_html(track_map, target_path="", audio_sources=None):
     <!-- PHARMAKON 3.2 TRACK INTELLIGENCE MAP -->
     <div class="track-map-card" id="trackMapRoot">
       <script id="tm-raw-data" type="application/json">{sections_json}</script>
-      <input type="hidden" id="tm-target-path" value="{target_path}" />
       
       <div class="track-map-header">
         <div style="display:flex; align-items:center; gap:10px;">
@@ -3036,9 +3035,8 @@ def generate_track_map_html(track_map, target_path="", audio_sources=None):
         }}
 
         window.saveEditedTrackMap = function() {{
-          const targetPath = document.getElementById('tm-target-path').value || '';
+          // no local path in the report: the server saves next to the report that sent this
           const payload = {{
-            target_path: targetPath,
             track_map: {{
               status: "edited",
               estimated_bpm: {bpm:.2f},
