@@ -536,3 +536,9 @@ No track is worse than in 3.2; edm_short_intro, edm_10 and edm_12 are now exact.
 **Result** (mean of 7 tracks; vocals 6, one excerpt has none): drums −11.5 → **−4.4 dB** (better on 7/7), bass −3.8 → **−3.1** (7/7), vocals −8.2 → −8.4, other −3.6 → −4.0. Split-and-master's sound changes in the low end only. Not changed: the default single-file chain, which does not split.
 
 **Also tried for the voice (not shipped):** bar-synchronous repetition on PHARMAKON's grid (accompaniment = per-bin median of the bars, globally or over the 4 or 8 neighbouring bars): vocals at best +0.1 dB, other −3.7 to −8.7 dB worse. Suno accompaniments vary too much from bar to bar for a repetition model. Next: a pitch-contour (harmonic comb) model of the voice.
+
+**Voice by its pitch contour (research, not shipped).** Model: predominant f0 (harmonic summation over 8 harmonics, 80–1000 Hz, Viterbi with a jump penalty and an unvoiced state), vocal = Gaussian combs at h·f0, h = 1…20, above 150 Hz. On the mix: vocals −13.0 dB (worse than the current −8.4). Diagnosis on the same 6 excerpts:
+- the comb model holds the voice: applied to the clean Suno vocal stem it keeps +3.8 dB SI-SDR;
+- with the f0 tracked on the clean stem ("oracle f0") the comb pulls the voice out of the MIX at **−3.3 dB, 5 dB better than the current separator**;
+- the f0 tracked on the mix matches the voice's f0 (within half a semitone) on only 30 % of voiced frames: the tracker follows synth leads and pads.
+So the model is sound and the bottleneck is voice-f0 tracking in a mix. Next: make the tracker prefer a voice (pitch modulation, stereo centre, formant envelope, octave checks), scored by f0 agreement with the stem, then by vocal SI-SDR.
