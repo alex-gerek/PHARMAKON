@@ -563,3 +563,13 @@ An external review cloned master (b8ac57c) on Linux and reported four problems. 
 | loud white noise, 4 min (worst case) | 5081 MB | **1033 MB** | 183 s, unchanged |
 
 Tests: `tests/test_limiter_precise.py` +2 (block-wise peak = full call within 1e-6; memory on 20 s of noise < 60× the input, 3.2 needed 113×, now 39×). `remaster_engine.py` changed: the next release needs a re-signed manifest.
+
+## 41. Vocal leakage of the own split, measured (no code change)
+
+Lex heard the voice in every stem of split-and-master. Measured on the 6 excerpts with a voice (Suno vocal stem as reference; share of each estimated stem's energy explained by the true vocal, least-squares scale per 1 s block, energy-weighted): **Vocals 19 %, Other 16 %, Drums 2.6 %, Bass 0.8 %.** So the voice leaks mainly into Other, and the estimated Vocals stem is 4/5 not voice (stereo-centre + formant-band mask: it also takes centred keys, synths and pads).
+
+Tried and rejected (both measured with the same ruler):
+- Other = harmonic − vocal in full (was − 0.85 × vocal): voice in Other 16 % → 15 %, Other SI-SDR −3.4 → −3.7 dB.
+- stricter vocal mask (mask²): Vocals purity 19 % → 16 %, vocal SI-SDR −8.4 → −9.6 dB; Other −3.1 dB but with more voice in it (17 %).
+
+The mask cannot tell a voice from a centred instrument in the same band. The fix is the pitch-contour model of note 38 (with an oracle f0 it reaches −3.3 dB vocal SI-SDR from the mix), which needs a voice-f0 tracker that works in a mix.
