@@ -339,6 +339,7 @@ Mathematical proofs, transfer functions, and AES/IEEE calibrations are documente
 * [05. The Peak Your Meter Never Shows: Inter-Sample Overs, Lossy Codecs and a Limiter That Leaves the Music Alone](articles/05_intersample_peaks_and_4x_oversampling.md)
 * [06. From Python to C++20: Architecting the Real-Time DSP Engine of PHARMAKON PRO](articles/06_from_python_to_cxx20_architecting_pharmakon_pro.md)
 * [07. Who Put Plastic in My Music? Hunting Down the Math Behind a Cleaner Sound](articles/07_who_put_plastic_in_my_music.md) ([Original publication on X](https://x.com/LexGerek/status/2120167917488676895))
+* [08. Two Mistakes Can Sound Right](articles/08_two_mistakes_can_sound_right.md) ([Original publication on X](https://x.com/LexGerek/status/2124566669762683097))
 
 ---
 
