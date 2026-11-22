@@ -212,6 +212,61 @@ def ensure_stereo(arr):
         return arr[:, :2]
     return arr
 
+_STEM_BUS_KEYWORDS = (
+    ("vocals", ("vocal", "vox", "choir", "voice")),
+    ("drums", ("drum", "percussion", "perc", "kick", "snare", "hihat", "hi-hat", "cymbal")),
+    ("bass", ("bass",)),
+)
+_PHARMAKON_OUTPUT_TAGS = ("studio_remaster", "delta_poison", "raw_sum", "master_matched",
+                          "vocals_cleaned", "drums_punched", "bass_monofied", "other_widened")
+
+
+def group_stem_files(files):
+    """
+    Every stem of a folder goes to one of 4 buses (vocals, drums, bass, other) - none is
+    dropped. Suno exports 7-12 numbered stems ("0 Lead Vocals", "1 Backing Vocals",
+    "4 Keyboard", "6 Synth", ...); the 3.2 rule took ONE file per keyword, so backing
+    vocals, keys, synths, percussion, guitar, brass etc. were silently left out of the
+    master (DEV note 37). When numbered stems are present, only that set is used (other
+    renders in the folder, e.g. a single "Drum Kit" extract, are not part of it).
+    """
+    import re
+    files = [f for f in files if os.path.basename(f).lower().endswith(SUPPORTED_EXTS)
+             and not any(t in os.path.basename(f).lower().replace(" - ", "_").replace(" ", "_") for t in _PHARMAKON_OUTPUT_TAGS)]
+    numbered = [f for f in files if re.match(r"^\d+\s", os.path.basename(f))]
+    if len(numbered) >= 3:
+        files = numbered
+    groups = {"vocals": [], "drums": [], "bass": [], "other": []}
+    for f in sorted(files):
+        base = os.path.basename(f).lower()
+        bus = "other"
+        for name, words in _STEM_BUS_KEYWORDS:
+            if any(w in base for w in words):
+                bus = name
+                break
+        groups[bus].append(f)
+    return groups
+
+
+def load_stem_buses(groups):
+    """Sums the stems of each bus (stereo float32, common length). Missing bus = silence."""
+    loaded, sr = {}, None
+    for bus, paths in groups.items():
+        for p in paths:
+            y, fs = sf.read(p, dtype='float32')
+            if sr is None:
+                sr = fs
+            elif fs != sr:
+                raise ValueError(f"Stem sample rates differ: {os.path.basename(p)} is {fs} Hz, others {sr} Hz")
+            loaded.setdefault(bus, []).append(ensure_stereo(y))
+    n = min(len(y) for ys in loaded.values() for y in ys)
+    buses = {}
+    for bus in groups:
+        ys = loaded.get(bus, [])
+        buses[bus] = np.sum([y[:n] for y in ys], axis=0).astype(np.float32) if ys else np.zeros((n, 2), dtype=np.float32)
+    return buses, sr
+
+
 def find_stem(files, keyword):
     """Matches stem file by keyword (vocals, drums, bass, other)."""
     for f in files:
@@ -3974,12 +4029,10 @@ def process_stems_folder(target_folder, params=None, open_folder=True):
         print(f"[ERROR] No audio files found in: {target_folder}")
         return None, None
 
-    v_path = find_stem(audio_files, "vocal")
-    d_path = find_stem(audio_files, "drum")
-    b_path = find_stem(audio_files, "bass")
-    o_path = find_stem(audio_files, "other")
+    stem_groups = group_stem_files(audio_files)
+    is_stem_set = sum(1 for g in stem_groups.values() if g) >= 2 and any(stem_groups[k] for k in ("vocals", "drums", "bass"))
 
-    if not all([v_path, d_path, b_path, o_path]):
+    if not is_stem_set:
         if len(audio_files) == 1:
             print(f"[INFO] Folder contains a single track. Running Full Track Mastering...")
             return process_single_file(audio_files[0], params=params, open_folder=open_folder)
@@ -3995,21 +4048,11 @@ def process_stems_folder(target_folder, params=None, open_folder=True):
     print(f"    Track: {track_name}")
     print(f"=======================================================\n")
 
-    vocals, sr = sf.read(v_path, dtype='float32')
-    drums, _ = sf.read(d_path, dtype='float32')
-    bass, _ = sf.read(b_path, dtype='float32')
-    other, _ = sf.read(o_path, dtype='float32')
-
-    vocals = ensure_stereo(vocals)
-    drums = ensure_stereo(drums)
-    bass = ensure_stereo(bass)
-    other = ensure_stereo(other)
-
-    min_len = min(len(vocals), len(drums), len(bass), len(other))
-    vocals = vocals[:min_len]
-    drums = drums[:min_len]
-    bass = bass[:min_len]
-    other = other[:min_len]
+    buses, sr = load_stem_buses(stem_groups)
+    for k in ("vocals", "drums", "bass", "other"):
+        names = ", ".join(os.path.basename(p) for p in stem_groups[k]) or "(none)"
+        print(f"  {k:6s} bus: {names}")
+    vocals, drums, bass, other = buses["vocals"], buses["drums"], buses["bass"], buses["other"]
 
     raw_sum = vocals + drums + bass + other
 
