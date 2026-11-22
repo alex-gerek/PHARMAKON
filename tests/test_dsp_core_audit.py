@@ -36,6 +36,30 @@ def baseline():
         return json.load(f)
 
 
+def _is_reference_env(baseline) -> bool:
+    """The SHA-256 baselines hold only on the machine and library versions that made them:
+    float results differ in the last bits across platforms, numpy/scipy and Python builds."""
+    import scipy
+    env = baseline["environment"]
+    return (sys.platform == env.get("platform") and np.__version__ == env["numpy"]
+            and scipy.__version__ == env["scipy"] and sys.version.split()[0] == env["python"])
+
+
+def _assert_dsp_output(out, key, baseline):
+    """Bit-identical on the reference environment; elsewhere the same sound within 0.01 dB
+    (100 ms block RMS and peak against baseline["dsp_output_fingerprints"])."""
+    if _is_reference_env(baseline):
+        assert hashlib.sha256(out.tobytes()).hexdigest() == baseline["dsp_output_hashes"][f"{key}_sha256"], key
+        return
+    ref = baseline["dsp_output_fingerprints"][key]
+    y = np.asarray(out, dtype=np.float64)
+    blk = 48000 // 10
+    assert len(y) == ref["len"], key
+    rms = np.array([10 * np.log10(np.mean(y[i * blk:(i + 1) * blk] ** 2) + 1e-20) for i in range(len(ref["block_rms_db"]))])
+    assert np.max(np.abs(rms - np.array(ref["block_rms_db"]))) < 0.01, (key, float(np.max(np.abs(rms - np.array(ref["block_rms_db"])))))
+    assert abs(20 * np.log10(np.max(np.abs(y)) + 1e-20) - ref["peak_db"]) < 0.01, key
+
+
 def _measure_4x_true_peak_db(audio: np.ndarray) -> float:
     up = signal.resample_poly(audio.astype(np.float64), up=4, down=1, axis=0)
     peak = float(np.max(np.abs(up)))
@@ -473,11 +497,11 @@ def test_dsp_bit_identical_regression(baseline):
 
     # Classic 3.1 profile must stay bit-identical to the Stage 1 baseline (Clean Chain is the 3.2 default)
     out_auto, _ = re_eng.process_audio_array(synth_stereo, sr, {**re_eng.DEFAULT_PARAMS, "classic_31": True})
-    assert hashlib.sha256(out_auto.tobytes()).hexdigest() == baseline["dsp_output_hashes"]["synth_pharmakon1_sha256"]
+    _assert_dsp_output(out_auto, "synth_pharmakon1", baseline)
 
     for p_key in ("suno", "udio", "club", "audiophile"):
         out_p, _ = re_eng.process_audio_array(synth_stereo, sr, {"mode": "pharmakon2", "preset": p_key, "classic_31": True})
-        assert hashlib.sha256(out_p.tobytes()).hexdigest() == baseline["dsp_output_hashes"][f"synth_preset_{p_key}_sha256"]
+        _assert_dsp_output(out_p, f"synth_preset_{p_key}", baseline)
 
 
 # =============================================================================
@@ -564,4 +588,4 @@ def test_diagnostic_logging_emits_telemetry_without_changing_audio(tmp_path, cap
     assert "Limiter post-decimation safety guard triggered:" in messages
 
     # Bit-for-bit identity against Stage 1 baseline SHA-256
-    assert hashlib.sha256(out_logged.tobytes()).hexdigest() == baseline["dsp_output_hashes"]["synth_pharmakon1_sha256"]
+    _assert_dsp_output(out_logged, "synth_pharmakon1", baseline)

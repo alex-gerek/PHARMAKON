@@ -542,3 +542,11 @@ No track is worse than in 3.2; edm_short_intro, edm_10 and edm_12 are now exact.
 - with the f0 tracked on the clean stem ("oracle f0") the comb pulls the voice out of the MIX at **−3.3 dB, 5 dB better than the current separator**;
 - the f0 tracked on the mix matches the voice's f0 (within half a semitone) on only 30 % of voiced frames: the tracker follows synth leads and pads.
 So the model is sound and the bottleneck is voice-f0 tracking in a mix. Next: make the tracker prefer a voice (pitch modulation, stereo centre, formant envelope, octave checks), scored by f0 agreement with the stem, then by vocal SI-SDR.
+
+## 39. Test suite runs outside the author's machine (external review, 2026-11-22)
+
+An external review cloned master (b8ac57c) on Linux and reported four problems. Checked here:
+- **Bit-identical tests "fail" (2 tests).** Not a code regression: the same commit passes on the reference machine. The SHA-256 of the DSP output holds only on the environment recorded in `baseline.json` (Windows, Python 3.14.3, numpy 2.4.2, scipy 1.18.1); other platforms and library builds differ in the last float bits. Fixed: on the reference environment the hash stays strict; elsewhere the output must match `baseline.json["dsp_output_fingerprints"]` (100 ms block RMS and peak, within 0.01 dB), recorded from the hash-verified outputs. A real change (tested: a 0.1-level DC signal) is caught. The "post-decimation safety guard" warning in the same log is triggered on purpose by `test_diagnostic_logging_…`.
+- **Plain `pytest` failed to import the engine.** True outside the repo root. `pytest.ini` now has `pythonpath = .`.
+- **fastapi / httpx.** fastapi is already in `requirements.txt`; `TestClient` also needs httpx. New `requirements-dev.txt` (pytest, httpx) so the product install stays as it is.
+- **Memory.** Measured (tracemalloc): `tests/test_limiter_precise.py` peaks at 5.1 GB. In the product, a 3.55 min track pushed 8 dB into the limiter peaks at 2.4 GB (standard and precise alike); 4 min of loud white noise at 2.5 GB standard and 5.1 GB precise (white noise needs ~10 precise passes, music 0–1). The 120 s chunk keeps the 4X envelope of the whole chunk in float64. Open: block-wise envelopes would cut this, but change chunk-boundary behaviour, so it needs its own validation.

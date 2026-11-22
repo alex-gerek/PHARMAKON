@@ -1,0 +1,4 @@
+# Test / development dependencies (not needed to run PHARMAKON)
+-r requirements.txt
+pytest>=7.0
+httpx>=0.24.0
