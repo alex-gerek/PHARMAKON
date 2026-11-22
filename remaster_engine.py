@@ -212,6 +212,8 @@ def ensure_stereo(arr):
         return arr[:, :2]
     return arr
 
+STEM_BASS_HZ = 150.0   # split_audio_to_stems: harmonic content below this is the bass (DEV note 38)
+
 _STEM_BUS_KEYWORDS = (
     ("vocals", ("vocal", "vox", "choir", "voice")),
     ("drums", ("drum", "percussion", "perc", "kick", "snare", "hihat", "hi-hat", "cymbal")),
@@ -4312,7 +4314,7 @@ def split_audio_to_stems(input_path, output_stems_dir=None, subtype='PCM_24'):
     Autonomous Stem Separation:
     Decomposes single mixed stereo track into 4 distinct stems:
     - Drums.wav: percussive transients, drum punch, snare attack
-    - Bass.wav: sub-bass & bass (<130 Hz mono-summed)
+    - Bass.wav: harmonic (sustained) content below 150 Hz, mono-summed; the kick stays in Drums
     - Vocals.wav: center mid-band vocal formant isolation (280 Hz - 5 kHz)
     - Other.wav: stereo synth pads, guitars, air and atmospheric ambience
 
@@ -4330,44 +4332,54 @@ def split_audio_to_stems(input_path, output_stems_dir=None, subtype='PCM_24'):
         output_stems_dir = os.path.join(os.path.dirname(input_path), f"{track_title}_Stems")
     os.makedirs(output_stems_dir, exist_ok=True)
 
-    # 1. Bass stem isolation (<130 Hz steep 4th-order Butterworth lowpass + True-Mono)
-    b_bass, a_bass = signal.butter(4, min(130.0, nyq - 20.0) / nyq, btype='low')
-    bass_raw = signal.filtfilt(b_bass, a_bass, audio, axis=0)
-    bass_mono = np.mean(bass_raw, axis=1, keepdims=True)
-    bass_stem = np.repeat(bass_mono, 2, axis=1)
+    # 1-3. Kick vs bass, drums vs harmonics: Harmonic-Percussive Source Separation on the
+    #      FULL band (3.3, DEV note 38). The 3.2 split sent everything below 130 Hz to the
+    #      bass, so the kick body ended in Bass.wav and Drums.wav had no kick: on Lex's Suno
+    #      tracks (Suno stems as the ruler) drums scored SI-SDR -11.5 dB, worse than using the
+    #      unseparated mix (-0.1). Here a kick is percussive at any frequency and a bass note
+    #      harmonic; a 4096-sample window gives the low end the frequency resolution for it.
+    #      Measured (7 tracks): drums -11.5 -> -4.4 dB, bass -3.8 -> -3.1, vocals -8.2 -> -8.4,
+    #      other -3.6 -> -4.0 (note 38).
+    eps = 1e-9
+    hp_n, hp_hop = 4096, 1024
+    f_hp, _, ZL_hp = signal.stft(audio[:, 0], fs=sr, nperseg=hp_n, noverlap=hp_n - hp_hop)
+    ZR_hp = signal.stft(audio[:, 1], fs=sr, nperseg=hp_n, noverlap=hp_n - hp_hop)[2]
+    Z_mid_hp = 0.5 * (ZL_hp + ZR_hp)
+    mag_hp = np.abs(Z_mid_hp)
+    harm_hp = median_filter(mag_hp, size=(1, 17))     # horizontal lines: notes, bass, pads
+    perc_hp = median_filter(mag_hp, size=(17, 1))     # vertical lines: kick, snare, hats
+    mask_p_hp = perc_hp ** 2 / (perc_hp ** 2 + harm_hp ** 2 + eps)
+    mask_h_hp = 1.0 - mask_p_hp
+    low_hp = (f_hp < STEM_BASS_HZ)[:, None]
 
-    # 2. Residual signal above 130 Hz
-    b_hi, a_hi = signal.butter(4, min(130.0, nyq - 20.0) / nyq, btype='high')
-    audio_hi = signal.filtfilt(b_hi, a_hi, audio, axis=0)
+    def _istft_hp(Z):
+        return signal.istft(Z, fs=sr, nperseg=hp_n, noverlap=hp_n - hp_hop)[1][:orig_len]
 
-    # 3. Harmonic-Percussive Source Separation (HPSS) via STFT median filtering
+    # Long window only where it is needed, below STEM_BASS_HZ: kick -> drums, notes -> bass.
+    # Above it the 3.2 short-window path is kept unchanged (a 4096 window took consonants
+    # and short syllables for hits: the vocal estimate lost 0.8-0.9 dB, note 38).
+    drums_low = np.column_stack([_istft_hp(ZL_hp * mask_p_hp * low_hp), _istft_hp(ZR_hp * mask_p_hp * low_hp)])
+    bass_mono = _istft_hp(Z_mid_hp * mask_h_hp * low_hp)            # True-Mono bass, as before
+    bass_stem = np.column_stack([bass_mono, bass_mono])
+    audio_hi = np.column_stack([_istft_hp(ZL_hp * (~low_hp)), _istft_hp(ZR_hp * (~low_hp))])
+
+    # Harmonic content above the bass, on the 2048-sample grid of the vocal stage below
     nperseg = 2048
     noverlap = 1536
     f, t_stft, Zxx_L = signal.stft(audio_hi[:, 0], fs=sr, nperseg=nperseg, noverlap=noverlap)
     Zxx_R = signal.stft(audio_hi[:, 1], fs=sr, nperseg=nperseg, noverlap=noverlap)[2]
-
-    mag_L = np.abs(Zxx_L)
-    mag_R = np.abs(Zxx_R)
-
-    # Harmonic components (horizontal lines: vocals, synths, sustained notes)
-    harm_L = median_filter(mag_L, size=(1, 15))
-    harm_R = median_filter(mag_R, size=(1, 15))
-
-    # Percussive components (vertical spikes: transients, kicks, snares, hats)
-    perc_L = median_filter(mag_L, size=(15, 1))
-    perc_R = median_filter(mag_R, size=(15, 1))
-
-    # Soft Wiener masks
-    eps = 1e-9
-    mask_p_L = (perc_L ** 1.8) / (perc_L ** 1.8 + harm_L ** 1.8 + eps)
-    mask_p_R = (perc_R ** 1.8) / (perc_R ** 1.8 + harm_R ** 1.8 + eps)
-    mask_h_L = 1.0 - mask_p_L
-    mask_h_R = 1.0 - mask_p_R
-
-    # Reconstruct Drums
-    _, drums_L = signal.istft(Zxx_L * mask_p_L, fs=sr, nperseg=nperseg, noverlap=noverlap)
-    _, drums_R = signal.istft(Zxx_R * mask_p_R, fs=sr, nperseg=nperseg, noverlap=noverlap)
-    drums_stem = np.column_stack([drums_L[:orig_len], drums_R[:orig_len]])
+    # 3.2 short-window HPSS above the bass (2048, medians 15, power 1.8)
+    harm_L = median_filter(np.abs(Zxx_L), size=(1, 15))
+    harm_R = median_filter(np.abs(Zxx_R), size=(1, 15))
+    perc_L = median_filter(np.abs(Zxx_L), size=(15, 1))
+    perc_R = median_filter(np.abs(Zxx_R), size=(15, 1))
+    mask_h_L = 1.0 - perc_L ** 1.8 / (perc_L ** 1.8 + harm_L ** 1.8 + eps)
+    mask_h_R = 1.0 - perc_R ** 1.8 / (perc_R ** 1.8 + harm_R ** 1.8 + eps)
+    _, drums_hi_L = signal.istft(Zxx_L * (1.0 - mask_h_L), fs=sr, nperseg=nperseg, noverlap=noverlap)
+    _, drums_hi_R = signal.istft(Zxx_R * (1.0 - mask_h_R), fs=sr, nperseg=nperseg, noverlap=noverlap)
+    n_d = min(len(drums_hi_L), orig_len)
+    drums_stem = drums_low.copy()
+    drums_stem[:n_d] += np.column_stack([drums_hi_L[:n_d], drums_hi_R[:n_d]])
 
     # 4. STFT-Domain Harmonic Separation (Ono HPSS + Spectral Wiener Panning Coherence)
     Z_harm_L = Zxx_L * mask_h_L

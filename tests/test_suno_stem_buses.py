@@ -82,3 +82,25 @@ def test_stems_mode_runs_on_a_suno_folder(tmp_path):
     n = min(len(raw), len(total))
     # RAW_SUM holds all 9 stems (PCM_24 export rounding only)
     assert np.max(np.abs(raw[:n] - total[:n])) < 1e-4
+
+
+def test_split_keeps_the_kick_in_drums(tmp_path):
+    # 3.2 sent everything below 130 Hz to Bass.wav, kick included (DEV note 38)
+    sr = 44100
+    n = sr * 8
+    t = np.arange(n) / sr
+    kick = np.zeros(n)
+    k = np.arange(int(0.25 * sr))
+    hit = 0.9 * np.sin(2 * np.pi * np.cumsum(50 + 90 * np.exp(-k / sr / 0.02)) / sr) * np.exp(-k / sr / 0.08)
+    for s in range(0, n - len(k), sr // 2):
+        kick[s:s + len(k)] += hit
+    bass = 0.3 * np.sin(2 * np.pi * 41.2 * t)
+    mix = np.column_stack([kick + bass] * 2).astype(np.float32)
+    p = tmp_path / "kb.wav"
+    sf.write(p, mix, sr, subtype="FLOAT")
+    out, info = re_eng.split_audio_to_stems(str(p), str(tmp_path / "stems"), subtype="FLOAT")
+    d = sf.read(info["drums"])[0].mean(1)
+    b = sf.read(info["bass"])[0].mean(1)
+    corr = lambda a, c: float(np.dot(a, c) / (np.linalg.norm(a) * np.linalg.norm(c) + 1e-12))
+    assert corr(d, kick) > 0.7 and corr(d, kick) > corr(d, bass)
+    assert corr(b, bass) > 0.7 and corr(b, bass) > corr(b, kick)
