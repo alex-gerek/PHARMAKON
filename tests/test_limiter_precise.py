@@ -90,3 +90,29 @@ def test_precise_pass_works_in_chunked_path():
 def test_profiles_select_limiter():
     assert re_eng.resolve_sound_profile({})[1]['limiter_precise'] is True
     assert re_eng.resolve_sound_profile({'classic_31': True})[1]['limiter_precise'] is False
+
+
+def test_upsampled_peak_blocks_match_the_full_call():
+    # block-wise 4X peak (DEV note 40) = full-length resample_poly within float rounding
+    x = noise(seconds=25, seed=7)
+    full = np.max(np.abs(signal.resample_poly(x, 4, 1, axis=0)), axis=1)
+    blk = re_eng._upsampled_abs_max(x, 4)
+    assert blk.shape == full.shape
+    assert np.max(np.abs(blk - full)) < 1e-6
+
+
+def test_clean_chain_limiter_memory_is_bounded():
+    # 3.2 held several float64 4X / 16X copies of a whole 120 s chunk: 5.1 GB on 4 min of
+    # loud noise. On 20 s of noise: 3.2 needed 113x the float32 input, now 39x.
+    import logging
+    import tracemalloc
+    logging.disable(logging.WARNING)
+    try:
+        x = (0.45 * np.random.default_rng(5).standard_normal((SR * 20, 2))).astype(np.float32)
+        tracemalloc.start()
+        re_eng.true_peak_limiter(x, SR, target_ceiling_db=-1.0, precise=True)
+        peak = tracemalloc.get_traced_memory()[1]
+        tracemalloc.stop()
+    finally:
+        logging.disable(logging.NOTSET)
+    assert peak < 60 * x.nbytes, peak / x.nbytes

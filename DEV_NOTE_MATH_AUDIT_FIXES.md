@@ -550,3 +550,16 @@ An external review cloned master (b8ac57c) on Linux and reported four problems. 
 - **Plain `pytest` failed to import the engine.** True outside the repo root. `pytest.ini` now has `pythonpath = .`.
 - **fastapi / httpx.** fastapi is already in `requirements.txt`; `TestClient` also needs httpx. New `requirements-dev.txt` (pytest, httpx) so the product install stays as it is.
 - **Memory.** Measured (tracemalloc): `tests/test_limiter_precise.py` peaks at 5.1 GB. In the product, a 3.55 min track pushed 8 dB into the limiter peaks at 2.4 GB (standard and precise alike); 4 min of loud white noise at 2.5 GB standard and 5.1 GB precise (white noise needs ~10 precise passes, music 0–1). The 120 s chunk keeps the 4X envelope of the whole chunk in float64. Open: block-wise envelopes would cut this, but change chunk-boundary behaviour, so it needs its own validation.
+
+## 40. Limiter memory (open item of 39)
+
+**Where it went.** Per 120 s chunk the limiter held full-length float64 copies of the signal at 4X (detection), again at 4X (verification) and per channel at 4X (final true-peak reading), plus the 4X gain curves; the precise pass resampled whole runs at 16X, and on dense material one run is the whole chunk. Of each copy only the per-sample peak is used.
+
+**Fix (Clean Chain / precise limiter).** `_upsampled_abs_max` measures the 4X peak in 10 s blocks with 1024 samples of context; the 16X runs of the precise pass are measured in 5 s pieces; the 4X gain arrays are freed as soon as they are used. Not bit-identical: scipy's polyphase filter sums in a slightly different order for a block, so the output differs by at most 1–2 float32 LSB (≈ −138 dBFS) on 6–9 % of samples; the reported true peak is the same. **Classic 3.1** (standard limiter) keeps the full-length calls and stays bit-for-bit 3.1 (checked on 130 s of noise and by the SHA-256 tests).
+
+| Precise limiter, 48 kHz stereo | 3.2 peak | now | time |
+|---|---|---|---|
+| Don't ruin it, 3.55 min, +8 dB into the limiter | 2281 MB | **979 MB** | 34 s, unchanged |
+| loud white noise, 4 min (worst case) | 5081 MB | **1033 MB** | 183 s, unchanged |
+
+Tests: `tests/test_limiter_precise.py` +2 (block-wise peak = full call within 1e-6; memory on 20 s of noise < 60× the input, 3.2 needed 113×, now 39×). `remaster_engine.py` changed: the next release needs a re-signed manifest.

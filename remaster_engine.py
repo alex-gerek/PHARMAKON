@@ -724,6 +724,24 @@ def _tp_envelope_1x(x, k=PRECISE_VERIFY_OVERSAMPLE, block_s=5.0, pad=1024):
     return np.maximum(env, np.max(np.abs(x), axis=1))
 
 
+def _upsampled_abs_max(x, k, block_s=10.0, pad=1024):
+    """max over channels of |resample_poly(x, k, 1)| at every k-X sample, computed in padded
+    blocks: the same numbers as the full-length call (the FIR needs < pad input samples of
+    context), without holding a k-times float64 copy of the whole signal (DEV note 40)."""
+    x = np.asarray(x)
+    if x.ndim == 1:
+        x = x[:, None]
+    n = len(x)
+    out = np.empty(n * k, dtype=np.float64)
+    blk = max(1, int(block_s * 48000))
+    for a in range(0, n, blk):
+        b = min(n, a + blk)
+        lo, hi = max(0, a - pad), min(n, b + pad)
+        up = signal.resample_poly(x[lo:hi], k, 1, axis=0)
+        out[a * k:b * k] = np.max(np.abs(up), axis=1)[(a - lo) * k:(b - lo) * k]
+    return out
+
+
 def _tp_envelope_runs(x, mask, env, k=PRECISE_VERIFY_OVERSAMPLE, pad=256):
     """Recomputes `env` at k X only on the runs where `mask` is True (in place)."""
     idx = np.flatnonzero(mask)
@@ -733,12 +751,15 @@ def _tp_envelope_runs(x, mask, env, k=PRECISE_VERIFY_OVERSAMPLE, pad=256):
     cuts = np.flatnonzero(np.diff(idx) > 2 * pad)
     starts = np.concatenate([[idx[0]], idx[cuts + 1]])
     ends = np.concatenate([idx[cuts], [idx[-1]]]) + 1
-    for a, b in zip(starts, ends):
-        a, b = max(0, a - pad // 4), min(n, b + pad // 4)
-        lo, hi = max(0, a - pad), min(n, b + pad)
-        up = signal.resample_poly(x[lo:hi], k, 1, axis=0)
-        pk = np.max(np.abs(up), axis=1)[(a - lo) * k:(b - lo) * k]
-        env[a:b] = np.maximum(pk.reshape(b - a, k).max(axis=1), np.max(np.abs(x[a:b]), axis=1))
+    sub = 5 * 48000            # a long run (dense material) is measured in 5 s pieces (DEV note 40)
+    for a0, b0 in zip(starts, ends):
+        a0, b0 = max(0, a0 - pad // 4), min(n, b0 + pad // 4)
+        for a in range(a0, b0, sub):
+            b = min(b0, a + sub)
+            lo, hi = max(0, a - pad), min(n, b + pad)
+            up = signal.resample_poly(x[lo:hi], k, 1, axis=0)
+            pk = np.max(np.abs(up), axis=1)[(a - lo) * k:(b - lo) * k]
+            env[a:b] = np.maximum(pk.reshape(b - a, k).max(axis=1), np.max(np.abs(x[a:b]), axis=1))
     return env
 
 
@@ -814,11 +835,17 @@ def _true_peak_limiter_block(audio, sr, target_ceiling_db=-0.3, oversample=4, le
             limited_1x = limited_1x.squeeze()
         return limited_1x.astype(np.float32), round(tp_db, 2)
 
-    # 1. 4X Polyphase upsampling to detect inter-sample peaks
-    audio_4x = signal.resample_poly(audio, up=oversample, down=1, axis=0)
+    # 1. 4X Polyphase upsampling to detect inter-sample peaks (block-wise: only the per-sample
+    #    peak is needed, not the 4X copy of the signal)
     sr_4x = sr * oversample
 
-    max_sample_4x = np.max(np.abs(audio_4x), axis=1)
+    # Clean Chain (precise) measures block-wise: same peaks within 1 float32 LSB, a fraction of
+    # the memory. Classic 3.1 keeps the full-length call so its output stays bit-for-bit 3.1.
+    lean = bool(precise)
+    if lean:
+        max_sample_4x = _upsampled_abs_max(audio, oversample)
+    else:
+        max_sample_4x = np.max(np.abs(signal.resample_poly(audio, up=oversample, down=1, axis=0)), axis=1)
     internal_ceiling = target_ceiling * (10.0 ** (-0.20 / 20.0))
 
     # Also account for 1X sample peaks directly
@@ -827,6 +854,7 @@ def _true_peak_limiter_block(audio, sr, target_ceiling_db=-0.3, oversample=4, le
     combined_peaks_4x = np.maximum(max_sample_4x, rep_1x_peaks)
 
     needed_gain = np.minimum(1.0, internal_ceiling / (combined_peaks_4x + 1e-12))
+    del max_sample_4x, rep_1x_peaks, combined_peaks_4x
 
     # Fast lookahead minimum filter (2 ms)
     win_size = int(0.002 * sr_4x) | 1
@@ -835,7 +863,9 @@ def _true_peak_limiter_block(audio, sr, target_ceiling_db=-0.3, oversample=4, le
     # Smooth release filter
     b_rel, a_rel = signal.butter(1, 30.0 / (0.5 * sr_4x), btype='low')
     gain_smooth = signal.filtfilt(b_rel, a_rel, gain_ahead)
+    del gain_ahead
     gain_final_4x = np.minimum(needed_gain, gain_smooth)
+    del gain_smooth, needed_gain
 
     # 2. Downsample gain envelope to 1X via minimum pooling
     pad_len = int(np.ceil(len(gain_final_4x) / oversample) * oversample)
@@ -853,8 +883,11 @@ def _true_peak_limiter_block(audio, sr, target_ceiling_db=-0.3, oversample=4, le
         limited_1x = _precise_gain_pass(limited_1x, sr, target_ceiling, internal_ceiling)
 
     # 4. Localized True-Peak verification & windowed guard (NO global tanh!)
-    tp_out_4x = signal.resample_poly(limited_1x, up=oversample, down=1, axis=0)
-    max_tp_4x = np.max(np.abs(tp_out_4x), axis=1)
+    del gain_final_4x
+    if lean:
+        max_tp_4x = _upsampled_abs_max(limited_1x, oversample)
+    else:
+        max_tp_4x = np.max(np.abs(signal.resample_poly(limited_1x, up=oversample, down=1, axis=0)), axis=1)
     tp_overshoot_4x = max_tp_4x > target_ceiling
     sample_overshoot_1x = np.max(np.abs(limited_1x), axis=1) > target_ceiling
 
@@ -881,9 +914,12 @@ def _true_peak_limiter_block(audio, sr, target_ceiling_db=-0.3, oversample=4, le
     limited_1x = np.clip(limited_1x, -target_ceiling, target_ceiling)
 
     # Measure final true peak
-    res_l = signal.resample_poly(limited_1x[:, 0], 4, 1)
-    res_r = signal.resample_poly(limited_1x[:, 1], 4, 1)
-    actual_tp = float(max(np.max(np.abs(res_l)), np.max(np.abs(res_r))))
+    if lean:
+        actual_tp = float(np.max(_upsampled_abs_max(limited_1x, 4)))
+    else:
+        res_l = signal.resample_poly(limited_1x[:, 0], 4, 1)
+        res_r = signal.resample_poly(limited_1x[:, 1], 4, 1)
+        actual_tp = float(max(np.max(np.abs(res_l)), np.max(np.abs(res_r))))
     true_peak_db = float(20.0 * np.log10(max(1e-9, actual_tp)))
 
     if is_1d:
