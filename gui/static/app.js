@@ -3087,7 +3087,7 @@ function openMasteringReportModal() {
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; font-family:var(--font-mono); flex-wrap:wrap; gap:6px;">
             <div style="display:flex; align-items:center; gap:6px;">
               <span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:#10b981; box-shadow:0 0 6px #10b981;"></span>
-              <span style="font-size:10.5px; font-weight:bold; color:#fff; letter-spacing:1px;">PHARMAKON 3.2 TRACK INTELLIGENCE MAP</span>
+              <span style="font-size:10.5px; font-weight:bold; color:#fff; letter-spacing:1px;">PHARMAKON 3.3 TRACK INTELLIGENCE MAP</span>
               <span style="font-size:9.5px; color:#64748b;">${Number(bpmVal).toFixed(1)} BPM${tm.tempo_alt_bpm ? ` (or ${Number(tm.tempo_alt_bpm).toFixed(1)})` : ''} · 4/4 · ${tm.sections.length} SECTORS</span>
             </div>
             <div style="display:flex; gap:6px; font-size:8.5px; font-weight:bold;">
@@ -3648,7 +3648,7 @@ async function downloadReportPNG() {
   // 2. Header
   ctx.fillStyle = '#ffffff';
   ctx.font = 'bold 26px "Orbitron", sans-serif, monospace';
-  ctx.fillText('PHARMAKON 3.2 PRO', 50, 70);
+  ctx.fillText('PHARMAKON 3.3 PRO', 50, 70);
 
   ctx.fillStyle = '#f59e0b';
   ctx.font = 'bold 12px monospace';
@@ -3933,7 +3933,7 @@ async function downloadReportPNG() {
   // 6. Seal of Quality at Bottom
   ctx.fillStyle = '#64748b';
   ctx.font = '10px monospace';
-  ctx.fillText(`PHARMAKON 3.2 DSP • ${d.profile || ''} • OPEN-SOURCE MIT LICENSE • 2026 LEX GEREK`, PAD, canvas.height - 24);
+  ctx.fillText(`PHARMAKON 3.3 DSP • ${d.profile || ''} • OPEN-SOURCE MIT LICENSE • 2026 LEX GEREK`, PAD, canvas.height - 24);
 
   // Seal: only statements measured true for this file (from the diagnosis)
   ctx.fillStyle = '#10b981';

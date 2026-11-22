@@ -188,7 +188,7 @@ def get_system_info():
         except Exception:
             pass
     return {
-        "engine": "PHARMAKON 3.2 PRO DSP (Clean Chain)",
+        "engine": "PHARMAKON 3.3 PRO DSP (Clean Chain)",
         "version": ver,
         "auto_update": True,
         "author": "Lex Gerek",
@@ -239,7 +239,7 @@ async def install_update():
     if auto_updater is None:
         return {"state": "offline", "error": "Auto-updater unavailable"}
     if _legacy_updater():
-        return {"state": "manual", "error": "This build's updater is too old for signed installs. Download the full PHARMAKON 3.2 build from the GitHub release."}
+        return {"state": "manual", "error": "This build's updater is too old for signed installs. Download the full PHARMAKON build from the GitHub release."}
     return await asyncio.to_thread(auto_updater.install_verified_update, 10.0)
 
 
