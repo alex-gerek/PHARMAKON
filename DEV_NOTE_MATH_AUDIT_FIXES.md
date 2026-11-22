@@ -577,3 +577,17 @@ The mask cannot tell a voice from a centred instrument in the same band. The fix
 ## 42. No local path left in the report (open item of 32)
 
 The hidden `tm-target-path` field of the Mastering Report held the absolute output folder (user name and folder structure in a report that gets shared). It existed only for "💾 SAVE EDITED MAP". The field is gone; the report sends no path, and `/api/save-track-map` saves `track_map.json` next to the report that sent the request (its Referer, as for report audio in 32). An explicit `target_path` from older reports still works. Tests: the no-local-path test now checks the whole report, not only the audio tags; new `test_edited_map_is_saved_next_to_the_report`.
+
+## 43. Split-and-master overloaded the machine
+
+**Report (Lex, 2026-11-22):** split-and-master loads, then stops working, "as if it overloads itself", on a 16 GB machine. Measured on a 3.55 min 48 kHz track (tracemalloc peaks):
+- `split_audio_to_stems`: **7.2 GB in 3.2** and 8.3 GB after note 38 (whole-track spectrograms at 4096 and 2048 samples, several complex copies). The 3.3 kick split had been measured on 60 s excerpts only.
+- `calc_audio_metrics` (every mode, not only stems): 3.6 GB: two full-length float64 4X copies for the true peak, and eight full-length filtered copies kept alive to the end of the function.
+- stems mastering after the split: soft-clip at 4X 1.9 GB, vocal de-harsher 1.2 GB, limiter 1.0 GB (after note 40).
+
+**Fix.**
+- The split runs in 30 s blocks with 3 s of context each side; only each block's centre is kept. Block edges on multiples of 4096 samples keep every STFT frame on the whole-track grid, so the stems are **bit-identical** to a whole-track run (checked after PCM_24 export, all 4 stems). Unaligned 30 s blocks differed at −26…−34 dB: a different frame grid changes the masks everywhere. 8.3 → **2.2 GB**, 104 → 68 s.
+- `calc_audio_metrics`: block-wise 4X true peak (`_upsampled_abs_max`) and the filtered copies freed after use: 3.6 → **1.1 GB**, every metric identical.
+- Whole split-and-master on the same track before the metrics fix: 5.1 GB peak, 145 s.
+
+Open: the 4X soft-clip and the vocal de-harsher of stems mode still work on the whole track.

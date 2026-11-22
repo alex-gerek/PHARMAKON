@@ -1193,10 +1193,10 @@ def calc_audio_metrics(orig, proc, sr, params=None):
     rms_proc = float(np.sqrt(np.mean(proc**2)))
 
     # True-Peak (full-file 4x polyphase ITU-R BS.1770-5 check)
-    orig_4x = signal.resample_poly(orig, 4, 1, axis=0)
-    proc_4x = signal.resample_poly(proc, 4, 1, axis=0)
-    true_peak_orig_db = float(20.0 * np.log10(max(1e-9, np.max(np.abs(orig_4x)))))
-    true_peak_proc_db = float(20.0 * np.log10(max(1e-9, np.max(np.abs(proc_4x)))))
+    # 4X true peak measured block-wise: same reading, without two full-length float64 4X copies
+    # of the track (2.9 GB on a 3.5 min track, DEV note 43)
+    true_peak_orig_db = float(20.0 * np.log10(max(1e-9, float(np.max(_upsampled_abs_max(orig, 4))))))
+    true_peak_proc_db = float(20.0 * np.log10(max(1e-9, float(np.max(_upsampled_abs_max(proc, 4))))))
 
     # Integrated LUFS loudness
     lufs_orig = calc_integrated_lufs(orig, sr)
@@ -1209,6 +1209,7 @@ def calc_audio_metrics(orig, proc, sr, params=None):
     sub_proc = signal.filtfilt(b_sub, a_sub, proc, axis=0)
     sub_orig_rms = float(np.sqrt(np.mean(sub_orig**2)))
     sub_proc_rms = float(np.sqrt(np.mean(sub_proc**2)))
+    del sub_orig, sub_proc          # full-length copies: free them at once (DEV note 43)
     sub_reduction = float(20 * np.log10(max(1e-9, sub_orig_rms) / max(1e-9, sub_proc_rms)))
 
     # Low-end side reduction (mono solidification < 120Hz)
@@ -1220,6 +1221,7 @@ def calc_audio_metrics(orig, proc, sr, params=None):
     low_side_proc = (low_proc[:, 0] - low_proc[:, 1]) * 0.5
     low_side_orig_rms = float(np.sqrt(np.mean(low_side_orig**2)))
     low_side_proc_rms = float(np.sqrt(np.mean(low_side_proc**2)))
+    del low_side_orig, low_side_proc
     mono_side_reduction = float(20 * np.log10(max(1e-9, low_side_orig_rms) / max(1e-9, low_side_proc_rms)))
 
     # Highs stereo expansion
@@ -1230,6 +1232,7 @@ def calc_audio_metrics(orig, proc, sr, params=None):
     high_side_proc = (high_proc[:, 0] - high_proc[:, 1]) * 0.5
     high_side_orig_rms = float(np.sqrt(np.mean(high_side_orig**2)))
     high_side_proc_rms = float(np.sqrt(np.mean(high_side_proc**2)))
+    del high_orig, high_proc, high_side_orig, high_side_proc
     stereo_expansion = float(20 * np.log10(max(1e-9, high_side_proc_rms) / max(1e-9, high_side_orig_rms)))
 
     # Harsh frequency reduction
@@ -1241,6 +1244,7 @@ def calc_audio_metrics(orig, proc, sr, params=None):
     harsh_proc = signal.filtfilt(b_harsh, a_harsh, proc, axis=0)
     harsh_orig_rms = float(np.sqrt(np.mean(harsh_orig**2)))
     harsh_proc_rms = float(np.sqrt(np.mean(harsh_proc**2)))
+    del harsh_orig, harsh_proc
     harsh_reduction = float(20 * np.log10(max(1e-9, harsh_orig_rms) / max(1e-9, harsh_proc_rms)))
 
     # Compute Welch spectral curves (120 log points 20Hz - 20kHz)
@@ -4366,97 +4370,114 @@ def split_audio_to_stems(input_path, output_stems_dir=None, subtype='PCM_24'):
         output_stems_dir = os.path.join(os.path.dirname(input_path), f"{track_title}_Stems")
     os.makedirs(output_stems_dir, exist_ok=True)
 
-    # 1-3. Kick vs bass, drums vs harmonics: Harmonic-Percussive Source Separation on the
-    #      FULL band (3.3, DEV note 38). The 3.2 split sent everything below 130 Hz to the
-    #      bass, so the kick body ended in Bass.wav and Drums.wav had no kick: on Lex's Suno
-    #      tracks (Suno stems as the ruler) drums scored SI-SDR -11.5 dB, worse than using the
-    #      unseparated mix (-0.1). Here a kick is percussive at any frequency and a bass note
-    #      harmonic; a 4096-sample window gives the low end the frequency resolution for it.
-    #      Measured (7 tracks): drums -11.5 -> -4.4 dB, bass -3.8 -> -3.1, vocals -8.2 -> -8.4,
-    #      other -3.6 -> -4.0 (note 38).
-    eps = 1e-9
-    hp_n, hp_hop = 4096, 1024
-    f_hp, _, ZL_hp = signal.stft(audio[:, 0], fs=sr, nperseg=hp_n, noverlap=hp_n - hp_hop)
-    ZR_hp = signal.stft(audio[:, 1], fs=sr, nperseg=hp_n, noverlap=hp_n - hp_hop)[2]
-    Z_mid_hp = 0.5 * (ZL_hp + ZR_hp)
-    mag_hp = np.abs(Z_mid_hp)
-    harm_hp = median_filter(mag_hp, size=(1, 17))     # horizontal lines: notes, bass, pads
-    perc_hp = median_filter(mag_hp, size=(17, 1))     # vertical lines: kick, snare, hats
-    mask_p_hp = perc_hp ** 2 / (perc_hp ** 2 + harm_hp ** 2 + eps)
-    mask_h_hp = 1.0 - mask_p_hp
-    low_hp = (f_hp < STEM_BASS_HZ)[:, None]
+    def _split_block(audio):
+        orig_len = len(audio)
+        # 1-3. Kick vs bass, drums vs harmonics: Harmonic-Percussive Source Separation on the
+        #      FULL band (3.3, DEV note 38). The 3.2 split sent everything below 130 Hz to the
+        #      bass, so the kick body ended in Bass.wav and Drums.wav had no kick: on Lex's Suno
+        #      tracks (Suno stems as the ruler) drums scored SI-SDR -11.5 dB, worse than using the
+        #      unseparated mix (-0.1). Here a kick is percussive at any frequency and a bass note
+        #      harmonic; a 4096-sample window gives the low end the frequency resolution for it.
+        #      Measured (7 tracks): drums -11.5 -> -4.4 dB, bass -3.8 -> -3.1, vocals -8.2 -> -8.4,
+        #      other -3.6 -> -4.0 (note 38).
+        eps = 1e-9
+        hp_n, hp_hop = 4096, 1024
+        f_hp, _, ZL_hp = signal.stft(audio[:, 0], fs=sr, nperseg=hp_n, noverlap=hp_n - hp_hop)
+        ZR_hp = signal.stft(audio[:, 1], fs=sr, nperseg=hp_n, noverlap=hp_n - hp_hop)[2]
+        Z_mid_hp = 0.5 * (ZL_hp + ZR_hp)
+        mag_hp = np.abs(Z_mid_hp)
+        harm_hp = median_filter(mag_hp, size=(1, 17))     # horizontal lines: notes, bass, pads
+        perc_hp = median_filter(mag_hp, size=(17, 1))     # vertical lines: kick, snare, hats
+        mask_p_hp = perc_hp ** 2 / (perc_hp ** 2 + harm_hp ** 2 + eps)
+        mask_h_hp = 1.0 - mask_p_hp
+        low_hp = (f_hp < STEM_BASS_HZ)[:, None]
 
-    def _istft_hp(Z):
-        return signal.istft(Z, fs=sr, nperseg=hp_n, noverlap=hp_n - hp_hop)[1][:orig_len]
+        def _istft_hp(Z):
+            return signal.istft(Z, fs=sr, nperseg=hp_n, noverlap=hp_n - hp_hop)[1][:orig_len]
 
-    # Long window only where it is needed, below STEM_BASS_HZ: kick -> drums, notes -> bass.
-    # Above it the 3.2 short-window path is kept unchanged (a 4096 window took consonants
-    # and short syllables for hits: the vocal estimate lost 0.8-0.9 dB, note 38).
-    drums_low = np.column_stack([_istft_hp(ZL_hp * mask_p_hp * low_hp), _istft_hp(ZR_hp * mask_p_hp * low_hp)])
-    bass_mono = _istft_hp(Z_mid_hp * mask_h_hp * low_hp)            # True-Mono bass, as before
-    bass_stem = np.column_stack([bass_mono, bass_mono])
-    audio_hi = np.column_stack([_istft_hp(ZL_hp * (~low_hp)), _istft_hp(ZR_hp * (~low_hp))])
+        # Long window only where it is needed, below STEM_BASS_HZ: kick -> drums, notes -> bass.
+        # Above it the 3.2 short-window path is kept unchanged (a 4096 window took consonants
+        # and short syllables for hits: the vocal estimate lost 0.8-0.9 dB, note 38).
+        drums_low = np.column_stack([_istft_hp(ZL_hp * mask_p_hp * low_hp), _istft_hp(ZR_hp * mask_p_hp * low_hp)])
+        bass_mono = _istft_hp(Z_mid_hp * mask_h_hp * low_hp)            # True-Mono bass, as before
+        bass_stem = np.column_stack([bass_mono, bass_mono])
+        audio_hi = np.column_stack([_istft_hp(ZL_hp * (~low_hp)), _istft_hp(ZR_hp * (~low_hp))])
 
-    # Harmonic content above the bass, on the 2048-sample grid of the vocal stage below
-    nperseg = 2048
-    noverlap = 1536
-    f, t_stft, Zxx_L = signal.stft(audio_hi[:, 0], fs=sr, nperseg=nperseg, noverlap=noverlap)
-    Zxx_R = signal.stft(audio_hi[:, 1], fs=sr, nperseg=nperseg, noverlap=noverlap)[2]
-    # 3.2 short-window HPSS above the bass (2048, medians 15, power 1.8)
-    harm_L = median_filter(np.abs(Zxx_L), size=(1, 15))
-    harm_R = median_filter(np.abs(Zxx_R), size=(1, 15))
-    perc_L = median_filter(np.abs(Zxx_L), size=(15, 1))
-    perc_R = median_filter(np.abs(Zxx_R), size=(15, 1))
-    mask_h_L = 1.0 - perc_L ** 1.8 / (perc_L ** 1.8 + harm_L ** 1.8 + eps)
-    mask_h_R = 1.0 - perc_R ** 1.8 / (perc_R ** 1.8 + harm_R ** 1.8 + eps)
-    _, drums_hi_L = signal.istft(Zxx_L * (1.0 - mask_h_L), fs=sr, nperseg=nperseg, noverlap=noverlap)
-    _, drums_hi_R = signal.istft(Zxx_R * (1.0 - mask_h_R), fs=sr, nperseg=nperseg, noverlap=noverlap)
-    n_d = min(len(drums_hi_L), orig_len)
-    drums_stem = drums_low.copy()
-    drums_stem[:n_d] += np.column_stack([drums_hi_L[:n_d], drums_hi_R[:n_d]])
+        # Harmonic content above the bass, on the 2048-sample grid of the vocal stage below
+        nperseg = 2048
+        noverlap = 1536
+        f, t_stft, Zxx_L = signal.stft(audio_hi[:, 0], fs=sr, nperseg=nperseg, noverlap=noverlap)
+        Zxx_R = signal.stft(audio_hi[:, 1], fs=sr, nperseg=nperseg, noverlap=noverlap)[2]
+        # 3.2 short-window HPSS above the bass (2048, medians 15, power 1.8)
+        harm_L = median_filter(np.abs(Zxx_L), size=(1, 15))
+        harm_R = median_filter(np.abs(Zxx_R), size=(1, 15))
+        perc_L = median_filter(np.abs(Zxx_L), size=(15, 1))
+        perc_R = median_filter(np.abs(Zxx_R), size=(15, 1))
+        mask_h_L = 1.0 - perc_L ** 1.8 / (perc_L ** 1.8 + harm_L ** 1.8 + eps)
+        mask_h_R = 1.0 - perc_R ** 1.8 / (perc_R ** 1.8 + harm_R ** 1.8 + eps)
+        _, drums_hi_L = signal.istft(Zxx_L * (1.0 - mask_h_L), fs=sr, nperseg=nperseg, noverlap=noverlap)
+        _, drums_hi_R = signal.istft(Zxx_R * (1.0 - mask_h_R), fs=sr, nperseg=nperseg, noverlap=noverlap)
+        n_d = min(len(drums_hi_L), orig_len)
+        drums_stem = drums_low.copy()
+        drums_stem[:n_d] += np.column_stack([drums_hi_L[:n_d], drums_hi_R[:n_d]])
 
-    # 4. STFT-Domain Harmonic Separation (Ono HPSS + Spectral Wiener Panning Coherence)
-    Z_harm_L = Zxx_L * mask_h_L
-    Z_harm_R = Zxx_R * mask_h_R
-    Z_mid = 0.5 * (Z_harm_L + Z_harm_R)
-    Z_side = 0.5 * (Z_harm_L - Z_harm_R)
+        # 4. STFT-Domain Harmonic Separation (Ono HPSS + Spectral Wiener Panning Coherence)
+        Z_harm_L = Zxx_L * mask_h_L
+        Z_harm_R = Zxx_R * mask_h_R
+        Z_mid = 0.5 * (Z_harm_L + Z_harm_R)
+        Z_side = 0.5 * (Z_harm_L - Z_harm_R)
 
-    mag_mid = np.abs(Z_mid)
-    mag_side = np.abs(Z_side)
+        mag_mid = np.abs(Z_mid)
+        mag_side = np.abs(Z_side)
 
-    # Inter-Channel Panning Mask & Soft Wiener Masking (per time-frequency bin)
-    stereo_ratio = mag_side / (mag_mid + mag_side + 1e-7)
-    panning_mask = np.clip(1.0 - 1.8 * stereo_ratio, 0.0, 1.0)
-    wiener_gain = (mag_mid ** 2) / (mag_mid ** 2 + mag_side ** 2 + 1e-7)
-    vocal_mask = panning_mask * np.sqrt(wiener_gain)
+        # Inter-Channel Panning Mask & Soft Wiener Masking (per time-frequency bin)
+        stereo_ratio = mag_side / (mag_mid + mag_side + 1e-7)
+        panning_mask = np.clip(1.0 - 1.8 * stereo_ratio, 0.0, 1.0)
+        wiener_gain = (mag_mid ** 2) / (mag_mid ** 2 + mag_side ** 2 + 1e-7)
+        vocal_mask = panning_mask * np.sqrt(wiener_gain)
 
-    # Vocal formant band weighting (250 Hz - 4200 Hz)
-    freq_bins = f[:, None]
-    formant_weight = np.exp(-0.5 * ((np.log2(np.maximum(20.0, freq_bins) / 1400.0)) / 1.6) ** 2)
-    vocal_mask_weighted = vocal_mask * (0.30 + 0.70 * formant_weight)
+        # Vocal formant band weighting (250 Hz - 4200 Hz)
+        freq_bins = f[:, None]
+        formant_weight = np.exp(-0.5 * ((np.log2(np.maximum(20.0, freq_bins) / 1400.0)) / 1.6) ** 2)
+        vocal_mask_weighted = vocal_mask * (0.30 + 0.70 * formant_weight)
 
-    # Reconstruct Vocals
-    Z_voc = Z_mid * vocal_mask_weighted
-    _, voc_L = signal.istft(Z_voc, fs=sr, nperseg=nperseg, noverlap=noverlap)
-    vocals_stem = np.column_stack([voc_L[:orig_len], voc_L[:orig_len]])
+        # Reconstruct Vocals
+        Z_voc = Z_mid * vocal_mask_weighted
+        _, voc_L = signal.istft(Z_voc, fs=sr, nperseg=nperseg, noverlap=noverlap)
+        vocals_stem = np.column_stack([voc_L[:orig_len], voc_L[:orig_len]])
 
-    # Reconstruct Harmonics (Other)
-    _, harm_L_sig = signal.istft(Z_harm_L, fs=sr, nperseg=nperseg, noverlap=noverlap)
-    _, harm_R_sig = signal.istft(Z_harm_R, fs=sr, nperseg=nperseg, noverlap=noverlap)
-    harm_sig = np.column_stack([harm_L_sig[:orig_len], harm_R_sig[:orig_len]])
-    other_stem = harm_sig - vocals_stem * 0.85
+        # Reconstruct Harmonics (Other)
+        _, harm_L_sig = signal.istft(Z_harm_L, fs=sr, nperseg=nperseg, noverlap=noverlap)
+        _, harm_R_sig = signal.istft(Z_harm_R, fs=sr, nperseg=nperseg, noverlap=noverlap)
+        harm_sig = np.column_stack([harm_L_sig[:orig_len], harm_R_sig[:orig_len]])
+        other_stem = harm_sig - vocals_stem * 0.85
 
-    # Pad or trim to orig_len
-    def _fit(arr):
-        if len(arr) < orig_len:
-            pad = np.zeros((orig_len - len(arr), 2), dtype=arr.dtype)
-            return np.vstack([arr, pad])
-        return arr[:orig_len]
+        # Pad or trim to orig_len
+        def _fit(arr):
+            if len(arr) < orig_len:
+                pad = np.zeros((orig_len - len(arr), 2), dtype=arr.dtype)
+                return np.vstack([arr, pad])
+            return arr[:orig_len]
 
-    drums_stem = _fit(drums_stem)
-    bass_stem = _fit(bass_stem)
-    vocals_stem = _fit(vocals_stem)
-    other_stem = _fit(other_stem)
+        drums_stem = _fit(drums_stem)
+        bass_stem = _fit(bass_stem)
+        vocals_stem = _fit(vocals_stem)
+        other_stem = _fit(other_stem)
+        return drums_stem, bass_stem, vocals_stem, other_stem
+
+    # Memory: the masks are local in time (the STFT medians span < 0.5 s), so the track is
+    # split in 30 s blocks with 3 s of context on each side and only each block's centre
+    # is kept. A whole 3.5 min track held 7-8 GB of spectrograms at once (DEV note 43).
+    # block edges on a multiple of 4096 samples keep every STFT frame (hops 1024 and 512) on
+    # the same grid as a whole-track run
+    blk, ctx = int(30 * sr) // 4096 * 4096, int(3 * sr) // 4096 * 4096
+    outs = [np.zeros((orig_len, 2)) for _ in range(4)]
+    for a in range(0, orig_len, blk):
+        b = min(orig_len, a + blk)
+        lo, hi = max(0, a - ctx), min(orig_len, b + ctx)
+        for o, part in zip(outs, _split_block(audio[lo:hi])):
+            o[a:b] = part[a - lo:b - lo]
+    drums_stem, bass_stem, vocals_stem, other_stem = outs
 
     drums_path = os.path.join(output_stems_dir, "Drums.wav")
     bass_path = os.path.join(output_stems_dir, "Bass.wav")
