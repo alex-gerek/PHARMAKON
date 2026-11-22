@@ -503,3 +503,14 @@ Theil–Sen fitted on all 36 runs; it removes the drift completely, least square
 **Fix.** `_bar_features` steps back by `onset_latency_s` before measuring, so every bar feature is the 3.2 one; only the reported times are corrected. Prominence stays 0.12.
 
 **Result.** Main set: hr3 0.99, labels 0.986 (3.2: 0.99 / 0.987); held-out: hr0.5 0.906, hr3 0.938, labels 0.919 (3.2: 0.913 / 0.938 / 0.918). Same boundaries as 3.2. The ±1-bar F drops (main 0.99 → 0.97, held-out 0.938 → 0.906) are a metric edge, not a change: three boundaries that 3.2 already places one bar late (e.g. edm_short_intro BUILDUP at 114.9 s vs 113.2 s) were 1 bar − 40 ms off on the early grid and are now 1 bar + 1 ms off, just outside the window. The one-bar-late boundary on risers/build-ups is a real, older weakness: next step.
+
+## 36. Build-up boundaries one bar late: refine to the sharpest bar change
+
+**Problem.** Section novelty compares 4-bar blocks (Foote kernel and block means). On a ramp (a riser and snare roll entering a build-up) the contrast keeps growing for a bar after the change starts, so the novelty peak, and the boundary, landed one bar late: edm_short_intro BUILDUP at 114.9 s vs 113.2 s; edm_10 and edm_12 on the held-out set likewise.
+
+**Fix.** After the novelty peaks are chosen, each boundary may move to a neighbouring bar line when the single-bar feature step there (distance between consecutive bar vectors, same features as the novelty) is ≥ 2× the step at the peak; on a tie the earlier bar wins. The ratio was set before the run: on the diagnosed case the steps were 3.84 (true bar) vs 0.69 (peak bar); on the six correct boundaries of that track the peak bar already had the largest step (3.55–5.91 vs ≤ 4.3 neighbours). Breakdown edges measured from the low-end run are not moved.
+
+**Result** (3.2 → after note 35 → now):
+- main set: hr0.5 0.97 → 0.97 → **0.99**, bar F 0.99 → 0.97 → **0.99**, labels 0.987 → 0.986 → **0.987**;
+- held-out (20 tracks): hr0.5 0.913 → 0.906 → **0.938**, hr3 0.938 → 0.938 → 0.938, bar F 0.938 → 0.906 → **0.938**, labels 0.918 → 0.919 → **0.921**.
+No track is worse than in 3.2; edm_short_intro, edm_10 and edm_12 are now exact. Test: `test_buildup_boundary_on_its_own_bar`.

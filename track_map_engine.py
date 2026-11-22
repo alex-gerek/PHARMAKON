@@ -502,6 +502,7 @@ def compute_section_chroma(mix_mono: np.ndarray, sr: int, boundaries: list) -> n
 SEC_FEAT_BANDS = ((20.0, 100.0), (100.0, 300.0), (300.0, 2000.0), (2000.0, 6000.0), (6000.0, 16000.0))
 SEC_NOVELTY_PROMINENCE = 0.12   # middle of the 0.08-0.12 plateau where boundary F is flat
 SEC_MIN_BARS = 4
+SEC_REFINE_RATIO = 2.0          # a neighbour bar's feature step must be >= 2x to move a boundary
 SEC_DENSITY_WEIGHT = 1.0        # weight of the onset-density features in the bar distance
 SEC_MIN_TRACK_BARS = 8          # shorter audio is reported as one CLIP, not segmented
 SEC_RUN_DB = 8.0                # breakdown run: low end this far below the track median ...
@@ -697,14 +698,19 @@ def _bar_features(mono: np.ndarray, sr: int, down: np.ndarray) -> list:
     return feats
 
 
+def _bar_matrix(feats: list) -> np.ndarray:
+    """Per-bar feature vectors: standardised band levels and onset density, scaled chroma."""
+    z = lambda X: (X - X.mean(axis=0)) / (X.std(axis=0) + 1e-6)
+    return np.hstack([z(np.array([f["band"] for f in feats])),
+                      SEC_DENSITY_WEIGHT * z(np.array([f["dens"] for f in feats])),
+                      np.array([f["chroma"] for f in feats]) * np.sqrt(12.0)])
+
+
 def _bar_novelty(feats: list, half: int = 4) -> np.ndarray:
     """Max of (a) Foote checkerboard novelty on the bar self-similarity matrix and (b) block
     novelty: mean features of the 4 bars before vs after each bar line (a chord loop averages
     out inside a section, so only a change of section remains). Both symmetric: no time shift."""
-    z = lambda X: (X - X.mean(axis=0)) / (X.std(axis=0) + 1e-6)
-    X = np.hstack([z(np.array([f["band"] for f in feats])),
-                   SEC_DENSITY_WEIGHT * z(np.array([f["dens"] for f in feats])),
-                   np.array([f["chroma"] for f in feats]) * np.sqrt(12.0)])
+    X = _bar_matrix(feats)
     n = len(X)
     d = np.sqrt(((X[:, None, :] - X[None, :, :]) ** 2).sum(-1))
     S = np.exp(-(d / (np.median(d) + 1e-9)) ** 2)
@@ -758,6 +764,21 @@ def _pick_boundaries(nov: np.ndarray, feats: list) -> list:
     for i in sorted(pk, key=lambda i: -nov[i]):
         if 2 <= i <= n - 2 and all(abs(i - c) >= SEC_MIN_BARS for c in chosen) and _real_change(feats, i):
             chosen.append(int(i))
+    # Refine to the sharpest bar change (3.3, DEV note 36). Novelty compares 4-bar blocks,
+    # so on a ramp (riser, build-up) it peaks a bar after the change starts. Move a boundary
+    # to a neighbouring bar line when the single-bar feature step there is clearly larger;
+    # on a tie the earlier bar wins (a section starts where its change first appears).
+    X = _bar_matrix(feats)
+    step = np.r_[0.0, np.linalg.norm(np.diff(X, axis=0), axis=1)]
+    refined = []
+    for c in chosen:
+        nb = [j for j in (c - 1, c + 1) if 2 <= j <= n - 2 and step[j] >= SEC_REFINE_RATIO * step[c]]
+        best = max(nb, key=lambda j: (step[j], -j)) if nb else c   # tie: the earlier bar
+        if all(abs(best - r) >= SEC_MIN_BARS for r in refined):
+            refined.append(best)
+        else:
+            refined.append(c)
+    chosen = refined
     # breakdown edges measured directly: >= SEC_RUN_BARS bars with the low end SEC_RUN_DB
     # below the track median (replaces a novelty boundary within 2 bars)
     low = np.array([f["band"][0] for f in feats])

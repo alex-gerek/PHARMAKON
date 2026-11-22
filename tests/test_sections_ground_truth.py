@@ -36,3 +36,12 @@ def test_no_generic_section_labels():
     m, _ = _case("pop_fast")
     assert all(s["tag"] != "SECTION" for s in m["sections"])
     assert all(0.0 <= s["boundary_strength"] <= 1.0 and "evidence" in s for s in m["sections"])
+
+
+def test_buildup_boundary_on_its_own_bar():
+    # A riser ramps up, so 4-bar novelty peaked one bar late (114.9 s vs 113.2 s); the
+    # boundary is now refined to the sharpest single-bar change (DEV note 36).
+    m, r = _case("edm_short_intro")
+    assert r["hr05"] == 1.0 and r["bar_f"] == 1.0, r
+    starts = [s["start_s"] for s in m["sections"]]
+    assert min(abs(t - 113.2) for t in starts) < 0.1, starts
