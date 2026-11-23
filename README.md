@@ -2,7 +2,7 @@
   <img src="gui/static/studio_icon.png" width="130" height="130" alt="PHARMAKON Logo">
 </p>
 
-# PHARMAKON 3.2
+# PHARMAKON 3.3
 ## Studio-Grade Audio Antidote, AI De-Harshing, Limiter-Aware Sub-Sync & True-Peak Mastering Console
 ### Created by Lex Gerek // Abbey Road 1974 × Blade Runner 2049
 
@@ -80,7 +80,7 @@ Fusing **Abbey Road 1974** analog tape warmth with **Blade Runner 2049** telemet
 
 ---
 
-## 🌿 Clean Chain — the default sound profile (PHARMAKON 3.2)
+## 🌿 Clean Chain — the default sound profile (since PHARMAKON 3.2)
 
 **Goal: music you can listen to for hours without fatigue.** PHARMAKON removes the *measurable* defects that make long listening tiring, and leaves matters of taste — tonal balance, character, the author's intent — as close to the original as possible.
 
