@@ -4347,11 +4347,93 @@ def process_stems_folder(target_folder, params=None, open_folder=True):
 # AUTONOMOUS STEM SEPARATION & DEEP STEM MASTERING
 # -----------------------------------------------------------------------------
 
+STEM_KICK_GATE_S = 0.12    # after each kick: low-end energy above the bass floor goes to Drums
+STEM_KICK_PRE_S = 0.01     # the gate opens this long before the detected kick onset
+STEM_KICK_FLOOR_S = 0.5    # half-width of the context around a hit that gives the bass floor
+
+
+def _kick_part_of_bass(bass, sr, onsets):
+    """The kick that the low-band HPSS left in the bass bus (mono in, mono out).
+
+    The 0.4 s harmonic median of the split takes a kick body or an 808 tail for a held
+    note, so on Lex's Suno tracks two thirds of the drum energy ended in Bass.wav
+    (measured against the Suno stems). Two passes, both own maths:
+    1. Kick gate: in [onset - STEM_KICK_PRE_S, onset + STEM_KICK_GATE_S] every bin keeps
+       only what is above the bass floor (median power in the STEM_KICK_FLOOR_S around the
+       hit, outside the gate); the excess is the kick (power subtraction).
+    2. What is left is split once more into hits and held notes with fine frequency
+       resolution (8192 / hop 512, medians 17 frames in time and 9 bins in frequency); the
+       hits are kick as well.
+    Measured against Suno stems (60 s excerpts): drums -2.85 -> +3.48 dB and bass
+    -2.33 -> +0.85 dB on dev (both better on 10 of 10 songs), extra 6 of 6, test 2 of 2.
+    """
+    from scipy.ndimage import median_filter
+    bass = np.asarray(bass, dtype=np.float32)
+    n_len = len(bass)
+    n, hop = 4096, 256
+    _, t, Z = signal.stft(bass, fs=sr, nperseg=n, noverlap=n - hop)
+    A2 = np.abs(Z) ** 2
+    ft = t * sr
+    M = np.zeros(A2.shape, dtype=np.float32)
+    for o in onsets:
+        inside = (ft >= o - STEM_KICK_PRE_S * sr) & (ft <= o + STEM_KICK_GATE_S * sr)
+        ctx = (np.abs(ft - (o + STEM_KICK_GATE_S * sr / 2)) <= STEM_KICK_FLOOR_S * sr) & ~inside
+        if inside.sum() == 0 or ctx.sum() < 3:
+            continue
+        floor = np.median(A2[:, ctx], axis=1, keepdims=True)
+        sub = np.clip(A2[:, inside] - floor, 0, None) / (A2[:, inside] + 1e-20)
+        M[:, inside] = np.maximum(M[:, inside], sub)
+    k1 = signal.istft(Z * np.sqrt(M), fs=sr, nperseg=n, noverlap=n - hop)[1]
+    gate = np.zeros(n_len, dtype=np.float32)
+    gate[:min(n_len, len(k1))] = k1[:n_len]
+    rest = bass - gate
+    n2, hop2 = 8192, 512
+    _, _, Z2 = signal.stft(rest, fs=sr, nperseg=n2, noverlap=n2 - hop2)
+    A = np.abs(Z2)
+    H = median_filter(A, size=(1, 17))
+    P = median_filter(A, size=(9, 1))
+    m = P ** 2 / (P ** 2 + H ** 2 + 1e-12)
+    k2 = signal.istft(Z2 * m, fs=sr, nperseg=n2, noverlap=n2 - hop2)[1]
+    out = gate.copy()
+    out[:min(n_len, len(k2))] += k2[:n_len]
+    return out
+
+
+def _move_kick_to_drums(drums_stem, bass_stem, audio, sr):
+    """Takes the kick out of the bass bus and adds it to the drums.
+    Kick onsets come from the Track Map detector on the whole mix; the work runs in 30 s
+    blocks with 1 s of context (memory, as the split itself). Drums + Bass keep their sum."""
+    mono = np.mean(audio, axis=1)
+    try:
+        onsets = np.asarray(_track_map_module().detect_kick_onsets(mono, sr), dtype=np.int64)
+    except Exception as e:
+        logger.warning("kick-to-drums skipped: kick detector unavailable (%s)", e)
+        return drums_stem, bass_stem
+    if onsets.size == 0:
+        return drums_stem, bass_stem
+    n = len(mono)
+    blk, ctx = int(30 * sr), int(1 * sr)
+    kick = np.zeros(n, dtype=np.float32)
+    bass_mono = bass_stem[:, 0]
+    for a in range(0, n, blk):
+        b = min(n, a + blk)
+        lo, hi = max(0, a - ctx), min(n, b + ctx)
+        on = onsets[(onsets >= lo) & (onsets < hi)] - lo
+        if on.size == 0:
+            continue
+        part = _kick_part_of_bass(bass_mono[lo:hi], sr, on)
+        kick[a:b] = part[a - lo:b - lo]
+    drums_stem = drums_stem + kick[:, None]
+    bass_stem = bass_stem - kick[:, None]
+    return drums_stem, bass_stem
+
+
 def split_audio_to_stems(input_path, output_stems_dir=None, subtype='PCM_24'):
     """
     Autonomous Stem Separation:
     Decomposes single mixed stereo track into 4 distinct stems:
-    - Drums.wav: percussive transients, drum punch, snare attack
+    - Drums.wav: percussive transients, drum punch, snare attack, and the kick body that the
+      low-band separation left in the bass (kick gate + fine HPSS, _move_kick_to_drums)
     - Bass.wav: harmonic (sustained) content below 150 Hz, mono-summed; the kick stays in Drums
     - Vocals.wav: center mid-band vocal formant isolation (280 Hz - 5 kHz)
     - Other.wav: stereo synth pads, guitars, air and atmospheric ambience
@@ -4478,6 +4560,7 @@ def split_audio_to_stems(input_path, output_stems_dir=None, subtype='PCM_24'):
         for o, part in zip(outs, _split_block(audio[lo:hi])):
             o[a:b] = part[a - lo:b - lo]
     drums_stem, bass_stem, vocals_stem, other_stem = outs
+    drums_stem, bass_stem = _move_kick_to_drums(drums_stem, bass_stem, audio, sr)
 
     drums_path = os.path.join(output_stems_dir, "Drums.wav")
     bass_path = os.path.join(output_stems_dir, "Bass.wav")
