@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="https://github.com/alex-gerek/PHARMAKON/releases/download/v3.3.1/PHARMAKON_v3.3.1_Windows_Portable.zip">
-    <img src="assets/badges/btn_download_v3.svg?v=3.3.1" alt="Download Windows Portable v3.3.1">
+    <img src="https://raw.githubusercontent.com/alex-gerek/PHARMAKON/5512a8e23d4a9c49e97078250f0d9b6137e10439/assets/badges/btn_download_v3.svg" alt="Download Windows Portable v3.3.1">
   </a>
   &nbsp;
   <a href="https://github.com/alex-gerek/PHARMAKON/releases/download/v2.0.3/PHARMAKON_v2.0.3_Windows_Portable.zip">
@@ -25,7 +25,7 @@
 </p>
 
 <p align="center">
-  <img src="assets/badges/badge_version_3.svg?v=3.3.1" alt="Version 3.3.1">
+  <img src="https://raw.githubusercontent.com/alex-gerek/PHARMAKON/5512a8e23d4a9c49e97078250f0d9b6137e10439/assets/badges/badge_version_3.svg" alt="Version 3.3.1">
   <img src="assets/badges/badge_track_map.svg" alt="Track Map">
   <img src="assets/badges/badge_sub_sync.svg" alt="Sub-Sync">
   <img src="assets/badges/badge_true_peak.svg" alt="True Peak Guard">
