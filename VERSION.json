@@ -1,10 +1,10 @@
 {
   "app": "PHARMAKON",
-  "version": "3.3.0",
-  "build_date": "2026-11-22",
+  "version": "3.3.1",
+  "build_date": "2026-11-24",
   "channel": "production",
-  "release_url": "https://github.com/alex-gerek/PHARMAKON/releases/tag/v3.3.0",
-  "notes": "PHARMAKON 3.3: Suno stem folders use every stem; own split keeps the kick in Drums; Track Map beat grid fitted to the beats (Theil-Sen), on the beat (latency fix), downbeat backbeat rule, build-up boundaries on their own bar; section player; precise 16X true-peak pass; limiter memory 2.3 -> 1.0 GB; no local paths in reports.",
+  "release_url": "https://github.com/alex-gerek/PHARMAKON/releases/tag/v3.3.1",
+  "notes": "PHARMAKON 3.3.1: split-and-master moves the kick from the Bass stem to Drums (drums -2.85 -> +3.49 dB, bass -2.33 -> +0.86 dB SI-SDR on 10 tracks); no false Infrasonic Energy warning on bass-heavy tracks (energy strictly below the cut-off); the previous track's diagnosis is cleared when a run starts.",
   "patch_files": [
     "remaster_engine.py",
     "gui/server.py",
@@ -13,12 +13,12 @@
     "gui/static/style.css",
     "track_map_engine.py"
   ],
-  "release_tag": "v3.3.0",
+  "release_tag": "v3.3.1",
   "files": {
-    "remaster_engine.py": "aa7591d9561691c37273c11fbf065d1924dc1d48a33a28e13ca17ba76ba9ef87",
+    "remaster_engine.py": "4ab354242e1118cfcceb348d820d93a04e6c1a1cf232e8503cbe8186e53baee3",
     "gui/server.py": "eeadb8cedfb25e265dd40add37848a48d385025bde8e561c55bb24faf4f63ffb",
     "gui/static/index.html": "9bc9d173317597b741ca2575f34a826a05e9e1171e21334de144fa5fb9513a11",
-    "gui/static/app.js": "61cf751ca0278d8e6c5c9813aa75494bcc0669017727f3d3357bfafd76f54ff6",
+    "gui/static/app.js": "abc4be6500e4c356ea39ac784e5a6a30736777413a5c2ecd5b98eb739152d0f9",
     "gui/static/style.css": "7589d68b682f6ed5b30ce5838d54cbbce931ea0853c52cf410a61bab4b8157dc",
     "track_map_engine.py": "75c2670000d284a3ffb9ef80f7cd91296015bd48b6d2644a2eff450936043b2e"
   }
