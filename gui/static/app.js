@@ -1584,6 +1584,7 @@ async function runSplitAndStemMaster() {
   const btnSplit = document.getElementById('btnSplitAndMaster');
   if (btnProcess) btnProcess.disabled = true;
   if (btnSplit) btnSplit.disabled = true;
+  resetDiagnosisView(String(currentTarget).split(/[\\/]/).pop());
 
   const startTime = performance.now();
   updateStatus("🧬 DEEP STEM ANTIDOTE [0.0s]: Extracting Drums, Bass, Vocals & Synths via HPSS...");
@@ -1679,6 +1680,7 @@ async function runPharmakonProcess(isInitial = false) {
 
   const btn = document.getElementById('btnProcess');
   btn.disabled = true;
+  resetDiagnosisView(String(currentTarget).split(/[\\/]/).pop());
   const procStartMs = performance.now();
   updateStatus("PROCESSING [0.0s]: Running 4X polyphase filters, de-harshing & True-Peak audit...");
   const procTimer = setInterval(() => {
@@ -2038,6 +2040,20 @@ function renderDiagnosis(d) {
   if (procTag) procTag.textContent = (d.profile || 'PHARMAKON').toUpperCase();
   const procInfo = document.getElementById('hudProcInfo');
   if (procInfo && trt.true_peak) procInfo.textContent = `TRUE-PEAK: ${Number(trt.true_peak.value).toFixed(2)} dBTP`;
+}
+
+// Clear the previous track's diagnosis while a new run measures (the old numbers stayed on
+// screen for the whole run and looked like the result of the new file).
+function resetDiagnosisView(name) {
+  const what = name ? ` ${name}` : '';
+  const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+  set('diagSourceSummary', `measuring${what}...`);
+  set('diagTreatSummary', 'results appear after processing');
+  ['diagSourceList', 'diagTreatList'].forEach(id => { const ul = document.getElementById(id); if (ul) ul.innerHTML = ''; });
+  set('hudRawTag', 'MEASURING...');
+  set('hudRawInfo', 'TRUE-PEAK: -- dBTP');
+  set('hudProcTag', 'PROCESSING...');
+  set('hudProcInfo', 'TRUE-PEAK: -- dBTP');
 }
 
 function setMode(mode) {

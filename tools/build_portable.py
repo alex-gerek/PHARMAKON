@@ -21,7 +21,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 PORTABLE = ROOT / "tools" / "portable"          # launch scripts for the built app (not the dev ones)
 DOCS = ["AI_AUDIO_RESTORATION_WORKFLOW.md", "DEV_NOTE_MATH_AUDIT_FIXES.md", "PHARMAKON_3_ARCHITECTURAL_GUIDE.md",
-        "README.md", "RELEASE_NOTES_3.2.0.md", "RELEASE_NOTES_3.3.0.md", "STEM_MASTERING_GUIDE.md"]
+        "README.md", "RELEASE_NOTES_3.2.0.md", "RELEASE_NOTES_3.3.0.md", "RELEASE_NOTES_3.3.1.md",
+        "STEM_MASTERING_GUIDE.md"]
 
 
 def run(cmd):

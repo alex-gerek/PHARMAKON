@@ -591,3 +591,25 @@ The hidden `tm-target-path` field of the Mastering Report held the absolute outp
 - Whole split-and-master on the same track before the metrics fix: 5.1 GB peak, 145 s.
 
 Open: the 4X soft-clip and the vocal de-harsher of stems mode still work on the whole track.
+
+## 44. Split: the kick moves from the Bass stem to Drums
+
+**Measured first.** With the Suno stems as the ruler, a leakage matrix of the 3.3 split (16 tracks, 60 s excerpts; complex STFT of each estimated stem regressed on the STFTs of the true sources in 32 bands) showed two thirds of the drum energy in Bass.wav: the 0.4 s harmonic median of the low-band HPSS (note 38) takes a kick body or an 808 tail for a held note. Drums scored −2.06 dB SI-SDR, worse than the unseparated mix (−0.75 dB).
+
+**Fix (commit 3204107).** After the split, the bass bus gives its kick back:
+1. Kick gate: kick onsets from the Track Map detector on the mix; in [onset − 10 ms, onset + 120 ms] every bin keeps only what is above the bass floor (median power in the 0.5 s around the hit), the rest is kick (power subtraction).
+2. What is left is split once more into hits and held notes with fine frequency resolution (8192 / hop 512, medians 17 × 9); the hits go to Drums as well.
+Drums + Bass keep their sum; Vocals and Other are unchanged; 30 s blocks as the split.
+
+**Measured (SI-SDR, 60 s excerpts):** 10 tracks: drums −2.85 → +3.49 dB, bass −2.33 → +0.86 dB, both better on every track; 6 more tracks: drums −0.74 → +3.14 dB, bass −0.60 → +1.04 dB, all 6; 2 held-out tracks (method frozen first): drums +5.6 / +6.7 dB, bass +3.6 / +1.9 dB. Gate lengths of 250-400 ms scored higher on average but took long bass notes on 2-3 tracks. Listened by Lex: fuller kick in Drums, no kick or vocal left in Bass, no clicks. Still heard: a whispered backing vocal in Drums (noise without pitch goes to the percussive part).
+
+Tests: `tests/test_kick_to_drums.py` (synthetic kick + held bass note: the kick goes to Drums and both stems get closer to the truth; Drums + Bass keep their sum; no kick, no change).
+
+## 45. Source diagnosis: infrasonic false alarm and a stale display
+
+**Report (Lex, 2026-11-24):** loading an already mastered track still showed defects.
+
+1. **Infrasonic Energy measured the sub-bass.** The check low-passed the mono mix at the sub cut-off (4th order, zero-phase) and took its power. That filter still passes 32-60 Hz, which on modern tracks is hundreds of times stronger than real infrasound. Example (Don't ruin it, PHARMAKON master after the infrasonic high-pass): reported −25.8 dB below 32 Hz (warning), actual −47 dB (exact FFT). Fix: `_energy_below_db`, a Welch power spectrum with a 4 s Blackman-Harris window (< 0.25 Hz bins), energy strictly below the cut-off over the total. Same master: −39 dB (OK); its source: −28 dB (warning, real rumble; the old reading was −23 dB, a defect). Thresholds unchanged (−35 / −25 dB). The Infrasonic Cut line of the treatment uses the same measure. Tests: `tests/test_diagnosis_infrasonic.py` (45 Hz sub tone with a 20 Hz rumble 50 dB down reads −50 ± 3 dB, the old measure gave about −22; a real rumble at −10 dB is still found; a clean sub reads OK).
+2. **The previous track's diagnosis stayed on screen during a run.** Processing a new file did not clear the SOURCE / TREATMENT lines or the scope labels, so for the whole run (25-95 s) the old numbers looked like the new file's result. Now both run buttons clear them first ("measuring <file>…", "TRUE-PEAK: -- dBTP").
+
+Checked in the app (Lex): the master now reads "no defects measured", its source "0 defect(s), 1 warning(s) measured - Infrasonic Energy" (−33.4 dB below 25 Hz → −45.6 dB after the cut).

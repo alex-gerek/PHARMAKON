@@ -1382,6 +1382,24 @@ DIAG_INFRA_ISSUE_DB = -25.0
 DIAG_RES_ISSUE_DB = 3.0           # persistent resonance height (detector v2)
 
 
+def _energy_below_db(mono, sr, f_cut):
+    """Energy below f_cut relative to the total (dB), from a Welch power spectrum with < 0.25 Hz
+    bins (4 s window), so the band edge is sharp.
+
+    The earlier measure low-passed the signal (4th order, zero-phase) and took its power. That
+    filter still passes the 32-60 Hz sub-bass, which on modern tracks is hundreds of times
+    stronger than real infrasound, so nearly every bass-heavy track, including PHARMAKON's own
+    masters after the infrasonic high-pass, was reported as having infrasonic energy
+    (e.g. -27.5 dB reported vs -47 dB actually below 32 Hz)."""
+    x = np.asarray(mono, dtype=np.float64)
+    if len(x) < 16:
+        return -200.0
+    nper = int(min(len(x), 2 ** int(np.ceil(np.log2(4 * sr)))))     # >= 4 s window: < 0.25 Hz bins
+    f, pxx = signal.welch(x, fs=sr, window='blackmanharris', nperseg=nper, noverlap=nper // 2)   # low side lobes
+    tot = float(np.sum(pxx)) + 1e-30
+    return float(10 * np.log10(float(np.sum(pxx[f < f_cut])) / tot + 1e-20))
+
+
 def _diag_item(key, label, status, text, value=None):
     return {"key": key, "label": label, "status": status, "text": text, "value": value}
 
@@ -1468,8 +1486,7 @@ def build_spectral_diagnosis(orig, proc, sr, metrics, params=None, extra=None):
     # --- SOURCE: infrasonic energy
     sub_cut = float(p.get('sub_cutoff', 32.0))
     mo = np.mean(orig, axis=1)
-    sos_lo = signal.butter(4, min(sub_cut, 0.45 * sr), btype='low', fs=sr, output='sos')
-    infra_db = float(10 * np.log10((np.mean(signal.sosfiltfilt(sos_lo, mo) ** 2) + 1e-20) / (np.mean(mo ** 2) + 1e-20)))
+    infra_db = _energy_below_db(mo, sr, sub_cut)
     if infra_db > DIAG_INFRA_ISSUE_DB:
         st = 'issue'
     elif infra_db > DIAG_INFRA_WARN_DB:
@@ -1527,7 +1544,7 @@ def build_spectral_diagnosis(orig, proc, sr, metrics, params=None, extra=None):
 
     # --- TREATMENT: infrasonic cut
     mp = np.mean(proc, axis=1)
-    infra_after = float(10 * np.log10((np.mean(signal.sosfiltfilt(sos_lo, mp) ** 2) + 1e-20) / (np.mean(mp ** 2) + 1e-20)))
+    infra_after = _energy_below_db(mp, sr, sub_cut)
     trt.append(_diag_item('infrasonic', 'Infrasonic Cut', 'ok' if infra_after <= DIAG_INFRA_WARN_DB else 'warn',
                           f"Energy below {sub_cut:.0f} Hz: {infra_db:.1f} -> {infra_after:.1f} dB of total", infra_after))
 
