@@ -613,3 +613,15 @@ Tests: `tests/test_kick_to_drums.py` (synthetic kick + held bass note: the kick 
 2. **The previous track's diagnosis stayed on screen during a run.** Processing a new file did not clear the SOURCE / TREATMENT lines or the scope labels, so for the whole run (25-95 s) the old numbers looked like the new file's result. Now both run buttons clear them first ("measuring <file>…", "TRUE-PEAK: -- dBTP").
 
 Checked in the app (Lex): the master now reads "no defects measured", its source "0 defect(s), 1 warning(s) measured - Infrasonic Energy" (−33.4 dB below 25 Hz → −45.6 dB after the cut).
+
+## 46. Kick gate: bass notes stay in Bass, the 808 still goes to Drums
+
+**Measured first.** After note 44 the kick gate also moved about a quarter of the 60-150 Hz bass into Drums: when a bass note starts on a hit it is not yet in the floor around the hit, so its harmonics count as kick. Protecting the bins on the bass note's harmonics inside the gate helps with the true bass pitch (oracle from the Suno bass stem, 10 tracks): drums +0.23, bass +0.51 dB. With a pitch tracked on the Bass bus it made things worse (up to −2 dB): on the bus the tracked pitch is the true bass in 64 % of the pitched frames, the pitched 808 / tom tone of the drum stems in 13 % (up to 33 % on some tracks) and neither in 22 %, so the 808 was protected too. The kick itself is not tuned onto the bass note: in the gate windows the drums put 9 % of their 30-200 Hz energy on the bass note's comb, which covers 16 % of the cells.
+
+**Bass note or 808?** On the bus, per pitched frame of the note: the level of its harmonics over the last 120 ms (808 about −100 dB/s, bass about +4 dB/s; AUC 0.95), the pitch slope over the last 60 ms (808 about −2100 cents/s; AUC 0.89), purity f0 vs 2f0..5f0 (808 24 dB purer; AUC 0.82). A boosted-tree detector on 8 such features separates them at AUC 0.98 (leave one track out); the product uses the readable rule **decay > −30 dB/s and glide > −600 cents/s** (keeps 76 % of the bass frames, 2.4 % of the 808 frames).
+
+**Fix.** `_bass_pitch_track` (own YIN at sr / 10, 30-300 Hz), `_bass_notes_only` (the rule), `_bass_comb`; in `_kick_part_of_bass` the gate's kick mask is multiplied by 1 − comb on the kept bass notes (harmonics up to 400 Hz, 3 % wide).
+
+**Measured (SI-SDR, 60 s excerpts, change vs note 44):** 10 tracks drums +0.24 / bass +0.41 dB, better on every track (worst +0.08 / +0.08); 6 more tracks +0.18 / +0.39, all 6. Whole split vs the 3.3 split: drums −2.85 → +3.73 dB, bass −2.33 → +1.26 dB (note 44: +3.49 / +0.86); 6 more tracks drums +3.32, bass +1.43. Held-out tracks (rule frozen first): The Glass Architect drums +8.2 dB (note 44: +7.7), bass −1.4 (−2.6); Black Sea drums +3.7 (+3.7), bass −9.5 (−9.7). Vocals and Other unchanged. Listened by Lex: no clicks; the differences are small by ear in a quiet bass stem. Still heard, unchanged: spoken words (no pitch) land in Drums.
+
+Tests: `tests/test_bass_note_protection.py` (a steady bass note counts as bass, a decaying sliding 808 does not; with a new note on every hit the Bass stem gets closer to the bass and the kick part does not get worse).

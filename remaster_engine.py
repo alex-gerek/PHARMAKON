@@ -4367,6 +4367,118 @@ def process_stems_folder(target_folder, params=None, open_folder=True):
 STEM_KICK_GATE_S = 0.12    # after each kick: low-end energy above the bass floor goes to Drums
 STEM_KICK_PRE_S = 0.01     # the gate opens this long before the detected kick onset
 STEM_KICK_FLOOR_S = 0.5    # half-width of the context around a hit that gives the bass floor
+STEM_BASS_DECAY_MIN = -30.0    # dB/s: a note that fades faster than this is an 808 / tom, not a bass note
+STEM_BASS_GLIDE_MIN = -600.0   # cents/s: a pitch falling faster than this is an 808 sweep
+STEM_BASS_COMB_WIDTH = 0.03    # relative width of the protected bins around each bass harmonic
+STEM_BASS_COMB_FMAX = 400.0    # Hz: harmonics of the bass note protected up to here
+
+
+def _bass_pitch_track(bass, sr):
+    """Own YIN on the bass bus, resampled to sr / 10 (frame 512 = 116 ms at 44.1 kHz, hop 51),
+    30-300 Hz, CMNDF threshold 0.2; frames more than 30 dB below the loud level are unpitched.
+    Returns (frame times in s, f0 in Hz with 0 = no pitch)."""
+    y = signal.resample_poly(np.asarray(bass, dtype=np.float64), 1, 10)
+    sr2 = sr / 10.0
+    N, HOP, thr = 512, 51, 0.2
+    tau_min, tau_max = int(sr2 / 300.0), int(sr2 / 30.0)
+    nfr = 1 + (len(y) - N) // HOP
+    if nfr <= 0:
+        return np.zeros(0), np.zeros(0)
+    idx = np.arange(N)[None, :] + HOP * np.arange(nfr)[:, None]
+    fr = y[idx]
+    W = N // 2
+    F = np.fft.rfft(fr, 2 * N, axis=1)
+    acf = np.fft.irfft(F * np.conj(np.fft.rfft(fr[:, :W], 2 * N, axis=1)), axis=1)[:, :tau_max + 1]
+    e = np.cumsum(fr ** 2, axis=1)
+    e0 = e[:, W - 1]
+    et = np.stack([e[:, t + W - 1] - (e[:, t - 1] if t > 0 else 0) for t in range(tau_max + 1)], axis=1)
+    d = e0[:, None] + et - 2 * acf
+    d[:, 0] = 0
+    cm = np.cumsum(d[:, 1:], axis=1) / np.arange(1, tau_max + 1)[None, :]
+    cmnd = np.ones_like(d)
+    cmnd[:, 1:] = d[:, 1:] / (cm + 1e-12)
+    f0 = np.zeros(nfr)
+    conf = np.ones(nfr)
+    for i in range(nfr):
+        c = cmnd[i]
+        below = np.flatnonzero(c[tau_min:] < thr)
+        if below.size:
+            t = tau_min + below[0]
+            while t + 1 <= tau_max and c[t + 1] < c[t]:
+                t += 1
+        else:
+            t = tau_min + int(np.argmin(c[tau_min:]))
+        conf[i] = c[t]
+        if 1 <= t < tau_max:
+            a, b, g = c[t - 1], c[t], c[t + 1]
+            den = a - 2 * b + g
+            t = t + (0.5 * (a - g) / den if den > 0 else 0.0)
+        f0[i] = sr2 / t
+    rms = 10 * np.log10(np.mean(fr ** 2, axis=1) + 1e-12)
+    ok = (conf < thr) & (rms > max(np.percentile(rms, 95) - 30.0, -60.0)) & (f0 < 0.98 * 300.0) & (f0 > 1.02 * 30.0)
+    times = (np.arange(nfr) * HOP + N // 2) / sr2
+    return times, np.where(ok, f0, 0.0)
+
+
+def _bass_notes_only(bass, sr, tt, f0):
+    """Keeps the pitch only where it behaves like a bass note, not like the pitched 808 / tom of
+    the drums (which the bass bus also holds): over the current note (a run within 50 cents) the
+    level of its harmonics must not fall faster than STEM_BASS_DECAY_MIN over 120 ms and the
+    pitch must not slide down faster than STEM_BASS_GLIDE_MIN over 60 ms. Measured on Lex's Suno
+    stems (pitched frames of this tracker): keeps 76 % of the true bass frames and 2.4 % of the
+    drums' tone frames."""
+    n = len(f0)
+    if n < 3:
+        return f0
+    dt = tt[1] - tt[0]
+    cents = np.where(f0 > 0, 1200 * np.log2(np.maximum(f0, 1.0)), np.nan)
+    start = np.full(n, -1)
+    s0 = -1
+    for i in range(n):
+        if f0[i] <= 0:
+            s0 = -1
+            continue
+        if s0 < 0 or abs(cents[i] - cents[i - 1]) > 50:
+            s0 = i
+        start[i] = s0
+    f, ts, Z = signal.stft(np.asarray(bass, dtype=np.float32), fs=sr, nperseg=4096, noverlap=4096 - 256)
+    A2 = np.abs(Z) ** 2
+    df = f[1] - f[0]
+    col = np.clip(np.searchsorted(ts, tt), 0, A2.shape[1] - 1)
+    lev = np.full(n, np.nan)
+    for i in np.flatnonzero(f0 > 0):
+        c = col[i]
+        tot = 0.0
+        for h in range(1, 6):
+            k = int(round(h * f0[i] / df))
+            tot += float(A2[max(0, k - 1):k + 2, c].sum())
+        lev[i] = 10 * np.log10(tot + 1e-20)
+    k6, k12 = max(2, int(0.06 / dt)), max(3, int(0.12 / dt))
+    keep = np.zeros(n, bool)
+    for i in np.flatnonzero(f0 > 0):
+        a6 = max(start[i], i - k6)
+        a12 = max(start[i], i - k12)
+        glide = np.polyfit(tt[a6:i + 1], cents[a6:i + 1], 1)[0] if i - a6 >= 2 else np.nan
+        seg = lev[a12:i + 1]
+        decay = np.polyfit(tt[a12:i + 1], seg, 1)[0] if i - a12 >= 3 and np.all(np.isfinite(seg)) else np.nan
+        keep[i] = (decay > STEM_BASS_DECAY_MIN) and (glide > STEM_BASS_GLIDE_MIN)
+    return np.where(keep, f0, 0.0)
+
+
+def _bass_comb(f, t_s, tt, f0):
+    """1 on the harmonics of the bass note at each STFT frame, 0 elsewhere (Gaussian bins)."""
+    F = np.interp(t_s, tt, f0, left=0, right=0)
+    voiced = np.interp(t_s, tt, (f0 > 0).astype(float), left=0, right=0) > 0.5
+    F = np.where(voiced, F, 0.0)
+    S = np.zeros((len(f), len(t_s)), dtype=np.float32)
+    for h in range(1, 16):
+        fh = F * h
+        ok = (fh > 0) & (fh <= STEM_BASS_COMB_FMAX)
+        if not ok.any():
+            continue
+        sig = np.maximum(STEM_BASS_COMB_WIDTH * fh, (f[1] - f[0]) * 0.6)
+        S = np.maximum(S, np.exp(-0.5 * ((f[:, None] - fh[None, :]) / sig[None, :]) ** 2) * ok[None, :])
+    return S
 
 
 def _kick_part_of_bass(bass, sr, onsets):
@@ -4388,7 +4500,7 @@ def _kick_part_of_bass(bass, sr, onsets):
     bass = np.asarray(bass, dtype=np.float32)
     n_len = len(bass)
     n, hop = 4096, 256
-    _, t, Z = signal.stft(bass, fs=sr, nperseg=n, noverlap=n - hop)
+    f, t, Z = signal.stft(bass, fs=sr, nperseg=n, noverlap=n - hop)
     A2 = np.abs(Z) ** 2
     ft = t * sr
     M = np.zeros(A2.shape, dtype=np.float32)
@@ -4400,6 +4512,14 @@ def _kick_part_of_bass(bass, sr, onsets):
         floor = np.median(A2[:, ctx], axis=1, keepdims=True)
         sub = np.clip(A2[:, inside] - floor, 0, None) / (A2[:, inside] + 1e-20)
         M[:, inside] = np.maximum(M[:, inside], sub)
+    # A bass note that sounds through the hit keeps its harmonics in Bass. Only pitch that
+    # behaves like a bass note counts (_bass_notes_only): the pitched 808 / tom of the drums,
+    # which the bus also holds, would otherwise be protected too.
+    tt_b, f0_b = _bass_pitch_track(bass, sr)
+    if len(f0_b) and np.any(f0_b > 0):
+        f0_b = _bass_notes_only(bass, sr, tt_b, f0_b)
+        if np.any(f0_b > 0):
+            M = M * (1.0 - _bass_comb(f, t, tt_b, f0_b))
     k1 = signal.istft(Z * np.sqrt(M), fs=sr, nperseg=n, noverlap=n - hop)[1]
     gate = np.zeros(n_len, dtype=np.float32)
     gate[:min(n_len, len(k1))] = k1[:n_len]
