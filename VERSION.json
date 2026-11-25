@@ -1,10 +1,10 @@
 {
   "app": "PHARMAKON",
-  "version": "3.3.1",
-  "build_date": "2026-11-24",
+  "version": "3.3.2",
+  "build_date": "2026-11-25",
   "channel": "production",
-  "release_url": "https://github.com/alex-gerek/PHARMAKON/releases/tag/v3.3.1",
-  "notes": "PHARMAKON 3.3.1: split-and-master moves the kick from the Bass stem to Drums (drums -2.85 -> +3.49 dB, bass -2.33 -> +0.86 dB SI-SDR on 10 tracks); no false Infrasonic Energy warning on bass-heavy tracks (energy strictly below the cut-off); the previous track's diagnosis is cleared when a run starts.",
+  "release_url": "https://github.com/alex-gerek/PHARMAKON/releases/tag/v3.3.2",
+  "notes": "PHARMAKON 3.3.2: split-and-master keeps bass notes that start on a kick in the Bass stem; a pitched 808 / tom still goes to Drums (drums +0.24 dB, bass +0.41 dB SI-SDR vs 3.3.1 on 10 tracks, every track better).",
   "patch_files": [
     "remaster_engine.py",
     "gui/server.py",
@@ -13,9 +13,9 @@
     "gui/static/style.css",
     "track_map_engine.py"
   ],
-  "release_tag": "v3.3.1",
+  "release_tag": "v3.3.2",
   "files": {
-    "remaster_engine.py": "4ab354242e1118cfcceb348d820d93a04e6c1a1cf232e8503cbe8186e53baee3",
+    "remaster_engine.py": "2e9a817d0616d3ee6694195d30f8755ac43fc7d767b7900f91d0db617a151ec3",
     "gui/server.py": "eeadb8cedfb25e265dd40add37848a48d385025bde8e561c55bb24faf4f63ffb",
     "gui/static/index.html": "9bc9d173317597b741ca2575f34a826a05e9e1171e21334de144fa5fb9513a11",
     "gui/static/app.js": "abc4be6500e4c356ea39ac784e5a6a30736777413a5c2ecd5b98eb739152d0f9",
